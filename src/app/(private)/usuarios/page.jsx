@@ -2,12 +2,12 @@
 
 import React from "react";
 
-const Dashboard = () => {
+const Usuarios = () => {
   return (
     <div className="flex items-center justify-center flex-col gap-6">
-      <h1>Dashboard Page</h1>
+      <h1>Usuarios Page</h1>
     </div>
   );
 };
 
-export default Dashboard;
+export default Usuarios;
