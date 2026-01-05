@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/tooltip";
 import { LogOut } from "lucide-react";
 import Image from "next/image";
-import { Button } from "../ui/button";
+import { Button, buttonVariants } from "../ui/button";
 import client from "@/api/client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -132,13 +132,16 @@ export const AppSidebar = () => {
             </div>
             <div>
               <Tooltip>
-                <TooltipTrigger>
-                  <Button
+                <TooltipTrigger asChild>
+                  <button
                     onClick={() => client.auth.signOut()}
-                    className={cn("group-data-[collapsible=icon]:w-full")}
+                    className={cn(
+                      buttonVariants(),
+                      "group-data-[collapsible=icon]:w-full"
+                    )}
                   >
                     <LogOut className="!size-5" />
-                  </Button>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent
                   side={state === "collapsed" ? "right" : "top"}
