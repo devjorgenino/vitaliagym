@@ -7,10 +7,10 @@ import {
   CardContent,
   CardDescription,
   CardFooter,
-} from "@/../../src/components/ui/card";
-import { Button } from "@/../../src/components/ui/button";
-import { Input } from "@/../../src/components/ui/input";
-import { Label } from "@/../../src/components/ui/label";
+} from "@/src/components/ui/card";
+import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
+import { Label } from "@/src/components/ui/label";
 import { toast } from "sonner";
 import client from "@/../../src/api/client";
 import Link from "next/link";
