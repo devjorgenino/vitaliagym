@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 const Registro = () => {
   const router = useRouter();
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
 
     const firstname = e.target[0]?.value;
@@ -30,29 +30,35 @@ const Registro = () => {
     const password = e.target[3]?.value;
     const password2 = e.target[4]?.value;
 
-    if (!email || !password) {
+    if (!email || !password || !password2 || !firstname || !lastname) {
       toast.error("Por favor, rellena todos los campos");
       return;
     }
 
-    const { data, error } = client.auth.signUp({
+    if (password !== password2) {
+      toast.error("Las contraseñas no coinciden");
+      return;
+    }
+
+    const { data, error } = await client.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: firstname + " " + lastname,
-          password2,
         },
       },
     });
 
     if (error) {
-      toast.error("Error al registrarte, Intenta de nuevo");
+      toast.error(error.message || "Error al registrarte, Intenta de nuevo");
+      return;
     }
 
     if (data) {
-      toast.success("Registro exitoso, porfavor inicia sesión");
-      router.push("/"); // REVISAR PORQUE NO REDIRECCIONA
+      toast.success("Registro exitoso, porfavor Inicia Sesión con tu cuenta");
+      client.auth.signOut();
+      router.push("/auth/login");
     }
   };
 
