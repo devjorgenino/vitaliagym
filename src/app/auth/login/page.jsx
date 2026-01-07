@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Card,
   CardHeader,
@@ -17,9 +17,12 @@ import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 const Login = () => {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  
   const handleLogin = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -31,16 +34,23 @@ const Login = () => {
       return;
     }
 
-    const { error } = await client.auth.signInWithPassword({
-      email,
-      password,
-    });
+    setLoading(true);
+    try {
+      const { error } = await client.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      toast.error("Error al iniciar sesión, Intenta de nuevo");
-    } else {
-      toast.success("Inicio de sesión exitoso");
-      router.push("/dashboard");
+      if (error) {
+        toast.error("Error al iniciar sesión, Intenta de nuevo");
+      } else {
+        toast.success("Inicio de sesión exitoso");
+        router.push("/dashboard");
+      }
+    } catch (err) {
+      toast.error("Error al iniciar sesión. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -82,8 +92,15 @@ const Login = () => {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full">
-                Iniciar Sesión
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Iniciando Sesión...
+                  </>
+                ) : (
+                  "Iniciar Sesión"
+                )}
               </Button>
             </div>
           </form>

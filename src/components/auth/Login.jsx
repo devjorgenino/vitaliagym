@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Card,
   CardHeader,
@@ -14,8 +14,11 @@ import { toast } from "sonner";
 import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
+import { Loader2 } from "lucide-react";
 
 const Login = () => {
+  const [loading, setLoading] = useState(false);
+  
   const handleLogin = (e) => {
     e.preventDefault();
     const email = e.target[0]?.value;
@@ -26,13 +29,26 @@ const Login = () => {
       return;
     }
 
-    const { error } = client.auth.signInWithPassword({
-      email,
-      password,
-    });
+    setLoading(true);
+    try {
+      const { error } = client.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      toast.error("Error al iniciar sesión, Intenta de nuevo");
+      if (error) {
+        toast.error("Error al iniciar sesión, Intenta de nuevo");
+      } else {
+        toast.success("Inicio de sesión exitoso");
+        // Redirigir después de un breve delay para mostrar el éxito
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 1000);
+      }
+    } catch (err) {
+      toast.error("Error al iniciar sesión. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -67,8 +83,15 @@ const Login = () => {
                 </Label>
                 <Input id="password" type="password" placeholder="******" />
               </div>
-              <Button type="submit" className="w-full">
-                Iniciar Sesión
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Iniciando Sesión...
+                  </>
+                ) : (
+                  "Iniciar Sesión"
+                )}
               </Button>
             </div>
           </form>

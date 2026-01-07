@@ -17,9 +17,11 @@ import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 const Registro = () => {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -41,26 +43,33 @@ const Registro = () => {
       return;
     }
 
-    const { data, error } = await client.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: firstname + " " + lastname,
-          phone: phone,
+    setLoading(true);
+    try {
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: firstname + " " + lastname,
+            phone: phone,
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      toast.error(error.message || "Error al registrarte, Intenta de nuevo");
-      return;
-    }
+      if (error) {
+        toast.error(error.message || "Error al registrarte, Intenta de nuevo");
+        return;
+      }
 
-    if (data) {
-      toast.success("Registro exitoso, porfavor Inicia Sesión con tu cuenta");
-      client.auth.signOut();
-      router.push("/auth/login");
+      if (data) {
+        toast.success("Registro exitoso, porfavor Inicia Sesión con tu cuenta");
+        client.auth.signOut();
+        router.push("/auth/login");
+      }
+    } catch (err) {
+      toast.error("Error al registrarte. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -115,11 +124,7 @@ const Registro = () => {
                 <Label htmlFor="phone" className="mb-2">
                   Teléfono (opcional)
                 </Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+1234567890"
-                />
+                <Input id="phone" type="tel" placeholder="+1234567890" />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="password" className="mb-2">
@@ -133,8 +138,15 @@ const Registro = () => {
                 </Label>
                 <Input id="password2" type="password" placeholder="******" />
               </div>
-              <Button type="submit" className="w-full">
-                Registrate
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Registrando...
+                  </>
+                ) : (
+                  "Registrate"
+                )}
               </Button>
             </div>
           </form>
