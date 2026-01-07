@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
+import { DashboardView } from "../../../components/dashboard/DashboardView";
 
 const Dashboard = () => {
   return (
-    <div className="flex items-center justify-center flex-col gap-6">
-      <h1>Dashboard Page</h1>
+    <div className="container mx-auto py-6">
+      <DashboardView />
     </div>
   );
 };

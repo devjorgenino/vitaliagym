@@ -1,4 +1,4 @@
-import { Dumbbell, Home, Settings, Smile, Users } from "lucide-react";
+import { Dumbbell, Home, CalendarCheck2, Smile, Users } from "lucide-react";
 
 export const items = [
   {
@@ -12,6 +12,11 @@ export const items = [
     icon: Smile,
   },
   {
+    title: "Asistencia",
+    url: "/asistencia",
+    icon: CalendarCheck2,
+  },
+  {
     title: "Planes",
     url: "/planes",
     icon: Dumbbell,
@@ -21,9 +26,10 @@ export const items = [
     url: "/usuarios",
     icon: Users,
   },
-  {
+
+  /* {
     title: "Configuraciones",
     url: "/configuraciones",
     icon: Settings,
-  },
+  }, */
 ];
