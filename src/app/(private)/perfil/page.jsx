@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import useAuth from "../../../hooks/useAuth";
 import { Button } from "../../../components/ui/button";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Camera, Upload } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from "../../../components/ui/card";
 import { Skeleton } from "../../../components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "../../../components/ui/avatar";
+import { getInitials } from "../../../lib/getInitials";
 
 const Perfil = () => {
   const { user, updateUserProfile } = useAuth();
@@ -22,6 +24,9 @@ const Perfil = () => {
     role: ""
   });
   const [loading, setLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Cargar datos del usuario cuando el componente se monta
   useEffect(() => {
@@ -77,6 +82,72 @@ const Perfil = () => {
       });
     }
     setIsEditing(false);
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validar el archivo
+      if (!file.type.startsWith('image/')) {
+        toast.error('Por favor selecciona una imagen válida');
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) { // 5MB
+        toast.error('La imagen no debe superar los 5MB');
+        return;
+      }
+
+      // Crear preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAvatarPreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadAvatar = async (file) => {
+    setAvatarLoading(true);
+    try {
+      // Para simplificar, convertiremos la imagen a base64 y la guardaremos en metadata
+      // En producción, deberías usar un servicio de almacenamiento como S3, Cloudinary, etc.
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Url = e.target.result;
+        
+        // Actualizar el perfil con la URL base64 del avatar
+        const result = await updateUserProfile({
+          avatar_url: base64Url
+        });
+
+        if (result.success) {
+          toast.success('Avatar actualizado correctamente');
+          setAvatarPreview(null);
+        } else {
+          toast.error(result.error || 'Error al actualizar el avatar');
+        }
+        setAvatarLoading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error subiendo avatar:', error);
+      toast.error('Error al actualizar el avatar');
+      setAvatarLoading(false);
+    }
+  };
+
+  const saveAvatar = async () => {
+    if (!avatarPreview) return;
+    
+    const fileInput = fileInputRef.current;
+    if (fileInput && fileInput.files[0]) {
+      await uploadAvatar(fileInput.files[0]);
+    }
   };
 
   if (!user) {
@@ -139,6 +210,66 @@ const Perfil = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
+              {/* Avatar */}
+              <div className="flex flex-col items-center">
+                <div className="relative">
+                  <Avatar className="w-24 h-24">
+                    <AvatarImage
+                      src={avatarPreview || user?.user_metadata?.avatar_url || "/avatar.jpg"}
+                      alt="Avatar"
+                    />
+                    <AvatarFallback className="text-lg">
+                      {getInitials(user?.user_metadata?.full_name || "Usuario")}
+                    </AvatarFallback>
+                  </Avatar>
+                  {isEditing && (
+                    <button
+                      onClick={handleAvatarClick}
+                      className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors"
+                      disabled={avatarLoading}
+                    >
+                      {avatarLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Camera className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
+                {isEditing && avatarPreview && (
+                  <div className="mt-4 flex gap-2">
+                    <Button
+                      onClick={saveAvatar}
+                      disabled={avatarLoading}
+                      size="sm"
+                    >
+                      {avatarLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        "Guardar Avatar"
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => setAvatarPreview(null)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               {/* Información básica */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>

@@ -33,11 +33,27 @@ const AuthProvider = ({ children }) => {
 
   const updateUserProfile = async (profileData) => {
     try {
+      // Verificar si hay una sesión activa y refrescar si es necesario
+      const { data: sessionData, error: sessionError } = await client.auth.refreshSession();
+      
+      if (sessionError) {
+        console.error('Session refresh error:', sessionError);
+        throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
+      }
+
+      if (!sessionData?.session?.user) {
+        throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
+      }
+
+      // Usar la sesión actualizada para actualizar el perfil
       const { data, error } = await client.auth.updateUser({
         data: profileData
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Update user error:', error);
+        throw error;
+      }
 
       // Actualizar el estado del usuario con los nuevos datos
       setUser(prev => ({
@@ -51,6 +67,14 @@ const AuthProvider = ({ children }) => {
       return { success: true, data };
     } catch (error) {
       console.error('Error updating profile:', error);
+      
+      // Si el error es de sesión, limpiar el estado del usuario
+      if (error.message?.includes('session') || error.message?.includes('auth')) {
+        setUser(null);
+        // Opcionalmente redirigir al login
+        window.location.href = '/auth/login';
+      }
+      
       return { success: false, error: error.message || 'Error al actualizar perfil' };
     }
   };
