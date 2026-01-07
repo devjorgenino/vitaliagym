@@ -27,11 +27,12 @@ const Registro = () => {
     const firstname = e.target[0]?.value;
     const lastname = e.target[1]?.value;
     const email = e.target[2]?.value;
-    const password = e.target[3]?.value;
-    const password2 = e.target[4]?.value;
+    const phone = e.target[3]?.value;
+    const password = e.target[4]?.value;
+    const password2 = e.target[5]?.value;
 
     if (!email || !password || !password2 || !firstname || !lastname) {
-      toast.error("Por favor, rellena todos los campos");
+      toast.error("Por favor, rellena todos los campos obligatorios");
       return;
     }
 
@@ -46,6 +47,7 @@ const Registro = () => {
       options: {
         data: {
           full_name: firstname + " " + lastname,
+          phone: phone,
         },
       },
     });
@@ -107,6 +109,16 @@ const Registro = () => {
                   type="email"
                   placeholder="example@example.com"
                   required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="phone" className="mb-2">
+                  Teléfono (opcional)
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+1234567890"
                 />
               </div>
               <div className="grid gap-2">
