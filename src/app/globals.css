@@ -46,7 +46,7 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
-:root {
+/* :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -113,6 +113,129 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+} */
+
+:root {
+  /* Mantenemos tu radio de borde preferido */
+  --radius: 0.625rem;
+
+  /* --- TEMA CLARO (Base: Ivory) --- */
+
+  /* Fondo: Ivory (#FFFFEB) */
+  --background: oklch(0.994 0.017 106.6);
+  /* Texto Principal: Night (#0E120D) */
+  --foreground: oklch(0.14 0.012 142.5);
+
+  /* Card: Ivory (mismo que fondo o un poco más blanco) */
+  --card: oklch(0.994 0.017 106.6);
+  --card-foreground: oklch(0.14 0.012 142.5);
+
+  /* Popover: Ivory */
+  --popover: oklch(0.994 0.017 106.6);
+  --popover-foreground: oklch(0.14 0.012 142.5);
+
+  /* Primary: Dark Moss Green (#626D21) */
+  --primary: oklch(0.475 0.117 113.6);
+  --primary-foreground: oklch(0.994 0.017 106.6); /* Ivory sobre oscuro */
+
+  /* Secondary: Tea Green (#E2F1BB) */
+  --secondary: oklch(0.924 0.12 113.6);
+  --secondary-foreground: oklch(0.24 0.066 142.5); /* Dark Green sobre claro */
+
+  /* Muted: Tea Green desaturado */
+  --muted: oklch(0.96 0.03 113);
+  --muted-foreground: oklch(0.475 0.117 113.6);
+
+  /* Accent: Tea Green (Hover suave) */
+  --accent: oklch(0.924 0.12 113.6);
+  --accent-foreground: oklch(0.24 0.066 142.5);
+
+  /* Destructive: Rojo ajustado a la luminosidad del tema */
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.994 0.017 106.6);
+
+  /* Border: Dark Moss Green con baja opacidad simulada (gris verdoso) */
+  --border: oklch(0.85 0.05 113);
+  --input: oklch(0.85 0.05 113);
+  --ring: oklch(0.475 0.117 113.6); /* Ring color Primary */
+
+  /* Charts: Variaciones de la paleta Vitalia */
+  --chart-1: oklch(0.475 0.117 113.6); /* Moss */
+  --chart-2: oklch(0.24 0.066 142.5); /* Dark Green */
+  --chart-3: oklch(0.924 0.12 113.6); /* Tea Green */
+  --chart-4: oklch(0.65 0.15 113); /* Moss claro */
+  --chart-5: oklch(0.75 0.1 142); /* Green medio */
+
+  /* Sidebar Light */
+  --sidebar: oklch(0.98 0.02 106); /* Ivory un poco más oscuro */
+  --sidebar-foreground: oklch(0.14 0.012 142.5);
+  --sidebar-primary: oklch(0.475 0.117 113.6);
+  --sidebar-primary-foreground: oklch(0.994 0.017 106.6);
+  --sidebar-accent: oklch(0.924 0.12 113.6);
+  --sidebar-accent-foreground: oklch(0.24 0.066 142.5);
+  --sidebar-border: oklch(0.85 0.05 113);
+  --sidebar-ring: oklch(0.475 0.117 113.6);
+}
+
+.dark {
+  /* --- TEMA OSCURO (Base: Night) --- */
+
+  /* Fondo: Night (#0E120D) */
+  --background: oklch(0.14 0.012 142.5);
+  /* Texto: Ivory (#FFFFEB) */
+  --foreground: oklch(0.994 0.017 106.6);
+
+  /* Card: Dark Green (#0A3317) para elevar capas */
+  --card: oklch(0.24 0.066 142.5);
+  --card-foreground: oklch(0.994 0.017 106.6);
+
+  /* Popover: Dark Green */
+  --popover: oklch(0.24 0.066 142.5);
+  --popover-foreground: oklch(0.994 0.017 106.6);
+
+  /* Primary: Tea Green (#E2F1BB) - Resalta mucho en oscuro */
+  --primary: oklch(0.924 0.12 113.6);
+  --primary-foreground: oklch(
+    0.24 0.066 142.5
+  ); /* Texto oscuro para legibilidad */
+
+  /* Secondary: Dark Moss Green (#626D21) */
+  --secondary: oklch(0.475 0.117 113.6);
+  --secondary-foreground: oklch(0.994 0.017 106.6);
+
+  /* Muted: Dark Green desaturado */
+  --muted: oklch(0.3 0.04 142);
+  --muted-foreground: oklch(0.7 0.05 113);
+
+  /* Accent: Dark Moss Green (Hover) */
+  --accent: oklch(0.475 0.117 113.6);
+  --accent-foreground: oklch(0.994 0.017 106.6);
+
+  /* Destructive */
+  --destructive: oklch(0.6 0.2 25);
+  --destructive-foreground: oklch(0.994 0.017 106.6);
+
+  /* Border: Dark Green suave */
+  --border: oklch(0.3 0.05 142);
+  --input: oklch(0.3 0.05 142);
+  --ring: oklch(0.924 0.12 113.6); /* Ring color Tea Green */
+
+  /* Charts Dark */
+  --chart-1: oklch(0.924 0.12 113.6); /* Tea Green (resalta más) */
+  --chart-2: oklch(0.475 0.117 113.6); /* Moss */
+  --chart-3: oklch(0.6 0.1 142); /* Green medio */
+  --chart-4: oklch(0.8 0.1 113); /* Pale Moss */
+  --chart-5: oklch(0.7 0.15 145); /* Bright Green */
+
+  /* Sidebar Dark */
+  --sidebar: oklch(0.2 0.04 142); /* Night un poco más claro/verde */
+  --sidebar-foreground: oklch(0.994 0.017 106.6);
+  --sidebar-primary: oklch(0.924 0.12 113.6);
+  --sidebar-primary-foreground: oklch(0.24 0.066 142.5);
+  --sidebar-accent: oklch(0.24 0.066 142.5);
+  --sidebar-accent-foreground: oklch(0.994 0.017 106.6);
+  --sidebar-border: oklch(0.3 0.05 142);
+  --sidebar-ring: oklch(0.924 0.12 113.6);
 }
 
 @layer base {
