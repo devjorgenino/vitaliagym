@@ -40,7 +40,7 @@ const Asistencia = () => {
     getAttendanceByClientId,
   } = useAttendance();
 
-  const [checkingCedula, setCheckingCedula] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [checking, setChecking] = useState(false);
   const [markingAttendance, setMarkingAttendance] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -49,13 +49,13 @@ const Asistencia = () => {
   const [selectedClientId, setSelectedClientId] = useState(null);
 
   const handleCheckCedula = async () => {
-    if (!checkingCedula.trim()) {
-      toast.error("Por favor ingrese una cédula");
+    if (!searchTerm.trim()) {
+      toast.error("Por favor ingrese una cédula o nombre");
       return;
     }
 
     setChecking(true);
-    const result = await checkClientStatus(checkingCedula);
+    const result = await checkClientStatus(searchTerm);
     setClientStatus(result);
     setChecking(false);
   };
@@ -75,7 +75,7 @@ const Asistencia = () => {
 
       if (result.success) {
         // Limpiar formulario y esconder información del cliente
-        setCheckingCedula("");
+        setSearchTerm("");
         setClientStatus(null);
         toast.success("Asistencia registrada exitosamente");
       } else {
@@ -183,7 +183,7 @@ const Asistencia = () => {
           </Button>
         </div>
 
-        {/* Verificación de cédula */}
+        {/* Verificación de cliente */}
         <Card>
           <CardHeader>
             <CardTitle>🔍 Verificar Cliente</CardTitle>
@@ -192,9 +192,9 @@ const Asistencia = () => {
             <div className="flex space-x-4">
               <input
                 type="text"
-                value={checkingCedula}
-                onChange={(e) => setCheckingCedula(e.target.value)}
-                placeholder="Ingrese cédula del cliente"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Ingrese cédula o nombre del cliente"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyPress={(e) => {
                   if (e.key === "Enter") {

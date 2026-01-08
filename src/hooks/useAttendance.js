@@ -200,10 +200,10 @@ export function useAttendance() {
     }
   };
 
-  const checkClientStatus = async (cedula) => {
+  const checkClientStatus = async (searchTerm) => {
     try {
-      // Buscar cliente real por cédula
-      const { data: clientData, error: clientError } = await client
+      // Primero intentar buscar por cédula exacta
+      let { data: clientData, error: clientError } = await client
         .from("clients")
         .select(
           `
@@ -214,8 +214,46 @@ export function useAttendance() {
           )
         `
         )
-        .eq("cedula", cedula)
+        .eq("cedula", searchTerm)
         .single();
+
+      // Si no se encuentra por cédula, buscar por nombre
+      if (clientError && clientError.code === 'PGRST116') {
+        // Dividir el término de búsqueda en palabras para buscar por nombre y apellido
+        const searchWords = searchTerm.toLowerCase().trim().split(/\s+/);
+        
+        // Construir consulta OR para buscar coincidencias en nombre o apellido
+        let query = client
+          .from("clients")
+          .select(
+            `
+            *,
+            plans (
+              name,
+              price
+            )
+          `
+          );
+
+        // Buscar coincidencias en nombre o apellido
+        if (searchWords.length >= 2) {
+          // Si hay múltiples palabras, buscar combinaciones
+          const [firstWord, secondWord] = searchWords;
+          query = query.or(`first_name.ilike.%${firstWord}%,last_name.ilike.%${firstWord}%,first_name.ilike.%${secondWord}%,last_name.ilike.%${secondWord}%`);
+        } else {
+          // Si es una sola palabra, buscar en ambos campos
+          const searchWord = searchWords[0];
+          query = query.or(`first_name.ilike.%${searchWord}%,last_name.ilike.%${searchWord}%`);
+        }
+
+        const result = await query.limit(5); // Limitar a 5 resultados para no sobrecargar
+        
+        if (result.data && result.data.length > 0) {
+          // Tomar el primer resultado si hay múltiples coincidencias
+          clientData = result.data[0];
+          clientError = null;
+        }
+      }
 
       // Si no hay tabla de clientes, devolver mensaje informativo
       if (clientError && clientError.code === "PGRST116") {
@@ -232,7 +270,7 @@ export function useAttendance() {
       if (!clientData) {
         return {
           found: false,
-          message: "❌ Cliente no encontrado con esta cédula",
+          message: "❌ Cliente no encontrado con este término de búsqueda",
         };
       }
 
