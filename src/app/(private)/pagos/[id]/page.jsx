@@ -1,14 +1,20 @@
 "use client";
 
 import React from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/components/payments/PaymentsTable";
 import { useClients } from "@/hooks/useClients";
 
 const NuevoPagoCliente = () => {
   const params = useParams();
+  const searchParams = useSearchParams();
   const { clients, loading } = useClients();
   const clientId = params.id;
+
+  // Leer parámetros de URL para pago restante
+  const payRemaining = searchParams.get('payRemaining') === 'true';
+  const remainingAmount = searchParams.get('remaining');
+  const paymentId = searchParams.get('paymentId');
 
   // Encontrar el cliente preseleccionado
   const preselectedClient = clients.find(client => client.id === clientId);
@@ -49,7 +55,12 @@ const NuevoPagoCliente = () => {
           Registrar pago para: <span className="font-semibold">{preselectedClient.first_name} {preselectedClient.last_name}</span>
         </p>
       </div>
-      <PaymentsTable preselectedClient={preselectedClient} />
+      <PaymentsTable 
+        preselectedClient={preselectedClient} 
+        payRemaining={payRemaining}
+        remainingAmount={remainingAmount}
+        paymentId={paymentId}
+      />
     </div>
   );
 };

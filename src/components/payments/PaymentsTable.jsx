@@ -87,7 +87,7 @@ const VENEZUELAN_BANKS = [
   "Banco de la Gente Emprendedora (BANGE)",
 ];
 
-export function PaymentsTable({ preselectedClient = null }) {
+export function PaymentsTable({ preselectedClient = null, payRemaining = false, remainingAmount = null, paymentId = null }) {
   const {
     payments,
     loading,
@@ -161,6 +161,44 @@ export function PaymentsTable({ preselectedClient = null }) {
   const [displayPayments, setDisplayPayments] = useState([]);
   const [isFiltering, setIsFiltering] = useState(false);
 
+  // Efecto para manejar pagos restantes desde props
+  useEffect(() => {
+    if (payRemaining && preselectedClient && remainingAmount && paymentId) {
+      // Buscar el plan del cliente
+      const clientPlan = plans.find(p => p.id === preselectedClient.plan_id);
+      
+      if (clientPlan) {
+        // Configurar modo de pago restante
+        setPaymentMode("partial");
+        setIsPayingRemaining(true);
+        
+        // Precargar formulario con los datos del pago restante
+        setFormData({
+          client_id: preselectedClient.id,
+          plan_id: preselectedClient.plan_id,
+          amount_usd: remainingAmount,
+          amount_bs: (parseFloat(remainingAmount) * (rate || 1)).toFixed(2),
+          exchange_rate: rate || 1,
+          payment_date: new Date().toISOString().split("T")[0],
+          reference: "",
+          bank: "",
+          payment_type: "pago_movil",
+          phone_payment: "",
+        });
+        
+        // Configurar datos del pago restante para visualización
+        setRemainingPaymentData({
+          client_id: preselectedClient.id,
+          client_name: `${preselectedClient.first_name} ${preselectedClient.last_name}`,
+          plan_id: preselectedClient.plan_id,
+          plan_name: clientPlan.name,
+          remaining_amount: parseFloat(remainingAmount),
+          plan_price: parseFloat(clientPlan.price),
+          total_paid: parseFloat(clientPlan.price) - parseFloat(remainingAmount),
+        });
+      }
+    }
+  }, [payRemaining, preselectedClient, remainingAmount, paymentId, plans, rate]);
 
   // Obtener el precio del plan seleccionado
   const getPlanPrice = useCallback((planId) => {

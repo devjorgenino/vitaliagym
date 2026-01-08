@@ -114,6 +114,55 @@ export function ClientsTable() {
     };
   };
 
+  const getPaymentWithRemaining = (client) => {
+    if (!client || !client.plan_id) {
+      return null;
+    }
+
+    const allClientPayments = payments.filter(
+      (p) => p.client_id === client.id && p.plan_id === client.plan_id
+    );
+
+    if (allClientPayments.length === 0) {
+      return null;
+    }
+
+    const planPrice = getPlanPrice(client.plan_id);
+    const totalPaid = allClientPayments.reduce(
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      0
+    );
+
+    const remainingAmount = Math.max(0, planPrice - totalPaid);
+    
+    if (remainingAmount > 0) {
+      // Encontrar el último pago para asociarlo con el saldo restante
+      const lastPayment = allClientPayments.sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+      )[0];
+      
+      return {
+        ...lastPayment,
+        remainingAmount,
+        remainingFormatted: remainingAmount.toFixed(2)
+      };
+    }
+    
+    return null;
+  };
+
+  const handlePayRemainingForClient = (client) => {
+    const paymentWithRemaining = getPaymentWithRemaining(client);
+    
+    if (paymentWithRemaining) {
+      // Redirigir a la página de pagos con parámetros específicos para el pago restante
+      router.push(`/pagos/${client.id}?paymentId=${paymentWithRemaining.id}&remaining=${paymentWithRemaining.remainingAmount}&payRemaining=true`);
+    } else {
+      // Si no hay pago específico con saldo, redirigir a la página normal
+      router.push(`/pagos/${client.id}`);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -797,6 +846,7 @@ export function ClientsTable() {
               <TableBody>
                 {filteredClients.map((client, index) => {
                   const paymentStatus = calculatePaymentStatus(client);
+                  const paymentWithRemaining = getPaymentWithRemaining(client);
                   const hasPendingPayment = client.plan_id && !paymentStatus.isFullyPaid;
 
                   return (
@@ -882,7 +932,7 @@ export function ClientsTable() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
-                              onClick={() => router.push(`/pagos/${client.id}`)}
+                              onClick={() => handlePayRemainingForClient(client)}
                               variant="default"
                               size="icon-sm"
                               className="bg-green-600 hover:bg-green-700"
@@ -892,7 +942,12 @@ export function ClientsTable() {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>Registrar pago</p>
+                            <p>
+                              {paymentWithRemaining 
+                                ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
+                                : 'Registrar pago'
+                              }
+                            </p>
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
