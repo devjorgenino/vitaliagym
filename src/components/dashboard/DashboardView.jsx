@@ -4,6 +4,7 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { MetricCard } from "./DashboardCharts";
+import { ExchangeRateCard } from "./ExchangeRateCard";
 
 export function DashboardView() {
   const { metrics, loading, error, refetch } = useDashboardMetrics();
@@ -14,7 +15,7 @@ export function DashboardView() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-32 w-full" />
           ))}
@@ -52,7 +53,8 @@ export function DashboardView() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Vista general del gimnasio</p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex items-center gap-2">
+          <ExchangeRateCard compact={true} />
           <Button onClick={refetch} variant="outline" size="sm">
             Actualizar
           </Button>
