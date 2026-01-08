@@ -506,6 +506,7 @@ export function UsersTable() {
             </div>
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -582,6 +583,7 @@ export function UsersTable() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>

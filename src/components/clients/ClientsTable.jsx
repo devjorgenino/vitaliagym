@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
+import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -9,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Input } from "../ui/input";
-import { EditIcon, TrashIcon, SearchIcon, FilterXIcon } from "../ui/icons";
+import { EditIcon, TrashIcon, SearchIcon, FilterXIcon, DollarSignIcon } from "../ui/icons";
 import {
   Table,
   TableBody,
@@ -20,6 +22,7 @@ import {
 } from "../ui/table";
 
 export function ClientsTable() {
+  const router = useRouter();
   const {
     clients,
     loading,
@@ -32,6 +35,7 @@ export function ClientsTable() {
   } = useClients();
 
   const { plans, loading: plansLoading } = usePlans();
+  const { payments, loading: paymentsLoading } = usePayments();
   const { formatMultiCurrency, loading: rateLoading } = useExchangeRate();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -70,6 +74,45 @@ export function ClientsTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
+
+  const getPlanPrice = (planId) => {
+    const plan = plans.find((p) => p.id === planId);
+    return plan ? parseFloat(plan.price) || 0 : 0;
+  };
+
+  const calculatePaymentStatus = (client) => {
+    if (!client || !client.plan_id) {
+      return { isFullyPaid: true, remainingFormatted: "0.00" };
+    }
+
+    const planPrice = getPlanPrice(client.plan_id);
+    if (planPrice <= 0) {
+      return { isFullyPaid: true, remainingFormatted: "0.00" };
+    }
+
+    const allClientPayments = payments.filter(
+      (p) => p.client_id === client.id && p.plan_id === client.plan_id
+    );
+
+    const totalPaidSoFar = allClientPayments.reduce(
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      0
+    );
+
+    let paidForCurrentCycle = totalPaidSoFar % planPrice;
+
+    if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
+      paidForCurrentCycle = planPrice;
+    }
+
+    const currentRemaining = planPrice - paidForCurrentCycle;
+    const isFullyPaid = currentRemaining < 0.001;
+
+    return {
+      isFullyPaid: isFullyPaid,
+      remainingFormatted: (isFullyPaid ? 0 : currentRemaining).toFixed(2),
+    };
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -260,7 +303,7 @@ export function ClientsTable() {
     (filter) => filter !== ""
   ).length;
 
-  if (loading) {
+  if (loading || paymentsLoading) {
     return (
       <Card>
         <CardHeader>
@@ -752,7 +795,11 @@ export function ClientsTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredClients.map((client, index) => (
+                {filteredClients.map((client, index) => {
+                  const paymentStatus = calculatePaymentStatus(client);
+                  const hasPendingPayment = client.plan_id && !paymentStatus.isFullyPaid;
+
+                  return (
                   <TableRow key={client.id}>
                     <TableCell className="font-medium text-center">
                       {index + 1}
@@ -835,6 +882,22 @@ export function ClientsTable() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
+                              onClick={() => router.push(`/pagos/${client.id}`)}
+                              variant="default"
+                              size="icon-sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              disabled={!hasPendingPayment}
+                            >
+                              <DollarSignIcon />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Registrar pago</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
                               onClick={() => handleEditClient(client)}
                               variant="outline"
                               size="icon-sm"
@@ -868,7 +931,8 @@ export function ClientsTable() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                );
+              })}
               </TableBody>
             </Table>
           </div>
