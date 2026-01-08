@@ -15,11 +15,13 @@ import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
+import { LogoSkeleton } from "@/components/ui/avatar-skeleton";
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     const email = e.target[0]?.value;
     const password = e.target[1]?.value;
@@ -31,22 +33,24 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const { error } = client.auth.signInWithPassword({
+      const { data, error } = await client.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
         toast.error("Error al iniciar sesión, Intenta de nuevo");
-      } else {
+        console.error('Login error:', error);
+      } else if (data?.user) {
         toast.success("Inicio de sesión exitoso");
-        // Redirigir después de un breve delay para mostrar el éxito
-        setTimeout(() => {
-          window.location.href = "/dashboard";
-        }, 1000);
+        console.log('Login successful:', data.user);
+        // No redirigir aquí, dejar que AuthProvider y el layout manejen la redirección
+      } else {
+        toast.error("Respuesta inesperada del servidor");
       }
     } catch (err) {
       toast.error("Error al iniciar sesión. Inténtalo de nuevo.");
+      console.error('Login exception:', err);
     } finally {
       setLoading(false);
     }
@@ -57,7 +61,21 @@ const Login = () => {
       <Card className="w-[400px]">
         <CardHeader>
           <CardTitle className="text-center text-2xl mb-3 flex justify-center items-center">
-            <Image src="/logo.png" alt="Logo" width={200} height={200} />
+            <div className="relative">
+              {!imageLoaded && <LogoSkeleton width={200} height={200} />}
+              <Image 
+                src="/logo.png" 
+                alt="Logo" 
+                width={200} 
+                height={200}
+                priority={true}
+                loading="eager"
+                placeholder="blur"
+                blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+                onLoad={() => setImageLoaded(true)}
+                className={`transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+              />
+            </div>
           </CardTitle>
           <CardDescription className="text-center">
             <p>Inicia sesión en tu cuenta</p>

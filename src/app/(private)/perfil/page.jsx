@@ -97,8 +97,8 @@ const Perfil = () => {
         return;
       }
 
-      if (file.size > 5 * 1024 * 1024) { // 5MB
-        toast.error('La imagen no debe superar los 5MB');
+      if (file.size > 2 * 1024 * 1024) { // 2MB
+        toast.error('La imagen no debe superar los 2MB');
         return;
       }
 
@@ -217,6 +217,7 @@ const Perfil = () => {
                     <AvatarImage
                       src={avatarPreview || user?.user_metadata?.avatar_url || "/avatar.jpg"}
                       alt="Avatar"
+                      loading="lazy"
                     />
                     <AvatarFallback className="text-lg">
                       {getInitials(user?.user_metadata?.full_name || "Usuario")}
