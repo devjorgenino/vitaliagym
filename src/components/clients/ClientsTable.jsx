@@ -8,7 +8,8 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { EditIcon, TrashIcon } from "../ui/icons";
+import { Input } from "../ui/input";
+import { EditIcon, TrashIcon, SearchIcon, FilterXIcon } from "../ui/icons";
 import {
   Table,
   TableBody,
@@ -64,6 +65,11 @@ export function ClientsTable() {
     plan_id: "",
     join_date: "",
   });
+
+  // Estados para búsqueda y filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -215,6 +221,45 @@ export function ClientsTable() {
     return new Date(dateString).toLocaleDateString("es-ES");
   };
 
+  // Lógica de filtrado
+  const filteredClients = clients.filter((client) => {
+    // Filtrar por término de búsqueda (nombre o cédula)
+    const matchesSearch = 
+      searchTerm === "" ||
+      client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.cedula.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Filtrar por plan
+    const matchesPlan = 
+      selectedPlan === "" ||
+      client.plan_id === selectedPlan;
+
+    // Filtrar por próximos pagos
+    let matchesPayment = true;
+    if (paymentFilter === "5days") {
+      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment <= 5 && client.daysUntilPayment >= 0;
+    } else if (paymentFilter === "10days") {
+      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment <= 10 && client.daysUntilPayment >= 0;
+    } else if (paymentFilter === "overdue") {
+      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment < 0;
+    }
+
+    return matchesSearch && matchesPlan && matchesPayment;
+  });
+
+  // Función para limpiar todos los filtros
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedPlan("");
+    setPaymentFilter("");
+  };
+
+  // Contar filtros activos
+  const activeFiltersCount = [searchTerm, selectedPlan, paymentFilter].filter(
+    (filter) => filter !== ""
+  ).length;
+
   if (loading) {
     return (
       <Card>
@@ -251,7 +296,7 @@ export function ClientsTable() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle>Clientes ({clients.length})</CardTitle>
+        <CardTitle>Clientes ({filteredClients.length}{filteredClients.length !== clients.length ? ` de ${clients.length}` : ""})</CardTitle>
         <div className="flex space-x-2">
           <Button
             onClick={() => setShowCreateForm(!showCreateForm)}
@@ -266,6 +311,83 @@ export function ClientsTable() {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Barra de búsqueda y filtros */}
+        <div className="mb-6 space-y-4">
+          {/* Barra de búsqueda */}
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Buscar por nombre o cédula..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
+            
+            {/* Filtro por plan */}
+            <select
+              value={selectedPlan}
+              onChange={(e) => setSelectedPlan(e.target.value)}
+              className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los planes</option>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Filtros de pago */}
+            <Button
+              variant={paymentFilter === "5days" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPaymentFilter(paymentFilter === "5days" ? "" : "5days")}
+            >
+              ≤ 5 días
+            </Button>
+            <Button
+              variant={paymentFilter === "10days" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPaymentFilter(paymentFilter === "10days" ? "" : "10days")}
+            >
+              ≤ 10 días
+            </Button>
+            <Button
+              variant={paymentFilter === "overdue" ? "destructive" : "outline"}
+              size="sm"
+              onClick={() => setPaymentFilter(paymentFilter === "overdue" ? "" : "overdue")}
+            >
+              Vencidos
+            </Button>
+
+            {/* Botón para limpiar filtros */}
+            {activeFiltersCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <FilterXIcon className="h-4 w-4 mr-1" />
+                Limpiar ({activeFiltersCount})
+              </Button>
+            )}
+          </div>
+
+          {/* Indicador de resultados */}
+          {filteredClients.length !== clients.length && (
+            <div className="text-sm text-muted-foreground">
+              Mostrando {filteredClients.length} de {clients.length} clientes
+            </div>
+          )}
+        </div>
+
         {showEditForm && (
           <div className="mb-6 p-4 border rounded-lg bg-blue-50">
             <h3 className="text-lg font-semibold mb-4">Editar Cliente</h3>
@@ -587,19 +709,27 @@ export function ClientsTable() {
           </div>
         )}
 
-        {clients.length === 0 ? (
+        {filteredClients.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground mb-4">
-              No hay clientes registrados
+              {clients.length === 0 
+                ? "No hay clientes registrados" 
+                : "No se encontraron clientes con los filtros aplicados"}
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-              <h4 className="font-semibold text-blue-900 mb-2">
-                📋 Para empezar:
-              </h4>
-              <ol className="text-sm text-blue-800 text-left space-y-1">
-                <li>Haz clic en "+ Nuevo Cliente"</li>
-              </ol>
-            </div>
+            {clients.length === 0 ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                <h4 className="font-semibold text-blue-900 mb-2">
+                  📋 Para empezar:
+                </h4>
+                <ol className="text-sm text-blue-800 text-left space-y-1">
+                  <li>Haz clic en "+ Nuevo Cliente"</li>
+                </ol>
+              </div>
+            ) : (
+              <Button onClick={clearFilters} variant="outline">
+                Limpiar filtros
+              </Button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -622,7 +752,7 @@ export function ClientsTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clients.map((client, index) => (
+                {filteredClients.map((client, index) => (
                   <TableRow key={client.id}>
                     <TableCell className="font-medium text-center">
                       {index + 1}

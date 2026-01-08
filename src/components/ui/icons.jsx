@@ -39,3 +39,42 @@ export function TrashIcon({ className = "" }) {
     </svg>
   );
 }
+
+export function SearchIcon({ className = "" }) {
+  return (
+    <svg 
+      className={className} 
+      width="16" 
+      height="16" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="8"></circle>
+      <path d="m21 21-4.35-4.35"></path>
+    </svg>
+  );
+}
+
+export function FilterXIcon({ className = "" }) {
+  return (
+    <svg 
+      className={className} 
+      width="16" 
+      height="16" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <path d="M2 4h6l4 4v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8Z"></path>
+      <path d="M22 8l-4 4"></path>
+      <path d="M18 8l4 4"></path>
+    </svg>
+  );
+}
