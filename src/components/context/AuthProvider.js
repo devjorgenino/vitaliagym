@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useState, useEffect, use } from "react";
+import { createContext, useState, useEffect, use, useCallback, useMemo } from "react";
 import client from "@/api/client";
 
 const AuthContext = createContext(null);
@@ -10,19 +10,36 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    client.auth
-      .getSession()
-      .then(({ data }) => {
-        setUser(data?.session?.user || null);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await client.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          setUser(null);
+        } else {
+          setUser(session?.user || null);
+        }
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+        setUser(null);
+      } finally {
         setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+      }
+    };
+
+    initializeAuth();
 
     const { data: authListener } = client.auth.onAuthStateChange(
       (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
         setUser(session?.user || null);
+        
+        // Si el usuario inicia sesión, el layout manejará la redirección
+        // Si cierra sesión, redirigir al login
+        if (event === 'SIGNED_OUT') {
+          window.location.href = '/';
+        }
       }
     );
 
@@ -31,7 +48,7 @@ const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  const updateUserProfile = async (profileData) => {
+  const updateUserProfile = useCallback(async (profileData) => {
     try {
       // Verificar si hay una sesión activa y refrescar si es necesario
       const { data: sessionData, error: sessionError } = await client.auth.refreshSession();
@@ -77,10 +94,16 @@ const AuthProvider = ({ children }) => {
       
       return { success: false, error: error.message || 'Error al actualizar perfil' };
     }
-  };
+  }, []);
+
+  const value = useMemo(() => ({ 
+    user, 
+    loading, 
+    updateUserProfile 
+  }), [user, loading, updateUserProfile]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, updateUserProfile }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -34,7 +34,10 @@ const PrivatePagesLayout = ({ children }) => {
 
   useEffect(() => {
     if (!loading && !user) {
+      console.log('No user found, redirecting to login');
       router.push("/");
+    } else if (!loading && user) {
+      console.log('User authenticated:', user.email);
     }
   }, [loading, user, router]);
 

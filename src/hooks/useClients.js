@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import client from "../api/client";
 
 export function useClients() {
@@ -7,7 +7,7 @@ export function useClients() {
   const [error, setError] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const calculateAge = (birthDate) => {
+  const calculateAge = useCallback((birthDate) => {
     const today = new Date();
     const birth = new Date(birthDate);
     let age = today.getFullYear() - birth.getFullYear();
@@ -21,9 +21,9 @@ export function useClients() {
     }
 
     return age;
-  };
+  }, []);
 
-  const calculateDaysUntilPayment = (nextPaymentDate) => {
+  const calculateDaysUntilPayment = useCallback((nextPaymentDate) => {
     if (!nextPaymentDate) return null;
 
     const today = new Date();
@@ -32,17 +32,17 @@ export function useClients() {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     return diffDays;
-  };
+  }, []);
 
-  const getPaymentStatusColor = (daysLeft) => {
+  const getPaymentStatusColor = useCallback((daysLeft) => {
     if (daysLeft === null) return "bg-gray-100 text-gray-800";
     if (daysLeft < 0) return "bg-red-100 text-red-800"; // Vencido
     if (daysLeft <= 7) return "bg-orange-100 text-orange-800"; // Por vencer
     if (daysLeft <= 15) return "bg-yellow-100 text-yellow-800"; // Próximo a vencer
     return "bg-green-100 text-green-800"; // Vigente
-  };
+  }, []);
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -89,7 +89,7 @@ export function useClients() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [calculateAge, calculateDaysUntilPayment, getPaymentStatusColor]);
 
   const createClient = async (clientData) => {
     try {

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
+import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -8,7 +10,8 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { EditIcon, TrashIcon } from "../ui/icons";
+import { Input } from "../ui/input";
+import { EditIcon, TrashIcon, SearchIcon, FilterXIcon, DollarSignIcon } from "../ui/icons";
 import {
   Table,
   TableBody,
@@ -19,6 +22,7 @@ import {
 } from "../ui/table";
 
 export function ClientsTable() {
+  const router = useRouter();
   const {
     clients,
     loading,
@@ -31,6 +35,7 @@ export function ClientsTable() {
   } = useClients();
 
   const { plans, loading: plansLoading } = usePlans();
+  const { payments, loading: paymentsLoading } = usePayments();
   const { formatMultiCurrency, loading: rateLoading } = useExchangeRate();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -64,6 +69,99 @@ export function ClientsTable() {
     plan_id: "",
     join_date: "",
   });
+
+  // Estados para búsqueda y filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
+
+  const getPlanPrice = (planId) => {
+    const plan = plans.find((p) => p.id === planId);
+    return plan ? parseFloat(plan.price) || 0 : 0;
+  };
+
+  const calculatePaymentStatus = (client) => {
+    if (!client || !client.plan_id) {
+      return { isFullyPaid: true, remainingFormatted: "0.00" };
+    }
+
+    const planPrice = getPlanPrice(client.plan_id);
+    if (planPrice <= 0) {
+      return { isFullyPaid: true, remainingFormatted: "0.00" };
+    }
+
+    const allClientPayments = payments.filter(
+      (p) => p.client_id === client.id && p.plan_id === client.plan_id
+    );
+
+    const totalPaidSoFar = allClientPayments.reduce(
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      0
+    );
+
+    let paidForCurrentCycle = totalPaidSoFar % planPrice;
+
+    if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
+      paidForCurrentCycle = planPrice;
+    }
+
+    const currentRemaining = planPrice - paidForCurrentCycle;
+    const isFullyPaid = currentRemaining < 0.001;
+
+    return {
+      isFullyPaid: isFullyPaid,
+      remainingFormatted: (isFullyPaid ? 0 : currentRemaining).toFixed(2),
+    };
+  };
+
+  const getPaymentWithRemaining = (client) => {
+    if (!client || !client.plan_id) {
+      return null;
+    }
+
+    const allClientPayments = payments.filter(
+      (p) => p.client_id === client.id && p.plan_id === client.plan_id
+    );
+
+    if (allClientPayments.length === 0) {
+      return null;
+    }
+
+    const planPrice = getPlanPrice(client.plan_id);
+    const totalPaid = allClientPayments.reduce(
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      0
+    );
+
+    const remainingAmount = Math.max(0, planPrice - totalPaid);
+    
+    if (remainingAmount > 0) {
+      // Encontrar el último pago para asociarlo con el saldo restante
+      const lastPayment = allClientPayments.sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+      )[0];
+      
+      return {
+        ...lastPayment,
+        remainingAmount,
+        remainingFormatted: remainingAmount.toFixed(2)
+      };
+    }
+    
+    return null;
+  };
+
+  const handlePayRemainingForClient = (client) => {
+    const paymentWithRemaining = getPaymentWithRemaining(client);
+    
+    if (paymentWithRemaining) {
+      // Redirigir a la página de pagos con parámetros específicos para el pago restante
+      router.push(`/pagos/${client.id}?paymentId=${paymentWithRemaining.id}&remaining=${paymentWithRemaining.remainingAmount}&payRemaining=true`);
+    } else {
+      // Si no hay pago específico con saldo, redirigir a la página normal
+      router.push(`/pagos/${client.id}`);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -215,7 +313,46 @@ export function ClientsTable() {
     return new Date(dateString).toLocaleDateString("es-ES");
   };
 
-  if (loading) {
+  // Lógica de filtrado
+  const filteredClients = clients.filter((client) => {
+    // Filtrar por término de búsqueda (nombre o cédula)
+    const matchesSearch = 
+      searchTerm === "" ||
+      client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.cedula.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Filtrar por plan
+    const matchesPlan = 
+      selectedPlan === "" ||
+      client.plan_id === selectedPlan;
+
+    // Filtrar por próximos pagos
+    let matchesPayment = true;
+    if (paymentFilter === "5days") {
+      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment <= 5 && client.daysUntilPayment >= 0;
+    } else if (paymentFilter === "10days") {
+      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment <= 10 && client.daysUntilPayment >= 0;
+    } else if (paymentFilter === "overdue") {
+      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment < 0;
+    }
+
+    return matchesSearch && matchesPlan && matchesPayment;
+  });
+
+  // Función para limpiar todos los filtros
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedPlan("");
+    setPaymentFilter("");
+  };
+
+  // Contar filtros activos
+  const activeFiltersCount = [searchTerm, selectedPlan, paymentFilter].filter(
+    (filter) => filter !== ""
+  ).length;
+
+  if (loading || paymentsLoading) {
     return (
       <Card>
         <CardHeader>
@@ -251,7 +388,7 @@ export function ClientsTable() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle>Clientes ({clients.length})</CardTitle>
+        <CardTitle>Clientes ({filteredClients.length}{filteredClients.length !== clients.length ? ` de ${clients.length}` : ""})</CardTitle>
         <div className="flex space-x-2">
           <Button
             onClick={() => setShowCreateForm(!showCreateForm)}
@@ -266,6 +403,83 @@ export function ClientsTable() {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Barra de búsqueda y filtros */}
+        <div className="mb-6 space-y-4">
+          {/* Barra de búsqueda */}
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Buscar por nombre o cédula..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
+            
+            {/* Filtro por plan */}
+            <select
+              value={selectedPlan}
+              onChange={(e) => setSelectedPlan(e.target.value)}
+              className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los planes</option>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Filtros de pago */}
+            <Button
+              variant={paymentFilter === "5days" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPaymentFilter(paymentFilter === "5days" ? "" : "5days")}
+            >
+              ≤ 5 días
+            </Button>
+            <Button
+              variant={paymentFilter === "10days" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPaymentFilter(paymentFilter === "10days" ? "" : "10days")}
+            >
+              ≤ 10 días
+            </Button>
+            <Button
+              variant={paymentFilter === "overdue" ? "destructive" : "outline"}
+              size="sm"
+              onClick={() => setPaymentFilter(paymentFilter === "overdue" ? "" : "overdue")}
+            >
+              Vencidos
+            </Button>
+
+            {/* Botón para limpiar filtros */}
+            {activeFiltersCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <FilterXIcon className="h-4 w-4 mr-1" />
+                Limpiar ({activeFiltersCount})
+              </Button>
+            )}
+          </div>
+
+          {/* Indicador de resultados */}
+          {filteredClients.length !== clients.length && (
+            <div className="text-sm text-muted-foreground">
+              Mostrando {filteredClients.length} de {clients.length} clientes
+            </div>
+          )}
+        </div>
+
         {showEditForm && (
           <div className="mb-6 p-4 border rounded-lg bg-blue-50">
             <h3 className="text-lg font-semibold mb-4">Editar Cliente</h3>
@@ -587,19 +801,27 @@ export function ClientsTable() {
           </div>
         )}
 
-        {clients.length === 0 ? (
+        {filteredClients.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground mb-4">
-              No hay clientes registrados
+              {clients.length === 0 
+                ? "No hay clientes registrados" 
+                : "No se encontraron clientes con los filtros aplicados"}
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-              <h4 className="font-semibold text-blue-900 mb-2">
-                📋 Para empezar:
-              </h4>
-              <ol className="text-sm text-blue-800 text-left space-y-1">
-                <li>Haz clic en "+ Nuevo Cliente"</li>
-              </ol>
-            </div>
+            {clients.length === 0 ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                <h4 className="font-semibold text-blue-900 mb-2">
+                  📋 Para empezar:
+                </h4>
+                <ol className="text-sm text-blue-800 text-left space-y-1">
+                  <li>Haz clic en "+ Nuevo Cliente"</li>
+                </ol>
+              </div>
+            ) : (
+              <Button onClick={clearFilters} variant="outline">
+                Limpiar filtros
+              </Button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -622,7 +844,12 @@ export function ClientsTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clients.map((client, index) => (
+                {filteredClients.map((client, index) => {
+                  const paymentStatus = calculatePaymentStatus(client);
+                  const paymentWithRemaining = getPaymentWithRemaining(client);
+                  const hasPendingPayment = client.plan_id && !paymentStatus.isFullyPaid;
+
+                  return (
                   <TableRow key={client.id}>
                     <TableCell className="font-medium text-center">
                       {index + 1}
@@ -705,6 +932,27 @@ export function ClientsTable() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
+                              onClick={() => handlePayRemainingForClient(client)}
+                              variant="default"
+                              size="icon-sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              disabled={!hasPendingPayment}
+                            >
+                              <DollarSignIcon />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              {paymentWithRemaining 
+                                ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
+                                : 'Registrar pago'
+                              }
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
                               onClick={() => handleEditClient(client)}
                               variant="outline"
                               size="icon-sm"
@@ -738,7 +986,8 @@ export function ClientsTable() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                );
+              })}
               </TableBody>
             </Table>
           </div>

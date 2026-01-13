@@ -78,7 +78,16 @@ const Registro = () => {
       <Card className="w-[400px]">
         <CardHeader>
           <CardTitle className="text-center text-2xl mb-3 flex justify-center items-center">
-            <Image src="/logo.png" alt="Logo" width={200} height={200} />
+            <Image 
+              src="/logo.png" 
+              alt="Logo" 
+              width={200} 
+              height={200}
+              priority={true}
+              loading="eager"
+              placeholder="blur"
+              blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+            />
           </CardTitle>
           <CardDescription className="text-center">
             <p>Registra un usuario</p>

@@ -4,6 +4,25 @@ export function useExchangeRate() {
   const [rate, setRate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isManualRate, setIsManualRate] = useState(false);
+
+  const setManualRate = (newRate) => {
+    if (newRate && newRate > 0) {
+      setRate(newRate);
+      setIsManualRate(true);
+      setError(null);
+      localStorage.setItem('manualExchangeRate', newRate.toString());
+      localStorage.setItem('isManualRate', 'true');
+      console.log("Using manual exchange rate:", newRate);
+    }
+  };
+
+  const resetToAutomatic = () => {
+    setIsManualRate(false);
+    localStorage.removeItem('manualExchangeRate');
+    localStorage.removeItem('isManualRate');
+    fetchBCVRate();
+  };
 
   const fetchBCVRate = async () => {
     try {
@@ -163,21 +182,34 @@ export function useExchangeRate() {
   };
 
   useEffect(() => {
-    fetchBCVRate();
-
-    // Actualizar cada hora
-    const interval = setInterval(fetchBCVRate, 60 * 60 * 1000);
-
-    return () => clearInterval(interval);
+    // Verificar si hay una tasa manual guardada
+    const savedManualRate = localStorage.getItem('manualExchangeRate');
+    const savedIsManual = localStorage.getItem('isManualRate');
+    
+    if (savedIsManual === 'true' && savedManualRate) {
+      const manualRate = parseFloat(savedManualRate);
+      setRate(manualRate);
+      setIsManualRate(true);
+      setLoading(false);
+      console.log("Using saved manual exchange rate:", manualRate);
+    } else {
+      fetchBCVRate();
+      // Actualizar cada hora solo si no es tasa manual
+      const interval = setInterval(fetchBCVRate, 60 * 60 * 1000);
+      return () => clearInterval(interval);
+    }
   }, []);
 
   return {
     rate,
     loading,
     error,
+    isManualRate,
     convertToBs,
     formatCurrency,
     formatMultiCurrency,
+    setManualRate,
+    resetToAutomatic,
     refetch: fetchBCVRate,
   };
 }

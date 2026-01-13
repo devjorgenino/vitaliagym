@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAttendance } from "../../../hooks/useAttendance";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
 import {
   Card,
   CardContent,
@@ -16,7 +17,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "../../../components/ui/tooltip";
-import { EditIcon, TrashIcon } from "../../../components/ui/icons";
+import {
+  EditIcon,
+  TrashIcon,
+  SearchIcon,
+  FilterXIcon,
+} from "../../../components/ui/icons";
 import { Loader2 } from "lucide-react";
 import {
   Table,
@@ -40,7 +46,7 @@ const Asistencia = () => {
     getAttendanceByClientId,
   } = useAttendance();
 
-  const [checkingCedula, setCheckingCedula] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [checking, setChecking] = useState(false);
   const [markingAttendance, setMarkingAttendance] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -48,16 +54,25 @@ const Asistencia = () => {
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
 
+  // Estados para búsqueda y filtros de la tabla
+  const [tableSearchTerm, setTableSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
   const handleCheckCedula = async () => {
-    if (!checkingCedula.trim()) {
-      toast.error("Por favor ingrese una cédula");
+    if (!searchTerm.trim()) {
+      toast.error("Por favor ingrese una cédula o nombre");
       return;
     }
 
     setChecking(true);
-    const result = await checkClientStatus(checkingCedula);
+    const result = await checkClientStatus(searchTerm);
     setClientStatus(result);
     setChecking(false);
+  };
+
+  const handleCancelVerification = () => {
+    setSearchTerm("");
+    setClientStatus(null);
   };
 
   const handleMarkAttendance = async (clientId, date) => {
@@ -75,7 +90,7 @@ const Asistencia = () => {
 
       if (result.success) {
         // Limpiar formulario y esconder información del cliente
-        setCheckingCedula("");
+        setSearchTerm("");
         setClientStatus(null);
         toast.success("Asistencia registrada exitosamente");
       } else {
@@ -134,6 +149,42 @@ const Asistencia = () => {
     );
   };
 
+  // Lógica de filtrado para la tabla de asistencia
+  const filteredAttendance = attendance.filter((record) => {
+    // Filtrar por término de búsqueda
+    let matchesSearch = true;
+    if (tableSearchTerm.trim() !== "") {
+      const searchTermLower = tableSearchTerm.toLowerCase();
+      matchesSearch =
+        (record.clients?.first_name || "")
+          .toLowerCase()
+          .includes(searchTermLower) ||
+        (record.clients?.last_name || "")
+          .toLowerCase()
+          .includes(searchTermLower) ||
+        (record.clients?.cedula || "").toLowerCase().includes(searchTermLower);
+    }
+
+    // Filtrar por estado
+    let matchesStatus = true;
+    if (statusFilter !== "") {
+      matchesStatus = record.status === statusFilter;
+    }
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Función para limpiar todos los filtros
+  const clearTableFilters = () => {
+    setTableSearchTerm("");
+    setStatusFilter("");
+  };
+
+  // Contar filtros activos
+  const activeTableFiltersCount = [tableSearchTerm, statusFilter].filter(
+    (filter) => filter !== ""
+  ).length;
+
   if (loading) {
     return (
       <div className="container mx-auto py-6">
@@ -183,7 +234,7 @@ const Asistencia = () => {
           </Button>
         </div>
 
-        {/* Verificación de cédula */}
+        {/* Verificación de cliente */}
         <Card>
           <CardHeader>
             <CardTitle>🔍 Verificar Cliente</CardTitle>
@@ -192,9 +243,9 @@ const Asistencia = () => {
             <div className="flex space-x-4">
               <input
                 type="text"
-                value={checkingCedula}
-                onChange={(e) => setCheckingCedula(e.target.value)}
-                placeholder="Ingrese cédula del cliente"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Ingrese cédula o nombre del cliente"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyPress={(e) => {
                   if (e.key === "Enter") {
@@ -237,9 +288,7 @@ const Asistencia = () => {
                       </p>
                       <p>
                         <strong>Próximo pago:</strong>{" "}
-                        {formatDate(
-                          clientStatus.client.next_payment_date
-                        )}
+                        {formatDate(clientStatus.client.next_payment_date)}
                       </p>
                     </div>
                     <div
@@ -251,14 +300,14 @@ const Asistencia = () => {
                     >
                       {clientStatus.message}
                     </div>
-                    {clientStatus.canEnter && (
-                      <div className="mt-3">
+                    <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:justify-center">
+                      {clientStatus.canEnter && (
                         <Button
                           onClick={() =>
                             handleMarkAttendance(clientStatus.client.id)
                           }
                           variant="default"
-                          className="w-full"
+                          className="flex-1 sm:flex-initial sm:min-w-[140px]"
                           disabled={markingAttendance}
                         >
                           {markingAttendance ? (
@@ -270,15 +319,31 @@ const Asistencia = () => {
                             "✅ Marcar Asistencia"
                           )}
                         </Button>
-                      </div>
-                    )}
+                      )}
+                      <Button
+                        onClick={handleCancelVerification}
+                        variant="outline"
+                        className="flex-1 sm:flex-initial sm:min-w-[100px]"
+                      >
+                        ❌ Cancelar
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="p-4 bg-red-50 border-red-200 rounded-lg">
                     <h3 className="font-semibold mb-2">
                       ❌ Cliente No Encontrado
                     </h3>
-                    <p className="text-red-800">{clientStatus.message}</p>
+                    {/* <p className="text-red-800">{clientStatus.message}</p> */}
+                    <div className="mt-3 sm:flex sm:justify-center">
+                      <Button
+                        onClick={handleCancelVerification}
+                        variant="outline"
+                        className="w-full sm:w-auto sm:min-w-[100px]"
+                      >
+                        ❌ Cancelar
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -289,14 +354,83 @@ const Asistencia = () => {
         {/* Tabla de asistencias */}
         <Card>
           <CardHeader>
-            <CardTitle>📋 Registro de Asistencias</CardTitle>
+            <CardTitle>
+              📋 Registro de Asistencias ({filteredAttendance.length}
+              {filteredAttendance.length !== attendance.length
+                ? ` de ${attendance.length}`
+                : ""}
+              )
+            </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Barra de búsqueda y filtros */}
+            <div className="mb-6 space-y-4">
+              {/* Barra de búsqueda */}
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  type="text"
+                  placeholder="Buscar por nombre o cédula..."
+                  value={tableSearchTerm}
+                  onChange={(e) => setTableSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              {/* Filtros */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Filtros:
+                </span>
+
+                {/* Filtro por estado */}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos los estados</option>
+                  <option value="present">Presente</option>
+                  <option value="absent">Ausente</option>
+                  <option value="late">Tarde</option>
+                </select>
+
+                {/* Botón para limpiar filtros */}
+                {activeTableFiltersCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearTableFilters}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <FilterXIcon className="h-4 w-4 mr-1" />
+                    Limpiar ({activeTableFiltersCount})
+                  </Button>
+                )}
+              </div>
+
+              {/* Indicador de resultados */}
+              {filteredAttendance.length !== attendance.length && (
+                <div className="text-sm text-muted-foreground">
+                  Mostrando {filteredAttendance.length} de {attendance.length}{" "}
+                  registros
+                </div>
+              )}
+            </div>
             {attendance.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">
                   No hay asistencias registradas
                 </p>
+              </div>
+            ) : filteredAttendance.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">
+                  No se encontraron registros con los filtros aplicados
+                </p>
+                <Button onClick={clearTableFilters} variant="outline">
+                  Limpiar filtros
+                </Button>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -312,7 +446,7 @@ const Asistencia = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {attendance.map((record, index) => (
+                    {filteredAttendance.map((record, index) => (
                       <TableRow key={record.id}>
                         <TableCell className="font-medium">
                           {formatDate(record.date)}
@@ -364,7 +498,9 @@ const Asistencia = () => {
                                 <Button
                                   variant="destructive"
                                   size="icon-sm"
-                                  onClick={() => handleDeleteAttendance(record.id)}
+                                  onClick={() =>
+                                    handleDeleteAttendance(record.id)
+                                  }
                                   disabled={deletingId === record.id}
                                 >
                                   {deletingId === record.id ? (

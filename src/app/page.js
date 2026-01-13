@@ -12,6 +12,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!loading && user) {
+      console.log('User logged in, redirecting to dashboard:', user.email);
       router.push("/dashboard");
     }
   }, [user, loading, router]);

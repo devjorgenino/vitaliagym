@@ -355,7 +355,8 @@ setEditFormData({ name: "", description: "", price: "" });
             </div>
           </div>
         ) : (
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16">#</TableHead>
@@ -436,6 +437,7 @@ setEditFormData({ name: "", description: "", price: "" });
               ))}
             </TableBody>
           </Table>
+        </div>
         )}
       </CardContent>
     </Card>

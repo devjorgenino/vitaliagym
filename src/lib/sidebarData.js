@@ -1,4 +1,11 @@
-import { Dumbbell, Home, CalendarCheck2, Smile, Users } from "lucide-react";
+import {
+  Dumbbell,
+  Home,
+  CalendarCheck2,
+  Smile,
+  Users,
+  BanknoteIcon,
+} from "lucide-react";
 
 export const items = [
   {
@@ -25,6 +32,11 @@ export const items = [
     title: "Usuarios",
     url: "/usuarios",
     icon: Users,
+  },
+  {
+    title: "Pagos",
+    url: "/pagos",
+    icon: BanknoteIcon,
   },
 
   /* {
