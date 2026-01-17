@@ -15,11 +15,10 @@ import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
-import { LogoSkeleton } from "@/components/ui/avatar-skeleton";
+import { logoBlurDataURL } from "@/lib/imagePlaceholders";
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
   
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -58,27 +57,25 @@ const Login = () => {
 
   return (
     <div>
-      <Card className="w-[400px]">
-        <CardHeader>
-          <CardTitle className="text-center text-2xl mb-3 flex justify-center items-center">
-            <div className="relative">
-              {!imageLoaded && <LogoSkeleton width={200} height={200} />}
+      <Card className="w-[400px] shadow-lg">
+        <CardHeader className="space-y-3">
+          <CardTitle className="text-center text-2xl flex justify-center items-center">
+            <div className="logo-container relative w-32 h-16">
               <Image 
                 src="/logo.png" 
-                alt="Logo" 
-                width={200} 
-                height={200}
+                alt="Logo Vitalia Gym" 
+                fill
+                sizes="128px"
                 priority={true}
                 loading="eager"
                 placeholder="blur"
-                blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
-                onLoad={() => setImageLoaded(true)}
-                className={`transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                blurDataURL={logoBlurDataURL}
+                className="object-contain"
               />
             </div>
           </CardTitle>
-          <CardDescription className="text-center">
-            <p>Inicia sesión en tu cuenta</p>
+          <CardDescription className="text-center text-muted-foreground">
+            <p>Bienvenido de nuevo</p>
           </CardDescription>
         </CardHeader>
         <CardContent>
