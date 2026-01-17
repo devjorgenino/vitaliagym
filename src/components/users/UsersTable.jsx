@@ -7,7 +7,8 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { EditIcon, TrashIcon } from "../ui/icons";
+import { Input } from "../ui/input";
+import { EditIcon, TrashIcon, SearchIcon, FilterXIcon } from "../ui/icons";
 import {
   Table,
   TableBody,
@@ -37,6 +38,10 @@ export function UsersTable() {
     phone: "",
     role: "user",
   });
+
+  // Estados para búsqueda y filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRole, setSelectedRole] = useState("");
 
   const handleDeleteUser = async (userId) => {
     setDeletingId(userId);
@@ -282,6 +287,34 @@ export function UsersTable() {
     });
   };
 
+  // Lógica de filtrado
+  const filteredUsers = users.filter((user) => {
+    // Filtrar por término de búsqueda (email, nombre, teléfono)
+    const matchesSearch = 
+      searchTerm === "" ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.full_name && user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.phone && user.phone.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // Filtrar por rol
+    const matchesRole = 
+      selectedRole === "" ||
+      user.role === selectedRole;
+
+    return matchesSearch && matchesRole;
+  });
+
+  // Función para limpiar todos los filtros
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedRole("");
+  };
+
+  // Contar filtros activos
+  const activeFiltersCount = [searchTerm, selectedRole].filter(
+    (filter) => filter !== ""
+  ).length;
+
   if (loading) {
     return (
       <Card>
@@ -318,7 +351,7 @@ export function UsersTable() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle>Usuarios ({users.length})</CardTitle>
+        <CardTitle>Usuarios ({filteredUsers.length}{filteredUsers.length !== users.length ? ` de ${users.length}` : ""})</CardTitle>
         <div className="flex space-x-2">
           <Button
             onClick={() => setShowCreateForm(!showCreateForm)}
@@ -333,6 +366,57 @@ export function UsersTable() {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Barra de búsqueda y filtros */}
+        <div className="mb-6 space-y-4">
+          {/* Barra de búsqueda */}
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Buscar por email, nombre o teléfono..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
+            
+            {/* Filtro por rol */}
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los roles</option>
+              <option value="user">Usuario</option>
+              <option value="admin">Administrador</option>
+            </select>
+
+            {/* Botón para limpiar filtros */}
+            {activeFiltersCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <FilterXIcon className="h-4 w-4 mr-1" />
+                Limpiar ({activeFiltersCount})
+              </Button>
+            )}
+          </div>
+
+          {/* Indicador de resultados */}
+          {filteredUsers.length !== users.length && (
+            <div className="text-sm text-muted-foreground">
+              Mostrando {filteredUsers.length} de {users.length} usuarios
+            </div>
+          )}
+        </div>
+
         {showEditForm && (
           <div className="mb-6 p-4 border rounded-lg bg-blue-50">
             <h3 className="text-lg font-semibold mb-4">Editar Usuario</h3>
@@ -491,19 +575,27 @@ export function UsersTable() {
             </div>
           </div>
         )}
-        {users.length === 0 ? (
+        {filteredUsers.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground mb-4">
-              No hay usuarios registrados
+              {users.length === 0 
+                ? "No hay usuarios registrados" 
+                : "No se encontraron usuarios con los filtros aplicados"}
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-              <h4 className="font-semibold text-blue-900 mb-2">
-                📋 Para empezar:
-              </h4>
-              <ol className="text-sm text-blue-800 text-left space-y-1">
-                <li>Haz clic en "+ Nuevo Usuario"</li>
-              </ol>
-            </div>
+            {users.length === 0 ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                <h4 className="font-semibold text-blue-900 mb-2">
+                  📋 Para empezar:
+                </h4>
+                <ol className="text-sm text-blue-800 text-left space-y-1">
+                  <li>Haz clic en &quot;+ Nuevo Usuario&quot;</li>
+                </ol>
+              </div>
+            ) : (
+              <Button onClick={clearFilters} variant="outline">
+                Limpiar filtros
+              </Button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -520,7 +612,7 @@ export function UsersTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user, index) => (
+              {filteredUsers.map((user, index) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium text-center">
                     {index + 1}
