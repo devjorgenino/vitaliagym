@@ -18,10 +18,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { useCriticalImagePreload } from "@/hooks/useImagePreload";
+import { logoBlurDataURL } from "@/lib/imagePlaceholders";
+import "@/styles/image-optimization.css";
 
 const Registro = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  
+  // Precargar imágenes críticas con máxima prioridad
+  useCriticalImagePreload();
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -75,22 +81,25 @@ const Registro = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <Card className="w-[400px]">
-        <CardHeader>
-          <CardTitle className="text-center text-2xl mb-3 flex justify-center items-center">
-            <Image 
-              src="/logo.png" 
-              alt="Logo" 
-              width={200} 
-              height={200}
-              priority={true}
-              loading="eager"
-              placeholder="blur"
-              blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
-            />
+      <Card className="w-[400px] shadow-lg">
+        <CardHeader className="space-y-3">
+          <CardTitle className="text-center text-2xl flex justify-center items-center">
+            <div className="logo-container relative w-32 h-16">
+              <Image 
+                src="/logo.png" 
+                alt="Logo Vitalia Gym" 
+                fill
+                sizes="128px"
+                priority={true}
+                loading="eager"
+                placeholder="blur"
+                blurDataURL={logoBlurDataURL}
+                className="object-contain"
+              />
+            </div>
           </CardTitle>
-          <CardDescription className="text-center">
-            <p>Registra un usuario</p>
+          <CardDescription className="text-center text-muted-foreground">
+            <p>Crea tu cuenta</p>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -162,7 +171,7 @@ const Registro = () => {
         </CardContent>
         <CardFooter>
           <p className="w-full text-center text-sm text-muted-foreground flex justify-between">
-            ¿Ya tienes cuenta? <Link href="/">Iniciar Sesión</Link>
+            ¿Ya tienes cuenta? <Link href="/auth/login">Iniciar Sesión</Link>
           </p>
         </CardFooter>
       </Card>

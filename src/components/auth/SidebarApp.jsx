@@ -26,48 +26,60 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/getInitials";
 import { items } from "@/lib/sidebarData";
+import { logoBlurDataURL, logoSmallBlurDataURL } from "@/lib/imagePlaceholders";
+import "@/styles/image-optimization.css";
+import { usePathname } from "next/navigation";
 
 export const AppSidebar = () => {
   const { state } = useSidebar();
   const { user } = useAuth();
+  const pathname = usePathname();
 
   const username = user?.user_metadata?.full_name || "Usuario";
 
   return (
     <Sidebar collapsible="icon">
       <SidebarGroup>
-        <SidebarHeader className="flex justify-center items-center m-auto p-0.5">
+        <SidebarHeader className="flex justify-center items-center m-auto">
           {state === "collapsed" ? (
-            <Link href="/dashboard">
+            <Link
+              href="/dashboard"
+              className="logo-container flex items-center justify-center w-9 h-9"
+            >
               <Image
                 src="/logo-collapsible.png"
-                alt="Logo Collapsible"
+                alt="Vitalia Gym"
                 width={40}
                 height={40}
                 priority={true}
                 loading="eager"
                 placeholder="blur"
-                blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+                blurDataURL={logoSmallBlurDataURL}
+                className="object-contain"
               />
             </Link>
           ) : (
-            <Link href="/dashboard">
+            <Link
+              href="/dashboard"
+              className="logo-container flex items-center justify-center"
+            >
               <Image
                 src="/logo-sidebar.png"
-                alt="Logo"
-                width={200}
-                height={200}
+                alt="Vitalia Gym"
+                width={120}
+                height={36}
                 priority={true}
                 loading="eager"
                 placeholder="blur"
-                blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+                blurDataURL={logoBlurDataURL}
+                className="object-contain"
               />
             </Link>
           )}
         </SidebarHeader>
       </SidebarGroup>
       <SidebarContent>
-        <SidebarGroup className="flex flex-col gap-2 items-center p-3">
+        <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-3">
           <SidebarGroupContent>
             <SidebarMenu className="group-data-[collapsible=icon]:items-center">
               {items.map((item) => (
@@ -78,12 +90,16 @@ export const AppSidebar = () => {
                         <Link
                           href={item.url}
                           className={cn(
-                            "flex items-center gap-2 px-4 py-2 w-full text-sm font-medium text-left text-muted-foreground transition-all hover:bg-muted duration-300",
-                            "group-data-[collapsible=icon]:justify-center"
+                            "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
+                            "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
+                            // Active state con colores del tema
+                            pathname === item.url
+                              ? "bg-primary text-primary-foreground hover:bg-primary"
+                              : "",
                           )}
                         >
-                          <item.icon className="!size-5" />
-                          <span className="group-data-[collapsible=icon]:hidden">
+                          <item.icon className="!size-5 transition-colors" />
+                          <span className="group-data-[collapsible=icon]:hidden transition-colors">
                             {item.title}
                           </span>
                         </Link>
@@ -102,19 +118,22 @@ export const AppSidebar = () => {
         </SidebarGroup>
       </SidebarContent>
       <SidebarGroup>
-        <SidebarFooter>
+        <SidebarFooter className="px-3 py-3">
           <div
             className={cn(
-              "flex flex-row justify-between items-center gap-4",
-              "group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-2"
+              "flex flex-row justify-between items-center gap-3",
+              "group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-2",
             )}
           >
             <div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/perfil">
+                  <Link
+                    href="/perfil"
+                    className="hover:opacity-80 transition-opacity"
+                  >
                     <div className="flex items-center justify-center gap-2">
-                      <Avatar className="w-8 h-8">
+                      <Avatar className="w-9 h-9 border-2 border-blue-100">
                         <AvatarImage
                           src={
                             user?.user_metadata?.avatar_url
@@ -124,18 +143,27 @@ export const AppSidebar = () => {
                           alt="Avatar"
                           loading="lazy"
                         />
-                        <AvatarFallback>{getInitials(username)}</AvatarFallback>
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
+                          {getInitials(username)}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                        <span className="text-sm font-medium">{username}</span>
-                        <p className="text-xs">Rol</p>
+                        <span className="text-sm font-medium text-foreground">
+                          {username}
+                        </span>
+                        <p className="text-xs text-muted-foreground">
+                          Administrador
+                        </p>
                       </div>
                     </div>
                   </Link>
                 </TooltipTrigger>
                 {state === "collapsed" && (
-                  <TooltipContent side="right" sideOffset={5}>
-                    <p>{username}</p>
+                  <TooltipContent side="right" sideOffset={8}>
+                    <p className="font-medium">{username}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Administrador
+                    </p>
                   </TooltipContent>
                 )}
               </Tooltip>
@@ -143,14 +171,17 @@ export const AppSidebar = () => {
             <div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => client.auth.signOut()}
-                    className={cn(
-                      buttonVariants(),
-                      "group-data-[collapsible=icon]:w-full"
-                    )}
-                  >
-                    <LogOut className="!size-5" />
+                   <button
+                     onClick={() => client.auth.signOut()}
+                     className={cn(
+                       "w-10 h-10 rounded-lg bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-105 transition-all duration-200 flex items-center justify-center",
+                       "group-data-[collapsible=icon]:w-8 h-8 group-data-[collapsible=icon]:justify-center",
+                     )}
+                   >
+                     <LogOut className={cn(
+                       "!size-5",
+                       "group-data-[collapsible=icon]:!size-4"
+                     )} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent

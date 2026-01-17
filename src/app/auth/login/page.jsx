@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import "@/styles/image-optimization.css";
 import {
   Card,
   CardHeader,
@@ -18,10 +19,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { useCriticalImagePreload } from "@/hooks/useImagePreload";
+import { logoBlurDataURL } from "@/lib/imagePlaceholders";
 
 const Login = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  
+  // Precargar imágenes críticas con máxima prioridad
+  useCriticalImagePreload();
   
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -56,13 +62,25 @@ const Login = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <Card className="w-[400px]">
-        <CardHeader>
-          <CardTitle className="text-center text-2xl mb-3 flex justify-center items-center">
-            <Image src="/logo.png" alt="Logo" width={200} height={200} />
+      <Card className="w-[400px] shadow-lg">
+        <CardHeader className="space-y-3">
+          <CardTitle className="text-center text-2xl flex justify-center items-center">
+            <div className="logo-container relative w-32 h-16">
+              <Image 
+                src="/logo.png" 
+                alt="Logo Vitalia Gym" 
+                fill
+                sizes="128px"
+                priority={true}
+                loading="eager"
+                placeholder="blur"
+                blurDataURL={logoBlurDataURL}
+                className="object-contain"
+              />
+            </div>
           </CardTitle>
-          <CardDescription className="text-center">
-            <p>Inicia sesión en tu cuenta</p>
+          <CardDescription className="text-center text-muted-foreground">
+            <p>Bienvenido de nuevo</p>
           </CardDescription>
         </CardHeader>
         <CardContent>
