@@ -1,4 +1,5 @@
 import { AuthProvider } from "@/components/context/AuthProvider.js";
+import { PermissionsProvider } from "@/components/context/PermissionsProvider.js";
 import { Toaster } from "sonner";
 import { Poppins } from "next/font/google";
 import "./globals.css";
@@ -26,7 +27,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${poppinsFont.className} antialiased`}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <PermissionsProvider>
+            {children}
+          </PermissionsProvider>
+        </AuthProvider>
         <Toaster />
       </body>
     </html>

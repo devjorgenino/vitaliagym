@@ -11,6 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { ConfirmDialog } from "../ui/confirm-dialog";
+import { EmptyState, SearchEmptyState, GettingStartedState } from "../ui/empty-state";
 import { EditIcon, TrashIcon, SearchIcon, FilterXIcon, DollarSignIcon } from "../ui/icons";
 import {
   Table,
@@ -20,6 +24,13 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 export function ClientsTable() {
   const router = useRouter();
@@ -54,6 +65,8 @@ export function ClientsTable() {
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdatingClient, setIsUpdatingClient] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState(null);
 
   const [editingClient, setEditingClient] = useState(null);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -291,12 +304,21 @@ export function ClientsTable() {
     });
   };
 
-  const handleDeleteClient = async (clientId) => {
-    setDeletingId(clientId);
+  const handleDeleteClick = (client) => {
+    setClientToDelete(client);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteClient = async () => {
+    if (!clientToDelete) return;
+    
+    setDeletingId(clientToDelete.id);
     try {
-      const result = await deleteClient(clientId);
+      const result = await deleteClient(clientToDelete.id);
       if (result.success) {
         toast.success("Cliente eliminado exitosamente");
+        setDeleteDialogOpen(false);
+        setClientToDelete(null);
       } else {
         toast.error("Error al eliminar cliente: " + result.error);
       }
@@ -422,18 +444,22 @@ export function ClientsTable() {
             <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
             
             {/* Filtro por plan */}
-            <select
+            <Select
               value={selectedPlan}
-              onChange={(e) => setSelectedPlan(e.target.value)}
-              className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onValueChange={(value) => setSelectedPlan(value === "all" ? "" : value)}
             >
-              <option value="">Todos los planes</option>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-[180px] h-8 text-sm">
+                <SelectValue placeholder="Todos los planes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los planes</SelectItem>
+                {plans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {/* Filtros de pago */}
             <Button
@@ -481,136 +507,126 @@ export function ClientsTable() {
         </div>
 
         {showEditForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-blue-50">
+          <div className="mb-6 p-4 border rounded-lg bg-muted/50">
             <h3 className="text-lg font-semibold mb-4">Editar Cliente</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Nombre</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="edit_first_name">Nombre</Label>
+                <Input
+                  id="edit_first_name"
                   type="text"
                   name="first_name"
                   value={editFormData.first_name}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Juan"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Apellido
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="edit_last_name">Apellido</Label>
+                <Input
+                  id="edit_last_name"
                   type="text"
                   name="last_name"
                   value={editFormData.last_name}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Pérez"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Cédula</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="edit_cedula">Cédula</Label>
+                <Input
+                  id="edit_cedula"
                   type="text"
                   name="cedula"
                   value={editFormData.cedula}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="123456789"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Fecha de Nacimiento
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="edit_birth_date">Fecha de Nacimiento</Label>
+                <Input
+                  id="edit_birth_date"
                   type="date"
                   name="birth_date"
                   value={editFormData.birth_date}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="edit_email">Email</Label>
+                <Input
+                  id="edit_email"
                   type="email"
                   name="email"
                   value={editFormData.email}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="cliente@ejemplo.com"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Teléfono
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="edit_phone">Teléfono</Label>
+                <Input
+                  id="edit_phone"
                   type="tel"
                   name="phone"
                   value={editFormData.phone}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="+1234567890"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">
-                  Dirección
-                </label>
-                <input
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="edit_address">Dirección</Label>
+                <Input
+                  id="edit_address"
                   type="text"
                   name="address"
                   value={editFormData.address}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Calle Principal #123"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">
-                  Observaciones
-                </label>
-                <textarea
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="edit_observations">Observaciones</Label>
+                <Textarea
+                  id="edit_observations"
                   name="observations"
                   value={editFormData.observations}
                   onChange={handleEditInputChange}
-                  rows="3"
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
                   placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Plan</label>
-                <select
-                  name="plan_id"
+              <div className="space-y-2">
+                <Label htmlFor="edit_plan_id">Plan</Label>
+                <Select
                   value={editFormData.plan_id}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, plan_id: value }))}
                 >
-                  <option value="">Seleccionar plan</option>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="edit_plan_id">
+                    <SelectValue placeholder="Seleccionar plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Fecha de Ingreso
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="edit_join_date">Fecha de Ingreso</Label>
+                <Input
+                  id="edit_join_date"
                   type="date"
                   name="join_date"
                   value={editFormData.join_date}
                   onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
@@ -639,137 +655,127 @@ export function ClientsTable() {
         )}
 
         {showCreateForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+          <div className="mb-6 p-4 border rounded-lg bg-muted/50">
             <h3 className="text-lg font-semibold mb-4">Crear Nuevo Cliente</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Nombre</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create_first_name">Nombre</Label>
+                <Input
+                  id="create_first_name"
                   type="text"
                   name="first_name"
                   value={formData.first_name}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Juan"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Apellido
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create_last_name">Apellido</Label>
+                <Input
+                  id="create_last_name"
                   type="text"
                   name="last_name"
                   value={formData.last_name}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Pérez"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Cédula</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create_cedula">Cédula</Label>
+                <Input
+                  id="create_cedula"
                   type="text"
                   name="cedula"
                   value={formData.cedula}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="123456789"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Fecha de Nacimiento
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create_birth_date">Fecha de Nacimiento</Label>
+                <Input
+                  id="create_birth_date"
                   type="date"
                   name="birth_date"
                   value={formData.birth_date}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create_email">Email</Label>
+                <Input
+                  id="create_email"
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="cliente@ejemplo.com"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Teléfono
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create_phone">Teléfono</Label>
+                <Input
+                  id="create_phone"
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="+1234567890"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">
-                  Dirección
-                </label>
-                <input
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="create_address">Dirección</Label>
+                <Input
+                  id="create_address"
                   type="text"
                   name="address"
                   value={formData.address}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Calle Principal #123"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">
-                  Observaciones
-                </label>
-                <textarea
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="create_observations">Observaciones</Label>
+                <Textarea
+                  id="create_observations"
                   name="observations"
                   value={formData.observations}
                   onChange={handleInputChange}
-                  rows="3"
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
                   placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Plan</label>
-                <select
-                  name="plan_id"
+              <div className="space-y-2">
+                <Label htmlFor="create_plan_id">Plan</Label>
+                <Select
                   value={formData.plan_id}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, plan_id: value }))}
                   disabled={plansLoading}
                 >
-                  <option value="">Seleccionar plan</option>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="create_plan_id">
+                    <SelectValue placeholder="Seleccionar plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Fecha de Ingreso
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create_join_date">Fecha de Ingreso</Label>
+                <Input
+                  id="create_join_date"
                   type="date"
                   name="join_date"
                   value={formData.join_date}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
@@ -802,27 +808,26 @@ export function ClientsTable() {
         )}
 
         {filteredClients.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground mb-4">
-              {clients.length === 0 
-                ? "No hay clientes registrados" 
-                : "No se encontraron clientes con los filtros aplicados"}
-            </p>
-            {clients.length === 0 ? (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                <h4 className="font-semibold text-blue-900 mb-2">
-                  📋 Para empezar:
-                </h4>
-                <ol className="text-sm text-blue-800 text-left space-y-1">
-                  <li>Haz clic en "+ Nuevo Cliente"</li>
-                </ol>
-              </div>
-            ) : (
-              <Button onClick={clearFilters} variant="outline">
-                Limpiar filtros
-              </Button>
-            )}
-          </div>
+          clients.length === 0 ? (
+            <GettingStartedState
+              title="No hay clientes registrados"
+              steps={[
+                "Haz clic en \"+ Nuevo Cliente\"",
+                "Completa el formulario con los datos del cliente",
+                "Selecciona un plan para el cliente"
+              ]}
+              action={{
+                label: "Nuevo Cliente",
+                onClick: () => setShowCreateForm(true)
+              }}
+            />
+          ) : (
+            <SearchEmptyState
+              searchTerm={searchTerm}
+              entityName="clientes"
+              onClear={clearFilters}
+            />
+          )
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -967,7 +972,7 @@ export function ClientsTable() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
-                              onClick={() => handleDeleteClient(client.id)}
+                              onClick={() => handleDeleteClick(client)}
                               variant="destructive"
                               size="icon-sm"
                               disabled={deletingId === client.id}
@@ -993,6 +998,23 @@ export function ClientsTable() {
           </div>
         )}
       </CardContent>
+
+      {/* Dialog de confirmación de eliminación */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar cliente"
+        description={
+          clientToDelete
+            ? `¿Estás seguro de que deseas eliminar a ${clientToDelete.first_name} ${clientToDelete.last_name}? Esta acción eliminará también todos sus pagos y registros de asistencia.`
+            : "¿Estás seguro de que deseas eliminar este cliente?"
+        }
+        confirmText="Eliminar"
+        variant="destructive"
+        loading={deletingId !== null}
+        onConfirm={handleDeleteClient}
+        onCancel={() => setClientToDelete(null)}
+      />
     </Card>
   );
 }
