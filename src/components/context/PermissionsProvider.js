@@ -45,6 +45,23 @@ export const PERMISSIONS = {
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_EDIT: 'settings.edit',
   SETTINGS_MANAGE_ROLES: 'settings.manage_roles',
+
+  // Administración
+  ADMIN_VIEW: 'admin.view',
+  ADMIN_STAFF_VIEW: 'admin.staff.view',
+  ADMIN_STAFF_CREATE: 'admin.staff.create',
+  ADMIN_STAFF_EDIT: 'admin.staff.edit',
+  ADMIN_STAFF_DELETE: 'admin.staff.delete',
+  ADMIN_STAFF_PAYMENTS_VIEW: 'admin.staff_payments.view',
+  ADMIN_STAFF_PAYMENTS_CREATE: 'admin.staff_payments.create',
+  ADMIN_STAFF_PAYMENTS_EDIT: 'admin.staff_payments.edit',
+  ADMIN_STAFF_PAYMENTS_DELETE: 'admin.staff_payments.delete',
+  ADMIN_EXPENSES_VIEW: 'admin.expenses.view',
+  ADMIN_EXPENSES_CREATE: 'admin.expenses.create',
+  ADMIN_EXPENSES_EDIT: 'admin.expenses.edit',
+  ADMIN_EXPENSES_DELETE: 'admin.expenses.delete',
+  ADMIN_REPORTS_VIEW: 'admin.reports.view',
+  ADMIN_REPORTS_EXPORT: 'admin.reports.export',
 };
 
 // Mapeo de rutas a permisos requeridos
@@ -56,6 +73,7 @@ export const ROUTE_PERMISSIONS = {
   '/usuarios': [PERMISSIONS.USERS_VIEW],
   '/pagos': [PERMISSIONS.PAYMENTS_VIEW],
   '/configuracion/roles': [PERMISSIONS.SETTINGS_MANAGE_ROLES],
+  '/administracion': [PERMISSIONS.ADMIN_VIEW],
   '/perfil': [], // Todos los usuarios autenticados pueden ver su perfil
 };
 
@@ -68,6 +86,7 @@ export const MODULE_PERMISSIONS = {
   users: PERMISSIONS.USERS_VIEW,
   payments: PERMISSIONS.PAYMENTS_VIEW,
   settings: PERMISSIONS.SETTINGS_VIEW,
+  admin: PERMISSIONS.ADMIN_VIEW,
 };
 
 const PermissionsContext = createContext(null);

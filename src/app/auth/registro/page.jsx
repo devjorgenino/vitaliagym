@@ -28,6 +28,7 @@ import { Loader2, Shield } from "lucide-react";
 import { useCriticalImagePreload } from "@/hooks/useImagePreload";
 import useRolesList from "@/hooks/useRolesList";
 import { logoBlurDataURL } from "@/lib/imagePlaceholders";
+import { PHONE_OPERATORS, formatPhone } from "@/lib/venezuelanData";
 import "@/styles/image-optimization.css";
 
 const Registro = () => {
@@ -40,6 +41,7 @@ const Registro = () => {
     firstname: "",
     lastname: "",
     email: "",
+    phone_operator: "0414",
     phone: "",
     password: "",
     password2: "",
@@ -98,7 +100,7 @@ const Registro = () => {
         options: {
           data: {
             full_name: firstname + " " + lastname,
-            phone: phone,
+            phone: phone ? formatPhone(formData.phone_operator, phone) : "",
           },
         },
       });
@@ -213,14 +215,36 @@ const Registro = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="phone">Teléfono</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    placeholder="+58 412 1234567"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                  />
+                  <div className="flex gap-1">
+                    <Select
+                      value={formData.phone_operator}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                    >
+                      <SelectTrigger 
+                        className="w-[90px] flex-shrink-0" 
+                        aria-label="Operador telefónico"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_OPERATORS.map((op) => (
+                          <SelectItem key={op.code} value={op.code}>
+                            <span className="font-medium">{op.code}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="1234567"
+                      maxLength={7}
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="role">

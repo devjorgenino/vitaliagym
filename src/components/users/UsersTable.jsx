@@ -8,7 +8,8 @@ import { PermissionGate } from "@/components/auth/PermissionGate";
 import { PERMISSIONS } from "@/components/context/PermissionsProvider";
 import client from "@/api/client";
 import { toast } from "sonner";
-import { Loader2, Shield, UserPlus, RefreshCw } from "lucide-react";
+import { Loader2, Shield, UserPlus, RefreshCw, Phone } from "lucide-react";
+import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EditIcon, TrashIcon, SearchIcon, FilterXIcon } from "@/components/ui/icons";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedCell } from "@/components/ui/truncated-cell";
 import {
   Select,
   SelectContent,
@@ -51,6 +53,7 @@ export function UsersTable() {
   const [formData, setFormData] = useState({
     email: "",
     full_name: "",
+    phone_operator: "0414",
     phone: "",
     roleId: "",
   });
@@ -62,6 +65,7 @@ export function UsersTable() {
   const [editFormData, setEditFormData] = useState({
     email: "",
     full_name: "",
+    phone_operator: "0414",
     phone: "",
   });
 
@@ -187,7 +191,7 @@ export function UsersTable() {
         options: {
           data: {
             full_name: formData.full_name,
-            phone: formData.phone,
+            phone: formData.phone ? formatPhone(formData.phone_operator, formData.phone) : "",
           },
         },
       });
@@ -200,7 +204,7 @@ export function UsersTable() {
           id: authData.user.id,
           email: formData.email,
           full_name: formData.full_name,
-          phone: formData.phone,
+          phone: formData.phone ? formatPhone(formData.phone_operator, formData.phone) : "",
         });
 
         if (profileError && profileError.code !== "PGRST116") {
@@ -223,6 +227,7 @@ export function UsersTable() {
       setFormData({
         email: "",
         full_name: "",
+        phone_operator: "0414",
         phone: "",
         roleId: availableRoles[0]?.id || "",
       });
@@ -243,10 +248,13 @@ export function UsersTable() {
 
   const handleEditUser = (user) => {
     setEditingUser(user);
+    const phoneValue = user.phone || user.user_metadata?.phone || "";
+    const { operator, number } = parsePhone(phoneValue);
     setEditFormData({
       email: user.email || "",
       full_name: user.full_name || user.user_metadata?.full_name || "",
-      phone: user.phone || user.user_metadata?.phone || "",
+      phone_operator: operator,
+      phone: number,
     });
     setShowEditForm(true);
     setShowCreateForm(false);
@@ -267,7 +275,7 @@ export function UsersTable() {
         .update({
           email: editFormData.email,
           full_name: editFormData.full_name,
-          phone: editFormData.phone,
+          phone: editFormData.phone ? formatPhone(editFormData.phone_operator, editFormData.phone) : "",
         })
         .eq("id", editingUser.id);
 
@@ -277,7 +285,7 @@ export function UsersTable() {
 
       setEditingUser(null);
       setShowEditForm(false);
-      setEditFormData({ email: "", full_name: "", phone: "" });
+      setEditFormData({ email: "", full_name: "", phone_operator: "0414", phone: "" });
       await refetch();
 
       toast.success("Usuario actualizado exitosamente");
@@ -489,13 +497,35 @@ export function UsersTable() {
                 </div>
                 <div>
                   <Label className="mb-2 block">Teléfono</Label>
-                  <Input
-                    type="tel"
-                    name="phone"
-                    value={editFormData.phone}
-                    onChange={handleEditInputChange}
-                    placeholder="+58 412 1234567"
-                  />
+                  <div className="flex gap-1">
+                    <Select
+                      value={editFormData.phone_operator}
+                      onValueChange={(value) => setEditFormData(prev => ({ ...prev, phone_operator: value }))}
+                    >
+                      <SelectTrigger 
+                        className="w-[90px] flex-shrink-0" 
+                        aria-label="Operador telefónico"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_OPERATORS.map((op) => (
+                          <SelectItem key={op.code} value={op.code}>
+                            <span className="font-medium">{op.code}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="tel"
+                      name="phone"
+                      value={editFormData.phone}
+                      onChange={handleEditInputChange}
+                      placeholder="1234567"
+                      maxLength={7}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mt-3">
@@ -550,13 +580,35 @@ export function UsersTable() {
                 </div>
                 <div>
                   <Label className="mb-2 block">Teléfono</Label>
-                  <Input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    placeholder="+58 412 1234567"
-                  />
+                  <div className="flex gap-1">
+                    <Select
+                      value={formData.phone_operator}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                    >
+                      <SelectTrigger 
+                        className="w-[90px] flex-shrink-0" 
+                        aria-label="Operador telefónico"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_OPERATORS.map((op) => (
+                          <SelectItem key={op.code} value={op.code}>
+                            <span className="font-medium">{op.code}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      placeholder="1234567"
+                      maxLength={7}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label className="mb-2 block flex items-center gap-1">
@@ -633,16 +685,16 @@ export function UsersTable() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table aria-label="Lista de usuarios del sistema">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12">#</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Teléfono</TableHead>
+                    <TableHead className="hidden md:table-cell">Nombre</TableHead>
+                    <TableHead className="hidden lg:table-cell">Teléfono</TableHead>
                     <TableHead>Rol(es)</TableHead>
-                    <TableHead>Creado</TableHead>
-                    <TableHead className="w-32">Acciones</TableHead>
+                    <TableHead className="hidden md:table-cell">Creado</TableHead>
+                    <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -654,11 +706,22 @@ export function UsersTable() {
                         <TableCell className="font-medium text-center">
                           {index + 1}
                         </TableCell>
-                        <TableCell className="font-medium">
-                          {user.email || "N/A"}
+                        <TableCell>
+                          <TruncatedCell 
+                            value={user.email} 
+                            maxWidth="180px"
+                            className="font-medium"
+                            fallback="N/A"
+                          />
                         </TableCell>
-                        <TableCell>{user.full_name || "Sin nombre"}</TableCell>
-                        <TableCell>{user.phone || "N/A"}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <TruncatedCell 
+                            value={user.full_name} 
+                            maxWidth="150px"
+                            fallback="Sin nombre"
+                          />
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell whitespace-nowrap">{user.phone || "N/A"}</TableCell>
                         <TableCell>
                           {loadingUserRoles ? (
                             <Skeleton className="h-5 w-20" />
@@ -686,7 +749,7 @@ export function UsersTable() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell>{formatDate(user.created_at)}</TableCell>
+                        <TableCell className="hidden md:table-cell whitespace-nowrap">{formatDate(user.created_at)}</TableCell>
                         <TableCell>
                           <div className="flex space-x-1">
                             {/* Botón de seguridad/roles */}

@@ -7,6 +7,7 @@ import {
   BanknoteIcon,
   Settings,
   Shield,
+  Briefcase,
 } from "lucide-react";
 
 /**
@@ -67,6 +68,12 @@ export const configItems = [
     url: "/configuracion/roles",
     icon: Shield,
     permission: "settings.manage_roles",
+  },
+  {
+    title: "Administración",
+    url: "/administracion",
+    icon: Briefcase,
+    permission: "admin.view",
   },
 ];
 

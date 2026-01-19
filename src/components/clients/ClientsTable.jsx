@@ -4,12 +4,14 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
+import { DOCUMENT_TYPES, PHONE_OPERATORS, formatCedula, parseCedula, formatPhone, parsePhone } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, IdCard, Phone } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { TruncatedCell } from "../ui/truncated-cell";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
@@ -53,9 +55,11 @@ export function ClientsTable() {
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
+    cedula_type: "V",
     cedula: "",
     birth_date: "",
     email: "",
+    phone_operator: "0414",
     phone: "",
     address: "",
     observations: "",
@@ -73,9 +77,11 @@ export function ClientsTable() {
   const [editFormData, setEditFormData] = useState({
     first_name: "",
     last_name: "",
+    cedula_type: "V",
     cedula: "",
     birth_date: "",
     email: "",
+    phone_operator: "0414",
     phone: "",
     address: "",
     observations: "",
@@ -199,15 +205,32 @@ export function ClientsTable() {
 
     setIsCreating(true);
     try {
-      const result = await createClient(formData);
+      // Format cedula with type prefix before saving
+      // Format phone with operator prefix before saving
+      const dataToSave = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        cedula: formatCedula(formData.cedula_type, formData.cedula),
+        birth_date: formData.birth_date,
+        email: formData.email,
+        phone: formData.phone ? formatPhone(formData.phone_operator, formData.phone) : "",
+        address: formData.address,
+        observations: formData.observations,
+        plan_id: formData.plan_id,
+        join_date: formData.join_date,
+      };
+      
+      const result = await createClient(dataToSave);
 
       if (result.success) {
         setFormData({
           first_name: "",
           last_name: "",
+          cedula_type: "V",
           cedula: "",
           birth_date: "",
           email: "",
+          phone_operator: "0414",
           phone: "",
           address: "",
           observations: "",
@@ -229,13 +252,19 @@ export function ClientsTable() {
 
   const handleEditClient = (client) => {
     setEditingClient(client);
+    // Parse cedula to separate type and number
+    const { type, number } = parseCedula(client.cedula || "");
+    // Parse phone to separate operator and number
+    const { operator, number: phoneNumber } = parsePhone(client.phone || "");
     setEditFormData({
       first_name: client.first_name || "",
       last_name: client.last_name || "",
-      cedula: client.cedula || "",
+      cedula_type: type,
+      cedula: number,
       birth_date: client.birth_date || "",
       email: client.email || "",
-      phone: client.phone || "",
+      phone_operator: operator,
+      phone: phoneNumber,
       address: client.address || "",
       observations: client.observations || "",
       plan_id: client.plan_id || "",
@@ -258,7 +287,22 @@ export function ClientsTable() {
 
     setIsUpdatingClient(true);
     try {
-      const result = await updateClient(editingClient.id, editFormData);
+      // Format cedula with type prefix before saving
+      // Format phone with operator prefix before saving
+      const dataToSave = {
+        first_name: editFormData.first_name,
+        last_name: editFormData.last_name,
+        cedula: formatCedula(editFormData.cedula_type, editFormData.cedula),
+        birth_date: editFormData.birth_date,
+        email: editFormData.email,
+        phone: editFormData.phone ? formatPhone(editFormData.phone_operator, editFormData.phone) : "",
+        address: editFormData.address,
+        observations: editFormData.observations,
+        plan_id: editFormData.plan_id,
+        join_date: editFormData.join_date,
+      };
+      
+      const result = await updateClient(editingClient.id, dataToSave);
 
       if (result.success) {
         setEditingClient(null);
@@ -266,9 +310,11 @@ export function ClientsTable() {
         setEditFormData({
           first_name: "",
           last_name: "",
+          cedula_type: "V",
           cedula: "",
           birth_date: "",
           email: "",
+          phone_operator: "0414",
           phone: "",
           address: "",
           observations: "",
@@ -293,9 +339,11 @@ export function ClientsTable() {
     setEditFormData({
       first_name: "",
       last_name: "",
+      cedula_type: "V",
       cedula: "",
       birth_date: "",
       email: "",
+      phone_operator: "0414",
       phone: "",
       address: "",
       observations: "",
@@ -535,16 +583,41 @@ export function ClientsTable() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit_cedula">Cédula</Label>
-                <Input
-                  id="edit_cedula"
-                  type="text"
-                  name="cedula"
-                  value={editFormData.cedula}
-                  onChange={handleEditInputChange}
-                  placeholder="123456789"
-                  required
-                />
+                <Label htmlFor="edit_cedula">
+                  Cédula <span className="text-destructive">*</span>
+                </Label>
+                <div className="flex gap-1">
+                  <Select
+                    value={editFormData.cedula_type}
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, cedula_type: value }))}
+                  >
+                    <SelectTrigger 
+                      className="w-[70px] flex-shrink-0" 
+                      aria-label="Tipo de documento"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DOCUMENT_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium">{type.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="edit_cedula"
+                    type="text"
+                    name="cedula"
+                    value={editFormData.cedula}
+                    onChange={handleEditInputChange}
+                    placeholder="12345678"
+                    required
+                    className="flex-1"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit_birth_date">Fecha de Nacimiento</Label>
@@ -570,14 +643,39 @@ export function ClientsTable() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit_phone">Teléfono</Label>
-                <Input
-                  id="edit_phone"
-                  type="tel"
-                  name="phone"
-                  value={editFormData.phone}
-                  onChange={handleEditInputChange}
-                  placeholder="+1234567890"
-                />
+                <div className="flex gap-1">
+                  <Select
+                    value={editFormData.phone_operator}
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, phone_operator: value }))}
+                  >
+                    <SelectTrigger 
+                      className="w-[90px] flex-shrink-0" 
+                      aria-label="Operador telefónico"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PHONE_OPERATORS.map((op) => (
+                        <SelectItem key={op.code} value={op.code}>
+                          <span className="font-medium">{op.code}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="edit_phone"
+                    type="tel"
+                    name="phone"
+                    value={editFormData.phone}
+                    onChange={handleEditInputChange}
+                    placeholder="1234567"
+                    maxLength={7}
+                    className="flex-1"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Movistar: 0414/0424, Movilnet: 0416/0426, Digitel: 0412
+                </p>
               </div>
               <div className="md:col-span-2 space-y-2">
                 <Label htmlFor="edit_address">Dirección</Label>
@@ -683,16 +781,45 @@ export function ClientsTable() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="create_cedula">Cédula</Label>
-                <Input
-                  id="create_cedula"
-                  type="text"
-                  name="cedula"
-                  value={formData.cedula}
-                  onChange={handleInputChange}
-                  placeholder="123456789"
-                  required
-                />
+                <Label htmlFor="create_cedula">
+                  Cédula <span className="text-destructive">*</span>
+                </Label>
+                <div className="flex gap-1">
+                  <Select
+                    value={formData.cedula_type}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, cedula_type: value }))}
+                  >
+                    <SelectTrigger 
+                      className="w-[70px] flex-shrink-0" 
+                      aria-label="Tipo de documento"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DOCUMENT_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium">{type.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="create_cedula"
+                    type="text"
+                    name="cedula"
+                    value={formData.cedula}
+                    onChange={handleInputChange}
+                    placeholder="12345678"
+                    required
+                    className="flex-1"
+                    aria-describedby="cedula-hint"
+                  />
+                </div>
+                <p id="cedula-hint" className="text-xs text-muted-foreground">
+                  V: Venezolano, E: Extranjero, J: Jurídico, P: Pasaporte
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="create_birth_date">Fecha de Nacimiento</Label>
@@ -718,14 +845,39 @@ export function ClientsTable() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="create_phone">Teléfono</Label>
-                <Input
-                  id="create_phone"
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  placeholder="+1234567890"
-                />
+                <div className="flex gap-1">
+                  <Select
+                    value={formData.phone_operator}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                  >
+                    <SelectTrigger 
+                      className="w-[90px] flex-shrink-0" 
+                      aria-label="Operador telefónico"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PHONE_OPERATORS.map((op) => (
+                        <SelectItem key={op.code} value={op.code}>
+                          <span className="font-medium">{op.code}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="create_phone"
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    placeholder="1234567"
+                    maxLength={7}
+                    className="flex-1"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Movistar: 0414/0424, Movilnet: 0416/0426, Digitel: 0412
+                </p>
               </div>
               <div className="md:col-span-2 space-y-2">
                 <Label htmlFor="create_address">Dirección</Label>
@@ -830,22 +982,20 @@ export function ClientsTable() {
           )
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table aria-label="Lista de clientes del gimnasio">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">#</TableHead>
-                  <TableHead>Nombre Completo</TableHead>
-                  <TableHead>Cédula</TableHead>
-                  {/* <TableHead>Fecha de Nacimiento</TableHead>
-                  <TableHead>Edad</TableHead> */}
-                  <TableHead>Email</TableHead>
-                  <TableHead>Teléfono</TableHead>
-                  <TableHead>Dirección</TableHead>
-                  <TableHead>Observaciones</TableHead>
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead className="hidden sm:table-cell">Cédula</TableHead>
+                  <TableHead className="hidden lg:table-cell">Email</TableHead>
+                  <TableHead className="hidden md:table-cell">Teléfono</TableHead>
+                  <TableHead className="hidden xl:table-cell">Dirección</TableHead>
+                  <TableHead className="hidden xl:table-cell">Observaciones</TableHead>
                   <TableHead>Plan</TableHead>
-                  <TableHead>Ingreso</TableHead>
-                  <TableHead>Próximo Pago</TableHead>
-                  <TableHead>Acciones</TableHead>
+                  <TableHead className="hidden lg:table-cell">Ingreso</TableHead>
+                  <TableHead>Próx. Pago</TableHead>
+                  <TableHead className="w-[100px]">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -859,73 +1009,69 @@ export function ClientsTable() {
                     <TableCell className="font-medium text-center">
                       {index + 1}
                     </TableCell>
-                    <TableCell className="font-medium">
-                      {client.first_name} {client.last_name}
-                    </TableCell>
-                    <TableCell>{client.cedula}</TableCell>
-                    {/* <TableCell>{formatDate(client.birth_date)}</TableCell>
-                    <TableCell>{client.age} años</TableCell> */}
-                    <TableCell>{client.email || "N/A"}</TableCell>
-                    <TableCell>{client.phone || "N/A"}</TableCell>
                     <TableCell>
-                      <div className="max-w-xs truncate" title={client.address}>
-                        {client.address || "N/A"}
+                      <TruncatedCell 
+                        value={`${client.first_name} ${client.last_name}`}
+                        maxWidth="150px"
+                        className="font-medium"
+                      />
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <IdCard className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span>{client.cedula}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div
-                        className="max-w-xs truncate"
-                        title={client.observations}
-                      >
-                        {client.observations || "N/A"}
-                      </div>
+                    <TableCell className="hidden lg:table-cell">
+                      <TruncatedCell 
+                        value={client.email} 
+                        maxWidth="160px"
+                        fallback="N/A"
+                      />
                     </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="font-medium">
-                          {client.plans?.name || "Sin plan"}
+                    <TableCell className="hidden md:table-cell whitespace-nowrap">
+                      {client.phone ? (
+                        <div className="flex items-center gap-1">
+                          <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          <span>{client.phone}</span>
                         </div>
-                        {client.plans?.price && (
-                          <div className="text-muted-foreground">
-                            {rateLoading ? (
-                              "Cargando..."
-                            ) : (
-                              <>
-                                <div>
-                                  {
-                                    formatMultiCurrency(
-                                      parseFloat(client.plans.price)
-                                    ).usd
-                                  }
-                                </div>
-                                <div>
-                                  {
-                                    formatMultiCurrency(
-                                      parseFloat(client.plans.price)
-                                    ).bs
-                                  }
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      ) : (
+                        <span className="text-muted-foreground">N/A</span>
+                      )}
                     </TableCell>
-                    <TableCell>{formatDate(client.join_date)}</TableCell>
+                    <TableCell className="hidden xl:table-cell">
+                      <TruncatedCell 
+                        value={client.address} 
+                        maxWidth="150px"
+                        fallback="N/A"
+                      />
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell">
+                      <TruncatedCell 
+                        value={client.observations} 
+                        maxWidth="120px"
+                        className="italic"
+                        fallback="N/A"
+                      />
+                    </TableCell>
                     <TableCell>
+                      <TruncatedCell 
+                        value={client.plans?.name || "Sin plan"}
+                        maxWidth="100px"
+                        className="font-medium"
+                      />
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell whitespace-nowrap">{formatDate(client.join_date)}</TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {client.next_payment_date ? (
-                        <div>
-                          <div className="text-sm">
-                            {formatDate(client.next_payment_date)}
-                          </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{formatDate(client.next_payment_date)}</span>
                           <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${client.paymentStatusColor}`}
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${client.paymentStatusColor}`}
                           >
                             {client.daysUntilPayment < 0
-                              ? `${Math.abs(
-                                  client.daysUntilPayment
-                                )} días vencido`
-                              : `${client.daysUntilPayment} días restantes`}
+                              ? `${Math.abs(client.daysUntilPayment)}d vencido`
+                              : `${client.daysUntilPayment}d`}
                           </span>
                         </div>
                       ) : (
@@ -942,6 +1088,7 @@ export function ClientsTable() {
                               size="icon-sm"
                               className="bg-green-600 hover:bg-green-700"
                               disabled={!hasPendingPayment}
+                              aria-label={`Registrar pago de ${client.first_name} ${client.last_name}`}
                             >
                               <DollarSignIcon />
                             </Button>
@@ -961,6 +1108,7 @@ export function ClientsTable() {
                               onClick={() => handleEditClient(client)}
                               variant="outline"
                               size="icon-sm"
+                              aria-label={`Editar cliente ${client.first_name} ${client.last_name}`}
                             >
                               <EditIcon />
                             </Button>
@@ -976,6 +1124,7 @@ export function ClientsTable() {
                               variant="destructive"
                               size="icon-sm"
                               disabled={deletingId === client.id}
+                              aria-label={`Eliminar cliente ${client.first_name} ${client.last_name}`}
                             >
                               {deletingId === client.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />

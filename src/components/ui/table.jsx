@@ -1,11 +1,29 @@
 import * as React from "react"
 import { cn } from "../../lib/utils"
 
-const Table = React.forwardRef(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
+/**
+ * Accessible Table component with improved UX
+ * 
+ * Improvements:
+ * - Added role="region" wrapper for screen readers
+ * - Improved focus styles for keyboard navigation
+ * - Added aria-label support
+ * - Better responsive overflow handling
+ */
+
+const Table = React.forwardRef(({ className, "aria-label": ariaLabel, ...props }, ref) => (
+  <div 
+    className="relative w-full overflow-auto rounded-md"
+    role="region"
+    aria-label={ariaLabel || "Tabla de datos"}
+    tabIndex={0}
+  >
     <table
       ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
+      className={cn(
+        "w-full caption-bottom text-sm border-collapse",
+        className
+      )}
       {...props}
     />
   </div>
@@ -13,7 +31,14 @@ const Table = React.forwardRef(({ className, ...props }, ref) => (
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+  <thead 
+    ref={ref} 
+    className={cn(
+      "[&_tr]:border-b bg-muted/30",
+      className
+    )} 
+    {...props} 
+  />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -38,11 +63,13 @@ const TableFooter = React.forwardRef(({ className, ...props }, ref) => (
 ))
 TableFooter.displayName = "TableFooter"
 
-const TableRow = React.forwardRef(({ className, ...props }, ref) => (
+const TableRow = React.forwardRef(({ className, isClickable, ...props }, ref) => (
   <tr
     ref={ref}
     className={cn(
       "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      "focus-within:bg-muted/30",
+      isClickable && "cursor-pointer",
       className
     )}
     {...props}
@@ -53,8 +80,11 @@ TableRow.displayName = "TableRow"
 const TableHead = React.forwardRef(({ className, ...props }, ref) => (
   <th
     ref={ref}
+    scope="col"
     className={cn(
-      "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      "h-11 px-3 text-left align-middle font-semibold text-muted-foreground whitespace-nowrap",
+      "[&:has([role=checkbox])]:pr-0",
+      "first:pl-4 last:pr-4",
       className
     )}
     {...props}
@@ -65,7 +95,12 @@ TableHead.displayName = "TableHead"
 const TableCell = React.forwardRef(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+    className={cn(
+      "px-3 py-3 align-middle",
+      "[&:has([role=checkbox])]:pr-0",
+      "first:pl-4 last:pr-4",
+      className
+    )}
     {...props}
   />
 ))

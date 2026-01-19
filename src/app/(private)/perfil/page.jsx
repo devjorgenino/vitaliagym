@@ -3,23 +3,50 @@
 import { useState, useEffect, useRef } from "react";
 import useAuth from "../../../hooks/useAuth";
 import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Label } from "../../../components/ui/label";
+import { Badge } from "../../../components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Camera, Upload } from "lucide-react";
+import { 
+  Loader2, 
+  Camera, 
+  Upload, 
+  User, 
+  Mail, 
+  Phone, 
+  Shield, 
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Edit3,
+  X,
+  Save,
+} from "lucide-react";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
 import { Skeleton } from "../../../components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "../../../components/ui/avatar";
 import { getInitials } from "../../../lib/getInitials";
+import { PHONE_OPERATORS, formatPhone, parsePhone } from "../../../lib/venezuelanData";
 
 const Perfil = () => {
   const { user, updateUserProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     full_name: "",
+    phone_operator: "0414",
     phone: "",
     role: ""
   });
@@ -31,9 +58,12 @@ const Perfil = () => {
   // Cargar datos del usuario cuando el componente se monta
   useEffect(() => {
     if (user) {
+      const phoneValue = user?.user_metadata?.phone || "";
+      const { operator, number } = parsePhone(phoneValue);
       setFormData({
         full_name: user?.user_metadata?.full_name || "",
-        phone: user?.user_metadata?.phone || "",
+        phone_operator: operator,
+        phone: number,
         role: user?.user_metadata?.role || "user"
       });
     }
@@ -47,6 +77,13 @@ const Perfil = () => {
     }));
   };
 
+  const handleRoleChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      role: value
+    }));
+  };
+
   const handleSave = async () => {
     if (!formData.full_name.trim()) {
       toast.error("El nombre es obligatorio");
@@ -57,7 +94,7 @@ const Perfil = () => {
     try {
       const updateData = {
         full_name: formData.full_name,
-        phone: formData.phone,
+        phone: formData.phone ? formatPhone(formData.phone_operator, formData.phone) : "",
         role: formData.role
       };
 
@@ -75,12 +112,16 @@ const Perfil = () => {
   const handleCancel = () => {
     // Restaurar valores originales
     if (user) {
+      const phoneValue = user?.user_metadata?.phone || "";
+      const { operator, number } = parsePhone(phoneValue);
       setFormData({
         full_name: user?.user_metadata?.full_name || "",
-        phone: user?.user_metadata?.phone || "",
+        phone_operator: operator,
+        phone: number,
         role: user?.user_metadata?.role || "user"
       });
     }
+    setAvatarPreview(null);
     setIsEditing(false);
   };
 
@@ -150,6 +191,26 @@ const Perfil = () => {
     }
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "Primer ingreso";
+    return new Date(dateString).toLocaleString('es-ES', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   if (!user) {
     return (
       <div className="container mx-auto py-6">
@@ -157,9 +218,13 @@ const Perfil = () => {
           <Card>
             <CardHeader>
               <CardTitle>Mi Perfil</CardTitle>
+              <CardDescription>Cargando información del usuario...</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-4" role="status" aria-label="Cargando perfil">
+                <div className="flex justify-center">
+                  <Skeleton className="h-24 w-24 rounded-full" />
+                </div>
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
@@ -173,36 +238,60 @@ const Perfil = () => {
 
   return (
     <div className="container mx-auto py-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold">Mi Perfil</h1>
+          <p className="text-muted-foreground">
+            Gestiona tu información personal y preferencias de cuenta
+          </p>
+        </div>
+
+        {/* Card principal */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <CardTitle>Mi Perfil</CardTitle>
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" aria-hidden="true" />
+                Información Personal
+              </CardTitle>
+              <CardDescription>
+                {isEditing 
+                  ? "Modifica tus datos y guarda los cambios" 
+                  : "Haz clic en Editar para modificar tu información"}
+              </CardDescription>
+            </div>
             {!isEditing ? (
               <Button
                 onClick={() => setIsEditing(true)}
                 variant="outline"
-                size="sm"
+                className="gap-2 w-fit"
               >
+                <Edit3 className="h-4 w-4" />
                 Editar Perfil
               </Button>
             ) : (
-              <div className="flex space-x-2">
-                <Button onClick={handleCancel} variant="outline" size="sm">
+              <div className="flex gap-2">
+                <Button onClick={handleCancel} variant="outline" size="sm" className="gap-2">
+                  <X className="h-4 w-4" />
                   Cancelar
                 </Button>
                 <Button
                   onClick={handleSave}
                   disabled={loading}
-                  variant="default"
                   size="sm"
+                  className="gap-2"
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                       Guardando...
                     </>
                   ) : (
-                    "Guardar"
+                    <>
+                      <Save className="h-4 w-4" />
+                      Guardar
+                    </>
                   )}
                 </Button>
               </div>
@@ -216,48 +305,66 @@ const Perfil = () => {
                   <Avatar className="w-24 h-24">
                     <AvatarImage
                       src={avatarPreview || user?.user_metadata?.avatar_url || "/avatar.jpg"}
-                      alt="Avatar"
+                      alt={`Foto de perfil de ${formData.full_name || "Usuario"}`}
                       loading="lazy"
                     />
-                    <AvatarFallback className="text-lg">
+                    <AvatarFallback className="text-lg bg-primary/10 text-primary">
                       {getInitials(user?.user_metadata?.full_name || "Usuario")}
                     </AvatarFallback>
                   </Avatar>
                   {isEditing && (
-                    <button
+                    <Button
+                      variant="default"
+                      size="icon"
+                      className="absolute bottom-0 right-0 h-8 w-8 rounded-full"
                       onClick={handleAvatarClick}
-                      className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors"
                       disabled={avatarLoading}
+                      aria-label="Cambiar foto de perfil"
                     >
                       {avatarLoading ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <Camera className="w-4 h-4" />
                       )}
-                    </button>
+                    </Button>
                   )}
                 </div>
+                
+                {/* Input de archivo accesible */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   onChange={handleAvatarChange}
-                  className="hidden"
+                  className="sr-only"
+                  id="avatar-upload"
+                  aria-label="Subir foto de perfil"
                 />
+                
+                {isEditing && !avatarPreview && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Haz clic en el icono de cámara para cambiar tu foto
+                  </p>
+                )}
+                
                 {isEditing && avatarPreview && (
                   <div className="mt-4 flex gap-2">
                     <Button
                       onClick={saveAvatar}
                       disabled={avatarLoading}
                       size="sm"
+                      className="gap-2"
                     >
                       {avatarLoading ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                           Guardando...
                         </>
                       ) : (
-                        "Guardar Avatar"
+                        <>
+                          <Upload className="h-4 w-4" />
+                          Guardar Avatar
+                        </>
                       )}
                     </Button>
                     <Button
@@ -271,21 +378,22 @@ const Perfil = () => {
                 )}
               </div>
 
-              {/* Información básica */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">
+              {/* Información de solo lectura */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-4 w-4" aria-hidden="true" />
                     Email
-                  </label>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-900">
+                  </Label>
+                  <div className="px-3 py-2 bg-muted/50 border rounded-md text-sm">
                     {user?.email || "N/A"}
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">
                     ID de Usuario
-                  </label>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-900 font-mono text-sm">
+                  </Label>
+                  <div className="px-3 py-2 bg-muted/50 border rounded-md font-mono text-xs">
                     {user?.id?.slice(0, 8) || "N/A"}...
                   </div>
                 </div>
@@ -293,122 +401,160 @@ const Perfil = () => {
               
               {/* Información editable */}
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">
+                <div className="space-y-2">
+                  <Label htmlFor="full_name" className="flex items-center gap-2">
+                    <User className="h-4 w-4" aria-hidden="true" />
                     Nombre Completo
-                  </label>
+                    {isEditing && <span className="text-destructive">*</span>}
+                  </Label>
                   {isEditing ? (
-                    <input
+                    <Input
+                      id="full_name"
                       type="text"
                       name="full_name"
                       value={formData.full_name}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ingresa tu nombre completo"
                       disabled={loading}
+                      aria-required="true"
                     />
                   ) : (
-                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
-                      {formData.full_name || "No especificado"}
+                    <div className="px-3 py-2 bg-muted/30 border rounded-md">
+                      {formData.full_name || (
+                        <span className="text-muted-foreground italic">No especificado</span>
+                      )}
                     </div>
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="flex items-center gap-2">
+                    <Phone className="h-4 w-4" aria-hidden="true" />
                     Teléfono
-                  </label>
+                  </Label>
                   {isEditing ? (
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={loading}
-                    />
+                    <div className="flex gap-1">
+                      <Select
+                        value={formData.phone_operator}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                        disabled={loading}
+                      >
+                        <SelectTrigger 
+                          className="w-[90px] flex-shrink-0" 
+                          aria-label="Operador telefónico"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHONE_OPERATORS.map((op) => (
+                            <SelectItem key={op.code} value={op.code}>
+                              <span className="font-medium">{op.code}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        placeholder="1234567"
+                        maxLength={7}
+                        disabled={loading}
+                        className="flex-1"
+                      />
+                    </div>
                   ) : (
-                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
-                      {formData.phone || "No especificado"}
+                    <div className="px-3 py-2 bg-muted/30 border rounded-md">
+                      {formData.phone ? (
+                        <span>{formData.phone_operator}-{formData.phone}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">No especificado</span>
+                      )}
                     </div>
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">
+                <div className="space-y-2">
+                  <Label htmlFor="role" className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" aria-hidden="true" />
                     Rol
-                  </label>
+                  </Label>
                   {isEditing ? (
-                    <select
-                      name="role"
+                    <Select
                       value={formData.role}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onValueChange={handleRoleChange}
                       disabled={loading}
                     >
-                      <option value="user">Usuario</option>
-                      <option value="admin">Administrador</option>
-                    </select>
+                      <SelectTrigger id="role" className="w-full">
+                        <SelectValue placeholder="Selecciona un rol" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">Usuario</SelectItem>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                      </SelectContent>
+                    </Select>
                   ) : (
-                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        formData.role === 'admin' 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
+                    <div className="px-3 py-2 bg-muted/30 border rounded-md">
+                      <Badge variant={formData.role === 'admin' ? 'default' : 'secondary'}>
                         {formData.role === 'admin' ? 'Administrador' : 'Usuario'}
-                      </span>
+                      </Badge>
                     </div>
                   )}
                 </div>
               </div>
-              
-              {/* Información de sesión */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Información de Sesión</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">
-                      Último Ingreso
-                    </label>
-                    <div className="px-3 py-2 bg-gray-50 border-gray-200 rounded-md text-gray-900">
-                      {user?.last_sign_in_at
-                        ? new Date(user.last_sign_in_at).toLocaleString('es-ES', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })
-                        : "Primer ingreso"
-                      }
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">
-                      Email Confirmado
-                    </label>
-                    <div className="px-3 py-2 bg-gray-50 border-gray-200 rounded-md text-gray-900">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                          user?.email_confirmed_at
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {user?.email_confirmed_at ? "Sí" : "No"}
-                      </span>
-                    </div>
-                  </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Información de sesión */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" aria-hidden="true" />
+              Información de Sesión
+            </CardTitle>
+            <CardDescription>
+              Detalles sobre tu cuenta y actividad
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Último Ingreso</Label>
+                <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
+                  {formatDateTime(user?.last_sign_in_at)}
                 </div>
               </div>
-              
-              {/* Fecha de creación */}
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Email Verificado</Label>
+                <div className="px-3 py-2 bg-muted/30 border rounded-md">
+                  <Badge 
+                    variant={user?.email_confirmed_at ? "default" : "secondary"}
+                    className="gap-1"
+                  >
+                    {user?.email_confirmed_at ? (
+                      <>
+                        <CheckCircle2 className="h-3 w-3" />
+                        Verificado
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="h-3 w-3" />
+                        Pendiente
+                      </>
+                    )}
+                  </Badge>
+                </div>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4" aria-hidden="true" />
                   Miembro desde
-                </label>
-                <div className="px-3 py-2 bg-gray-50 border-gray-200 rounded-md text-gray-900">
-                  {user?.created_at ? new Date(user.created_at).toLocaleDateString('es-ES') : "N/A"}
+                </Label>
+                <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
+                  {formatDate(user?.created_at)}
                 </div>
               </div>
             </div>

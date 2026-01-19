@@ -3,13 +3,15 @@ import { usePayments } from "../../hooks/usePayments";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
+import { VENEZUELAN_BANKS, PHONE_OPERATORS, formatPhone, parsePhone } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Building2, Phone } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 import {
   EditIcon,
   TrashIcon,
@@ -17,6 +19,7 @@ import {
   FilterXIcon,
   DollarSignIcon,
 } from "../ui/icons";
+import { TruncatedCell } from "../ui/truncated-cell";
 import {
   Select,
   SelectContent,
@@ -63,30 +66,6 @@ function debounce(func, delay) {
 }
 
 
-// Lista de bancos de Venezuela
-const VENEZUELAN_BANKS = [
-  "Banco de Venezuela",
-  "Banco Mercantil",
-  "Banco Provincial",
-  "Banesco",
-  "Banco Occidental de Descuento (BOD)",
-  "Banco Caroní",
-  "Banco Exterior",
-  "Banco del Tesoro",
-  "Banco Agrícola de Venezuela",
-  "Banco Bicentenario",
-  "Banco Sofitasa",
-  "100% Banco",
-  "Banco Activo",
-  "Bancrecer",
-  "Banco Fondo Común",
-  "Banco Nacional de Crédito (BNC)",
-  "Citibank",
-  "BBVA Provincial",
-  "Scotiabank",
-  "Banco de la Gente Emprendedora (BANGE)",
-];
-
 export function PaymentsTable({ preselectedClient = null, payRemaining = false, remainingAmount = null, paymentId = null }) {
   const {
     payments,
@@ -122,6 +101,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
     reference: "",
     bank: "",
     payment_type: "pago_movil",
+    phone_operator: "0414",
     phone_payment: "",
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -144,6 +124,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
     reference: "",
     bank: "",
     payment_type: "",
+    phone_operator: "0414",
     phone_payment: "",
   });
   const [isUpdating, setIsUpdating] = useState(false);
@@ -651,7 +632,10 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         amount_usd: parseFloat(formData.amount_usd),
         amount_bs: parseFloat(formData.amount_bs),
         exchange_rate: parseFloat(formData.exchange_rate),
+        phone_payment: formData.phone_payment ? formatPhone(formData.phone_operator, formData.phone_payment) : "",
       };
+      // Remove phone_operator from payload as it's only for UI
+      delete paymentData.phone_operator;
 
       const result = await createPayment(paymentData);
 
@@ -666,6 +650,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           reference: "",
           bank: "",
           payment_type: "pago_movil",
+          phone_operator: "0414",
           phone_payment: "",
         });
 
@@ -702,6 +687,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
     const isFullPayment =
       payment.amount_usd === parseFloat(payment.plans?.price || 0);
     setEditPaymentMode(isFullPayment ? "full" : "partial");
+    // Parse phone to separate operator and number
+    const { operator, number } = parsePhone(payment.phone_payment || "");
     setEditFormData({
       client_id: payment.client_id,
       plan_id: payment.plan_id,
@@ -712,7 +699,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       reference: payment.reference || "",
       bank: payment.bank || "",
       payment_type: payment.payment_type,
-      phone_payment: payment.phone_payment || "",
+      phone_operator: operator,
+      phone_payment: number,
     });
     setShowEditForm(true);
     setShowCreateForm(false);
@@ -792,7 +780,10 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         amount_usd: parseFloat(editFormData.amount_usd),
         amount_bs: parseFloat(editFormData.amount_bs),
         exchange_rate: parseFloat(editFormData.exchange_rate),
+        phone_payment: editFormData.phone_payment ? formatPhone(editFormData.phone_operator, editFormData.phone_payment) : "",
       };
+      // Remove phone_operator from payload as it's only for UI
+      delete paymentData.phone_operator;
 
       const result = await updatePayment(editingPayment.id, paymentData);
 
@@ -808,7 +799,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           payment_date: "",
           reference: "",
           bank: "",
-          payment_type: "",
+          payment_type: "pago_movil",
+          phone_operator: "0414",
           phone_payment: "",
         });
         setEditPaymentMode("full");
@@ -838,6 +830,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       reference: "",
       bank: "",
       payment_type: "",
+      phone_operator: "0414",
       phone_payment: "",
     });
     setEditPaymentMode("full");
@@ -885,6 +878,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       reference: "",
       bank: "",
       payment_type: "pago_movil",
+      phone_operator: "0414",
       phone_payment: "",
     };
 
@@ -1050,34 +1044,45 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
             </select>
 
             {/* Filtro por tipo de pago */}
-            <select
-              value={selectedPaymentType}
-              onChange={(e) => setSelectedPaymentType(e.target.value)}
-              className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <Select
+              value={selectedPaymentType || "all"}
+              onValueChange={(value) => setSelectedPaymentType(value === "all" ? "" : value)}
             >
-              <option value="">Todos los tipos</option>
-              <option value="pago_movil">Pago Móvil</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="punto_de_venta">Punto de Venta</option>
-              <option value="efectivo_dolares">Efectivo $</option>
-            </select>
+              <SelectTrigger className="w-[160px]" aria-label="Filtrar por tipo de pago">
+                <SelectValue placeholder="Todos los tipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                <SelectItem value="transferencia">Transferencia</SelectItem>
+                <SelectItem value="punto_de_venta">Punto de Venta</SelectItem>
+                <SelectItem value="efectivo_dolares">Efectivo $</SelectItem>
+              </SelectContent>
+            </Select>
 
             {/* Filtro por banco (solo se muestra si se selecciona pago móvil o transferencia) */}
             {(selectedPaymentType === "pago_movil" ||
               selectedPaymentType === "transferencia" ||
               selectedPaymentType === "") && (
-              <select
-                value={selectedBank}
-                onChange={(e) => setSelectedBank(e.target.value)}
-                className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <Select
+                value={selectedBank || "all"}
+                onValueChange={(value) => setSelectedBank(value === "all" ? "" : value)}
               >
-                <option value="">Todos los bancos</option>
-                {VENEZUELAN_BANKS.map((bank) => (
-                  <option key={bank} value={bank}>
-                    {bank}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-[200px]" aria-label="Filtrar por banco">
+                  <SelectValue placeholder="Todos los bancos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los bancos</SelectItem>
+                  {VENEZUELAN_BANKS.map((bank) => (
+                    <SelectItem key={bank.code} value={bank.name}>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-3 w-3 text-muted-foreground" />
+                        {bank.shortName}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
 
             {/* Filtros de fecha */}
@@ -1352,20 +1357,25 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Banco</label>
-                    <select
-                      name="bank"
+                    <Label htmlFor="create-bank">Banco</Label>
+                    <Select
                       value={formData.bank}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, bank: value }))}
                     >
-                      <option value="">Seleccionar banco</option>
-                      {VENEZUELAN_BANKS.map((bank) => (
-                        <option key={bank} value={bank}>
-                          {bank}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id="create-bank" className="w-full">
+                        <SelectValue placeholder="Seleccionar banco" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VENEZUELAN_BANKS.map((bank) => (
+                          <SelectItem key={bank.code} value={bank.name}>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3 text-muted-foreground" />
+                              <span>{bank.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </>
               )}
@@ -1373,17 +1383,39 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               {/* Campo de teléfono - solo para pago móvil */}
               {formData.payment_type === "pago_movil" && (
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <Label htmlFor="phone_payment" className="block text-sm font-medium mb-2">
                     Teléfono Pago Móvil
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone_payment"
-                    value={formData.phone_payment}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="04141234567"
-                  />
+                  </Label>
+                  <div className="flex gap-1">
+                    <Select
+                      value={formData.phone_operator}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                    >
+                      <SelectTrigger 
+                        className="w-[90px] flex-shrink-0" 
+                        aria-label="Operador telefónico"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_OPERATORS.map((op) => (
+                          <SelectItem key={op.code} value={op.code}>
+                            <span className="font-medium">{op.code}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="phone_payment"
+                      type="tel"
+                      name="phone_payment"
+                      value={formData.phone_payment}
+                      onChange={handleInputChange}
+                      placeholder="1234567"
+                      maxLength={7}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1621,20 +1653,25 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Banco</label>
-                    <select
-                      name="bank"
+                    <Label htmlFor="edit-bank">Banco</Label>
+                    <Select
                       value={editFormData.bank}
-                      onChange={handleEditInputChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onValueChange={(value) => setEditFormData(prev => ({ ...prev, bank: value }))}
                     >
-                      <option value="">Seleccionar banco</option>
-                      {VENEZUELAN_BANKS.map((bank) => (
-                        <option key={bank} value={bank}>
-                          {bank}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id="edit-bank" className="w-full">
+                        <SelectValue placeholder="Seleccionar banco" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VENEZUELAN_BANKS.map((bank) => (
+                          <SelectItem key={bank.code} value={bank.name}>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3 text-muted-foreground" />
+                              <span>{bank.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </>
               )}
@@ -1642,17 +1679,39 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               {/* Campo de teléfono - solo para pago móvil */}
               {editFormData.payment_type === "pago_movil" && (
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <Label htmlFor="edit_phone_payment" className="block text-sm font-medium mb-2">
                     Teléfono Pago Móvil
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone_payment"
-                    value={editFormData.phone_payment}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="04141234567"
-                  />
+                  </Label>
+                  <div className="flex gap-1">
+                    <Select
+                      value={editFormData.phone_operator}
+                      onValueChange={(value) => setEditFormData(prev => ({ ...prev, phone_operator: value }))}
+                    >
+                      <SelectTrigger 
+                        className="w-[90px] flex-shrink-0" 
+                        aria-label="Operador telefónico"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_OPERATORS.map((op) => (
+                          <SelectItem key={op.code} value={op.code}>
+                            <span className="font-medium">{op.code}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="edit_phone_payment"
+                      type="tel"
+                      name="phone_payment"
+                      value={editFormData.phone_payment}
+                      onChange={handleEditInputChange}
+                      placeholder="1234567"
+                      maxLength={7}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1715,22 +1774,22 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table aria-label="Lista de pagos del gimnasio">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">#</TableHead>
+                  <TableHead className="w-12">#</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead>Cédula</TableHead>
+                  <TableHead className="hidden lg:table-cell">Cédula</TableHead>
                   <TableHead>Plan</TableHead>
-                  <TableHead>Monto USD</TableHead>
-                  <TableHead>Monto Bs</TableHead>
-                  <TableHead>Pago Restante</TableHead>
-                  <TableHead>Referencia</TableHead>
-                  <TableHead>Banco</TableHead>
-                  <TableHead>Tipo de Pago</TableHead>
-                  <TableHead>Teléfono</TableHead>
+                  <TableHead>USD</TableHead>
+                  <TableHead className="hidden md:table-cell">Bs</TableHead>
+                  <TableHead className="hidden lg:table-cell">Restante</TableHead>
+                  <TableHead className="hidden xl:table-cell">Ref.</TableHead>
+                  <TableHead className="hidden xl:table-cell">Banco</TableHead>
+                  <TableHead className="hidden sm:table-cell">Tipo</TableHead>
+                  <TableHead className="hidden xl:table-cell">Tel.</TableHead>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Acciones</TableHead>
+                  <TableHead className="w-[100px]">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1741,69 +1800,64 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                       <TableCell className="font-medium text-center">
                         {index + 1}
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {payment.clients?.first_name}{" "}
-                        {payment.clients?.last_name}
-                      </TableCell>
-                      <TableCell>{payment.clients?.cedula}</TableCell>
                       <TableCell>
-                        <div className="text-sm">
-                          <div className="font-medium">
-                            {payment.plans?.name || "N/A"}
-                          </div>
-                          {payment.plans?.price && (
-                            <div className="text-muted-foreground text-xs">
-                              ${(parseFloat(payment.plans.price) || 0).toFixed(2)}
-                            </div>
-                          )}
-                        </div>
+                        <TruncatedCell 
+                          value={`${payment.clients?.first_name} ${payment.clients?.last_name}`}
+                          maxWidth="120px"
+                          className="font-medium"
+                        />
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="hidden lg:table-cell whitespace-nowrap">{payment.clients?.cedula}</TableCell>
+                      <TableCell>
+                        <TruncatedCell 
+                          value={payment.plans?.name || "N/A"}
+                          maxWidth="100px"
+                          className="font-medium"
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">
                         ${(parseFloat(payment.amount_usd) || 0).toFixed(2)}
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="hidden md:table-cell">
                         {rateLoading ? (
-                          "Cargando..."
+                          "..."
                         ) : (
-                          <div className="text-green-600">
+                          <span className="text-green-600 whitespace-nowrap">
                             {formatCurrency(
                               parseFloat(payment.amount_bs) || 0,
                               "VES"
                             )}
-                            <div className="text-xs text-muted-foreground">
-                              Tasa:{" "}
-                              {(parseFloat(payment.exchange_rate) || 0).toFixed(4)}
-                            </div>
-                          </div>
+                          </span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div
-                          className={`font-medium ${
+                      <TableCell className="hidden lg:table-cell">
+                        <span
+                          className={`font-medium whitespace-nowrap ${
                             paymentStatus.isFullyPaid
                               ? "text-green-600"
                               : "text-orange-600"
                           }`}
                         >
                           ${paymentStatus.remainingFormatted}
-                          <div className="text-xs text-muted-foreground">
-                            {paymentStatus.isFullyPaid
-                              ? "Completado"
-                              : `Restante`}
-                          </div>
-                        </div>
+                        </span>
                       </TableCell>
-                      <TableCell className="font-mono text-sm">
+                      <TableCell className="hidden xl:table-cell font-mono text-sm whitespace-nowrap">
                         {payment.reference || "N/A"}
                       </TableCell>
-                      <TableCell>{payment.bank || "N/A"}</TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800">
+                      <TableCell className="hidden xl:table-cell">
+                        <TruncatedCell 
+                          value={payment.bank}
+                          maxWidth="100px"
+                          fallback="N/A"
+                        />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
                           {formatPaymentType(payment.payment_type)}
                         </span>
                       </TableCell>
-                      <TableCell>{payment.phone_payment || "N/A"}</TableCell>
-                      <TableCell>{formatDate(payment.payment_date)}</TableCell>
+                      <TableCell className="hidden xl:table-cell whitespace-nowrap">{payment.phone_payment || "N/A"}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDate(payment.payment_date)}</TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Tooltip>
