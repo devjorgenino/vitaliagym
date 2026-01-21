@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
@@ -28,12 +28,22 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+import { Pagination, usePagination } from "../ui/pagination";
 
 export function PlansTable() {
   const { plans, loading, error, refetch, createPlan, updatePlan, deletePlan } =
     usePlans();
 
   const { formatMultiCurrency, loading: rateLoading } = useExchangeRate();
+
+  // Estados para paginación
+  const { currentPage, pageSize, setCurrentPage, setPageSize, paginateData } =
+    usePagination(10);
+
+  // Datos paginados
+  const paginatedPlans = useMemo(() => {
+    return paginateData(plans);
+  }, [plans, paginateData]);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -458,109 +468,126 @@ export function PlansTable() {
               }}
             />
           ) : (
-            <div className="overflow-x-auto">
-              <Table aria-label="Lista de planes del gimnasio">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12" scope="col">
-                      #
-                    </TableHead>
-                    <TableHead scope="col">Nombre</TableHead>
-                    <TableHead className="hidden md:table-cell" scope="col">
-                      Descripción
-                    </TableHead>
-                    <TableHead scope="col">Precio</TableHead>
-                    <TableHead className="hidden lg:table-cell" scope="col">
-                      Creado
-                    </TableHead>
-                    <TableHead scope="col" className="w-[100px]">
-                      Acciones
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {plans.map((plan, index) => (
-                    <TableRow key={plan.id}>
-                      <TableCell className="font-medium text-center">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <TruncatedCell
-                          value={plan.name}
-                          maxWidth="140px"
-                          fallback="Sin nombre"
-                        />
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <TruncatedCell
-                          value={plan.description}
-                          maxWidth="180px"
-                          className="italic"
-                          fallback="Sin descripción"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {rateLoading ? (
-                          <Skeleton className="h-8 w-20" />
-                        ) : (
-                          <div className="text-sm">
-                            <div className="font-medium">
-                              {
-                                formatMultiCurrency(parseFloat(plan.price) || 0)
-                                  .usd
-                              }
-                            </div>
-                            <div className="text-muted-foreground">
-                              {
-                                formatMultiCurrency(parseFloat(plan.price) || 0)
-                                  .bs
-                              }
-                            </div>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground whitespace-nowrap">
-                        {formatDate(plan.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() => handleEditPlan(plan)}
-                                variant="outline"
-                                size="icon-sm"
-                                aria-label={`Editar plan ${plan.name}`}
-                              >
-                                <EditIcon />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Editar plan</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() => openDeleteDialog(plan)}
-                                variant="destructive"
-                                size="icon-sm"
-                                aria-label={`Eliminar plan ${plan.name}`}
-                              >
-                                <TrashIcon />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Eliminar plan</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table aria-label="Lista de planes del gimnasio">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12" scope="col">
+                        #
+                      </TableHead>
+                      <TableHead scope="col">Nombre</TableHead>
+                      <TableHead className="hidden md:table-cell" scope="col">
+                        Descripción
+                      </TableHead>
+                      <TableHead scope="col">Precio</TableHead>
+                      <TableHead className="hidden lg:table-cell" scope="col">
+                        Creado
+                      </TableHead>
+                      <TableHead scope="col" className="w-[100px]">
+                        Acciones
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedPlans.map((plan, index) => {
+                      const realIndex =
+                        (currentPage - 1) * pageSize + index + 1;
+                      return (
+                        <TableRow key={plan.id}>
+                          <TableCell className="font-medium text-center">
+                            {realIndex}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <TruncatedCell
+                              value={plan.name}
+                              maxWidth="140px"
+                              fallback="Sin nombre"
+                            />
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <TruncatedCell
+                              value={plan.description}
+                              maxWidth="180px"
+                              className="italic"
+                              fallback="Sin descripción"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {rateLoading ? (
+                              <Skeleton className="h-8 w-20" />
+                            ) : (
+                              <div className="text-sm">
+                                <div className="font-medium">
+                                  {
+                                    formatMultiCurrency(
+                                      parseFloat(plan.price) || 0,
+                                    ).usd
+                                  }
+                                </div>
+                                <div className="text-muted-foreground">
+                                  {
+                                    formatMultiCurrency(
+                                      parseFloat(plan.price) || 0,
+                                    ).bs
+                                  }
+                                </div>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-sm text-muted-foreground whitespace-nowrap">
+                            {formatDate(plan.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    onClick={() => handleEditPlan(plan)}
+                                    variant="outline"
+                                    size="icon-sm"
+                                    aria-label={`Editar plan ${plan.name}`}
+                                  >
+                                    <EditIcon />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Editar plan</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    onClick={() => openDeleteDialog(plan)}
+                                    variant="destructive"
+                                    size="icon-sm"
+                                    aria-label={`Eliminar plan ${plan.name}`}
+                                  >
+                                    <TrashIcon />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Eliminar plan</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Paginación */}
+              <Pagination
+                currentPage={currentPage}
+                totalItems={plans.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            </>
           )}
         </CardContent>
       </Card>

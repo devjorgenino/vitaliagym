@@ -40,6 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+import { Pagination, usePagination } from "../ui/pagination";
 
 // Improved debounce function with cancellation support
 function debounce(func, delay) {
@@ -150,6 +151,16 @@ export function PaymentsTable({
   const [dateTo, setDateTo] = useState("");
   const [displayPayments, setDisplayPayments] = useState([]);
   const [isFiltering, setIsFiltering] = useState(false);
+
+  // Estados para paginación
+  const {
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+    resetPage,
+    paginateData,
+  } = usePagination(10);
 
   // Efecto para manejar pagos restantes desde props
   useEffect(() => {
@@ -1000,7 +1011,26 @@ export function PaymentsTable({
     setSelectedBank("");
     setDateFrom("");
     setDateTo("");
+    resetPage();
   };
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    resetPage();
+  }, [
+    searchTerm,
+    selectedPlan,
+    selectedPaymentType,
+    selectedBank,
+    dateFrom,
+    dateTo,
+    resetPage,
+  ]);
+
+  // Datos paginados
+  const paginatedPayments = useMemo(() => {
+    return paginateData(displayPayments);
+  }, [displayPayments, paginateData]);
 
   const activeFiltersCount = [
     searchTerm,
@@ -1881,165 +1911,183 @@ export function PaymentsTable({
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table aria-label="Lista de pagos del gimnasio">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="hidden lg:table-cell">Cédula</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>USD</TableHead>
-                  <TableHead className="hidden md:table-cell">Bs</TableHead>
-                  <TableHead className="hidden lg:table-cell">
-                    Restante
-                  </TableHead>
-                  <TableHead className="hidden xl:table-cell">Ref.</TableHead>
-                  <TableHead className="hidden xl:table-cell">Banco</TableHead>
-                  <TableHead className="hidden sm:table-cell">Tipo</TableHead>
-                  <TableHead className="hidden xl:table-cell">Tel.</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead className="w-[100px]">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {displayPayments.map((payment, index) => {
-                  const paymentStatus = calculatePaymentStatus(payment);
-                  return (
-                    <TableRow key={payment.id}>
-                      <TableCell className="font-medium text-center">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell>
-                        <TruncatedCell
-                          value={`${payment.clients?.first_name} ${payment.clients?.last_name}`}
-                          maxWidth="120px"
-                          className="font-medium"
-                        />
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell whitespace-nowrap">
-                        {payment.clients?.cedula}
-                      </TableCell>
-                      <TableCell>
-                        <TruncatedCell
-                          value={payment.plans?.name || "N/A"}
-                          maxWidth="100px"
-                          className="font-medium"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        ${(parseFloat(payment.amount_usd) || 0).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {rateLoading ? (
-                          "..."
-                        ) : (
-                          <span className="text-green-600 whitespace-nowrap">
-                            {formatCurrency(
-                              parseFloat(payment.amount_bs) || 0,
-                              "VES",
-                            )}
+          <>
+            <div className="overflow-x-auto">
+              <Table aria-label="Lista de pagos del gimnasio">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Cédula
+                    </TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>USD</TableHead>
+                    <TableHead className="hidden md:table-cell">Bs</TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Restante
+                    </TableHead>
+                    <TableHead className="hidden xl:table-cell">Ref.</TableHead>
+                    <TableHead className="hidden xl:table-cell">
+                      Banco
+                    </TableHead>
+                    <TableHead className="hidden sm:table-cell">Tipo</TableHead>
+                    <TableHead className="hidden xl:table-cell">Tel.</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead className="w-[100px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedPayments.map((payment, index) => {
+                    const paymentStatus = calculatePaymentStatus(payment);
+                    const realIndex = (currentPage - 1) * pageSize + index + 1;
+                    return (
+                      <TableRow key={payment.id}>
+                        <TableCell className="font-medium text-center">
+                          {realIndex}
+                        </TableCell>
+                        <TableCell>
+                          <TruncatedCell
+                            value={`${payment.clients?.first_name} ${payment.clients?.last_name}`}
+                            maxWidth="120px"
+                            className="font-medium"
+                          />
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                          {payment.clients?.cedula}
+                        </TableCell>
+                        <TableCell>
+                          <TruncatedCell
+                            value={payment.plans?.name || "N/A"}
+                            maxWidth="100px"
+                            className="font-medium"
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">
+                          ${(parseFloat(payment.amount_usd) || 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {rateLoading ? (
+                            "..."
+                          ) : (
+                            <span className="text-green-600 whitespace-nowrap">
+                              {formatCurrency(
+                                parseFloat(payment.amount_bs) || 0,
+                                "VES",
+                              )}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <span
+                            className={`font-medium whitespace-nowrap ${
+                              paymentStatus.isFullyPaid
+                                ? "text-green-600"
+                                : "text-orange-600"
+                            }`}
+                          >
+                            ${paymentStatus.remainingFormatted}
                           </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <span
-                          className={`font-medium whitespace-nowrap ${
-                            paymentStatus.isFullyPaid
-                              ? "text-green-600"
-                              : "text-orange-600"
-                          }`}
-                        >
-                          ${paymentStatus.remainingFormatted}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell font-mono text-sm whitespace-nowrap">
-                        {payment.reference || "N/A"}
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell">
-                        <TruncatedCell
-                          value={payment.bank}
-                          maxWidth="100px"
-                          fallback="N/A"
-                        />
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
-                          {formatPaymentType(payment.payment_type)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell whitespace-nowrap">
-                        {payment.phone_payment || "N/A"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {formatDate(payment.payment_date)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() => handleEditPayment(payment)}
-                                variant="outline"
-                                size="icon-sm"
-                              >
-                                <EditIcon />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Editar pago</p>
-                            </TooltipContent>
-                          </Tooltip>
-
-                          {/* Botón de pagar restante - solo si hay saldo pendiente */}
-                          {!paymentStatus.isFullyPaid && (
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell font-mono text-sm whitespace-nowrap">
+                          {payment.reference || "N/A"}
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell">
+                          <TruncatedCell
+                            value={payment.bank}
+                            maxWidth="100px"
+                            fallback="N/A"
+                          />
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
+                            {formatPaymentType(payment.payment_type)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell whitespace-nowrap">
+                          {payment.phone_payment || "N/A"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {formatDate(payment.payment_date)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  onClick={() => handlePayRemaining(payment)}
-                                  variant="default"
+                                  onClick={() => handleEditPayment(payment)}
+                                  variant="outline"
                                   size="icon-sm"
-                                  className="bg-green-600 hover:bg-green-700"
                                 >
-                                  <DollarSignIcon />
+                                  <EditIcon />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>
-                                  Pagar restante ($
-                                  {paymentStatus.remainingFormatted})
-                                </p>
+                                <p>Editar pago</p>
                               </TooltipContent>
                             </Tooltip>
-                          )}
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() => handleDeletePayment(payment.id)}
-                                variant="destructive"
-                                size="icon-sm"
-                                disabled={deletingId === payment.id}
-                              >
-                                {deletingId === payment.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <TrashIcon />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Eliminar pago</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                            {/* Botón de pagar restante - solo si hay saldo pendiente */}
+                            {!paymentStatus.isFullyPaid && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    onClick={() => handlePayRemaining(payment)}
+                                    variant="default"
+                                    size="icon-sm"
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    <DollarSignIcon />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>
+                                    Pagar restante ($
+                                    {paymentStatus.remainingFormatted})
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={() =>
+                                    handleDeletePayment(payment.id)
+                                  }
+                                  variant="destructive"
+                                  size="icon-sm"
+                                  disabled={deletingId === payment.id}
+                                >
+                                  {deletingId === payment.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <TrashIcon />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Eliminar pago</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Paginación */}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={displayPayments.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </CardContent>
     </Card>

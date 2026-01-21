@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useUsers } from "@/hooks/useUsers";
 import usePermissions from "@/hooks/usePermissions";
 import useRolesList from "@/hooks/useRolesList";
@@ -43,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import {
   Dialog,
   DialogContent,
@@ -87,6 +88,16 @@ export function UsersTable() {
   // Estados para búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRoleFilter, setSelectedRoleFilter] = useState("");
+
+  // Estados para paginación
+  const {
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+    resetPage,
+    paginateData,
+  } = usePagination(10);
 
   // Estado para los roles de cada usuario (cargados dinámicamente)
   const [userRolesMap, setUserRolesMap] = useState({});
@@ -394,7 +405,18 @@ export function UsersTable() {
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedRoleFilter("");
+    resetPage();
   };
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    resetPage();
+  }, [searchTerm, selectedRoleFilter, resetPage]);
+
+  // Datos paginados
+  const paginatedUsers = useMemo(() => {
+    return paginateData(filteredUsers);
+  }, [filteredUsers, paginateData]);
 
   const activeFiltersCount = [searchTerm, selectedRoleFilter].filter(
     (f) => f !== "",
@@ -750,159 +772,172 @@ export function UsersTable() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table aria-label="Lista de usuarios del sistema">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      Nombre
-                    </TableHead>
-                    <TableHead className="hidden lg:table-cell">
-                      Teléfono
-                    </TableHead>
-                    <TableHead>Rol(es)</TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      Creado
-                    </TableHead>
-                    <TableHead className="w-[100px]">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map((user, index) => {
-                    const userRoles = getUserRoles(user.id);
+            <>
+              <div className="overflow-x-auto">
+                <Table aria-label="Lista de usuarios del sistema">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Nombre
+                      </TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Teléfono
+                      </TableHead>
+                      <TableHead>Rol(es)</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Creado
+                      </TableHead>
+                      <TableHead className="w-[100px]">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedUsers.map((user, index) => {
+                      const userRoles = getUserRoles(user.id);
+                      const realIndex =
+                        (currentPage - 1) * pageSize + index + 1;
 
-                    return (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium text-center">
-                          {index + 1}
-                        </TableCell>
-                        <TableCell>
-                          <TruncatedCell
-                            value={user.email}
-                            maxWidth="180px"
-                            className="font-medium"
-                            fallback="N/A"
-                          />
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <TruncatedCell
-                            value={user.full_name}
-                            maxWidth="150px"
-                            fallback="Sin nombre"
-                          />
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell whitespace-nowrap">
-                          {user.phone || "N/A"}
-                        </TableCell>
-                        <TableCell>
-                          {loadingUserRoles ? (
-                            <Skeleton className="h-5 w-20" />
-                          ) : userRoles.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {userRoles.map((role) => (
-                                <Badge
-                                  key={role.id}
-                                  variant={
-                                    role.name === "Admin"
-                                      ? "default"
-                                      : role.name === "Secretaria"
-                                        ? "secondary"
-                                        : "outline"
-                                  }
-                                  className="text-xs"
-                                >
-                                  {role.name}
-                                </Badge>
-                              ))}
+                      return (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium text-center">
+                            {realIndex}
+                          </TableCell>
+                          <TableCell>
+                            <TruncatedCell
+                              value={user.email}
+                              maxWidth="180px"
+                              className="font-medium"
+                              fallback="N/A"
+                            />
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <TruncatedCell
+                              value={user.full_name}
+                              maxWidth="150px"
+                              fallback="Sin nombre"
+                            />
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                            {user.phone || "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            {loadingUserRoles ? (
+                              <Skeleton className="h-5 w-20" />
+                            ) : userRoles.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {userRoles.map((role) => (
+                                  <Badge
+                                    key={role.id}
+                                    variant={
+                                      role.name === "Admin"
+                                        ? "default"
+                                        : role.name === "Secretaria"
+                                          ? "secondary"
+                                          : "outline"
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {role.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">
+                                Sin rol
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell whitespace-nowrap">
+                            {formatDate(user.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-1">
+                              {/* Botón de seguridad/roles */}
+                              <PermissionGate
+                                permission={PERMISSIONS.USERS_MANAGE_ROLES}
+                                hide
+                              >
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      onClick={() => setSecurityModalUser(user)}
+                                      variant="outline"
+                                      size="icon-sm"
+                                    >
+                                      <Shield className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Gestionar roles y permisos</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </PermissionGate>
+
+                              {/* Botón de editar */}
+                              <PermissionGate
+                                permission={PERMISSIONS.USERS_EDIT}
+                                hide
+                              >
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      onClick={() => handleEditUser(user)}
+                                      variant="outline"
+                                      size="icon-sm"
+                                    >
+                                      <EditIcon />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Editar usuario</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </PermissionGate>
+
+                              {/* Botón de eliminar */}
+                              <PermissionGate
+                                permission={PERMISSIONS.USERS_DELETE}
+                                hide
+                              >
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      onClick={() => handleDeleteUser(user.id)}
+                                      variant="destructive"
+                                      size="icon-sm"
+                                      disabled={deletingId === user.id}
+                                    >
+                                      {deletingId === user.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <TrashIcon />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Eliminar usuario</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </PermissionGate>
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">
-                              Sin rol
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell whitespace-nowrap">
-                          {formatDate(user.created_at)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-1">
-                            {/* Botón de seguridad/roles */}
-                            <PermissionGate
-                              permission={PERMISSIONS.USERS_MANAGE_ROLES}
-                              hide
-                            >
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    onClick={() => setSecurityModalUser(user)}
-                                    variant="outline"
-                                    size="icon-sm"
-                                  >
-                                    <Shield className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Gestionar roles y permisos</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </PermissionGate>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
 
-                            {/* Botón de editar */}
-                            <PermissionGate
-                              permission={PERMISSIONS.USERS_EDIT}
-                              hide
-                            >
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    onClick={() => handleEditUser(user)}
-                                    variant="outline"
-                                    size="icon-sm"
-                                  >
-                                    <EditIcon />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Editar usuario</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </PermissionGate>
-
-                            {/* Botón de eliminar */}
-                            <PermissionGate
-                              permission={PERMISSIONS.USERS_DELETE}
-                              hide
-                            >
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    onClick={() => handleDeleteUser(user.id)}
-                                    variant="destructive"
-                                    size="icon-sm"
-                                    disabled={deletingId === user.id}
-                                  >
-                                    {deletingId === user.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <TrashIcon />
-                                    )}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Eliminar usuario</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </PermissionGate>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+              {/* Paginación */}
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredUsers.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            </>
           )}
         </CardContent>
       </Card>

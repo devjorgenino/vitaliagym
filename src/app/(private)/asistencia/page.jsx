@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useAttendance } from "../../../hooks/useAttendance";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
@@ -57,6 +57,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../../components/ui/table";
+import { Pagination, usePagination } from "../../../components/ui/pagination";
 
 const Asistencia = () => {
   const {
@@ -236,10 +237,31 @@ const Asistencia = () => {
     return matchesSearch && matchesStatus;
   });
 
+  // Estados para paginación de la tabla
+  const {
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+    resetPage,
+    paginateData,
+  } = usePagination(10);
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    resetPage();
+  }, [tableSearchTerm, statusFilter, resetPage]);
+
+  // Datos paginados
+  const paginatedAttendance = useMemo(() => {
+    return paginateData(filteredAttendance);
+  }, [filteredAttendance, paginateData]);
+
   // Función para limpiar todos los filtros
   const clearTableFilters = () => {
     setTableSearchTerm("");
     setStatusFilter("all");
+    resetPage();
   };
 
   // Contar filtros activos
@@ -622,93 +644,106 @@ const Asistencia = () => {
                   entityName="registros de asistencia"
                 />
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead scope="col">Fecha</TableHead>
-                        <TableHead scope="col">Cliente</TableHead>
-                        <TableHead scope="col">Check-in</TableHead>
-                        <TableHead scope="col">Estado</TableHead>
-                        <TableHead scope="col">Notas</TableHead>
-                        <TableHead scope="col">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAttendance.map((record) => (
-                        <TableRow key={record.id}>
-                          <TableCell className="font-medium">
-                            {formatDate(record.date)}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">
-                                {record.clients?.first_name}{" "}
-                                {record.clients?.last_name}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {record.clients?.cedula}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {formatTime(record.check_in_time)}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(record.status)}</TableCell>
-                          <TableCell>
-                            <div
-                              className="max-w-xs truncate"
-                              title={record.notes}
-                            >
-                              {record.notes || (
-                                <span className="text-muted-foreground italic">
-                                  Sin notas
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="icon-sm"
-                                    onClick={() => {
-                                      setSelectedClientId(record.client_id);
-                                      setShowAttendanceForm(true);
-                                    }}
-                                    aria-label={`Editar asistencia de ${record.clients?.first_name} ${record.clients?.last_name}`}
-                                  >
-                                    <EditIcon />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Editar asistencia</p>
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="destructive"
-                                    size="icon-sm"
-                                    onClick={() => openDeleteDialog(record)}
-                                    aria-label={`Eliminar asistencia de ${record.clients?.first_name} ${record.clients?.last_name}`}
-                                  >
-                                    <TrashIcon />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Eliminar asistencia</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </TableCell>
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead scope="col">Fecha</TableHead>
+                          <TableHead scope="col">Cliente</TableHead>
+                          <TableHead scope="col">Check-in</TableHead>
+                          <TableHead scope="col">Estado</TableHead>
+                          <TableHead scope="col">Notas</TableHead>
+                          <TableHead scope="col">Acciones</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedAttendance.map((record) => (
+                          <TableRow key={record.id}>
+                            <TableCell className="font-medium">
+                              {formatDate(record.date)}
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">
+                                  {record.clients?.first_name}{" "}
+                                  {record.clients?.last_name}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {record.clients?.cedula}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {formatTime(record.check_in_time)}
+                            </TableCell>
+                            <TableCell>
+                              {getStatusBadge(record.status)}
+                            </TableCell>
+                            <TableCell>
+                              <div
+                                className="max-w-xs truncate"
+                                title={record.notes}
+                              >
+                                {record.notes || (
+                                  <span className="text-muted-foreground italic">
+                                    Sin notas
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="icon-sm"
+                                      onClick={() => {
+                                        setSelectedClientId(record.client_id);
+                                        setShowAttendanceForm(true);
+                                      }}
+                                      aria-label={`Editar asistencia de ${record.clients?.first_name} ${record.clients?.last_name}`}
+                                    >
+                                      <EditIcon />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Editar asistencia</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="destructive"
+                                      size="icon-sm"
+                                      onClick={() => openDeleteDialog(record)}
+                                      aria-label={`Eliminar asistencia de ${record.clients?.first_name} ${record.clients?.last_name}`}
+                                    >
+                                      <TrashIcon />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Eliminar asistencia</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Paginación */}
+                  <Pagination
+                    currentPage={currentPage}
+                    totalItems={filteredAttendance.length}
+                    pageSize={pageSize}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setPageSize}
+                  />
+                </>
               )}
             </CardContent>
           </Card>

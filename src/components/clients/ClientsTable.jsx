@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
@@ -50,6 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+import { Pagination, usePagination } from "../ui/pagination";
 
 export function ClientsTable() {
   const router = useRouter();
@@ -110,6 +111,16 @@ export function ClientsTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
+
+  // Estados para paginación
+  const {
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+    resetPage,
+    paginateData,
+  } = usePagination(10);
 
   const getPlanPrice = (planId) => {
     const plan = plans.find((p) => p.id === planId);
@@ -451,7 +462,18 @@ export function ClientsTable() {
     setSearchTerm("");
     setSelectedPlan("");
     setPaymentFilter("");
+    resetPage();
   };
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    resetPage();
+  }, [searchTerm, selectedPlan, paymentFilter, resetPage]);
+
+  // Datos paginados
+  const paginatedClients = useMemo(() => {
+    return paginateData(filteredClients);
+  }, [filteredClients, paginateData]);
 
   // Contar filtros activos
   const activeFiltersCount = [searchTerm, selectedPlan, paymentFilter].filter(
@@ -1032,206 +1054,222 @@ export function ClientsTable() {
           </div>
         )}
 
-        {filteredClients.length === 0 ? (
-          clients.length === 0 ? (
-            <GettingStartedState
-              title="No hay clientes registrados"
-              steps={[
-                'Haz clic en "+ Nuevo Cliente"',
-                "Completa el formulario con los datos del cliente",
-                "Selecciona un plan para el cliente",
-              ]}
-              action={{
-                label: "Nuevo Cliente",
-                onClick: () => setShowCreateForm(true),
-              }}
-            />
-          ) : (
-            <SearchEmptyState
-              searchTerm={searchTerm}
-              entityName="clientes"
-              onClear={clearFilters}
-            />
-          )
+        {clients.length === 0 ? (
+          <GettingStartedState
+            title="No hay clientes registrados"
+            steps={[
+              'Haz clic en "+ Nuevo Cliente"',
+              "Completa el formulario con los datos del cliente",
+              "Selecciona un plan para el cliente",
+            ]}
+            action={{
+              label: "Nuevo Cliente",
+              onClick: () => setShowCreateForm(true),
+            }}
+          />
+        ) : filteredClients.length === 0 ? (
+          <SearchEmptyState
+            searchTerm={searchTerm}
+            entityName="clientes"
+            onClear={clearFilters}
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <Table aria-label="Lista de clientes del gimnasio">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead className="hidden sm:table-cell">Cédula</TableHead>
-                  <TableHead className="hidden lg:table-cell">Email</TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Teléfono
-                  </TableHead>
-                  {/* <TableHead className="hidden xl:table-cell">
+          <>
+            <div className="overflow-x-auto">
+              <Table aria-label="Lista de clientes del gimnasio">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead className="hidden sm:table-cell">
+                      Cédula
+                    </TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Email
+                    </TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      Teléfono
+                    </TableHead>
+                    {/* <TableHead className="hidden xl:table-cell">
                     Dirección
                   </TableHead> */}
-                  <TableHead className="hidden xl:table-cell">
-                    Observaciones
-                  </TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead className="hidden lg:table-cell">
-                    Ingreso
-                  </TableHead>
-                  <TableHead>Próx. Pago</TableHead>
-                  <TableHead className="w-[100px]">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredClients.map((client, index) => {
-                  const paymentStatus = calculatePaymentStatus(client);
-                  const paymentWithRemaining = getPaymentWithRemaining(client);
-                  const hasPendingPayment =
-                    client.plan_id && !paymentStatus.isFullyPaid;
+                    <TableHead className="hidden xl:table-cell">
+                      Observaciones
+                    </TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Ingreso
+                    </TableHead>
+                    <TableHead>Próx. Pago</TableHead>
+                    <TableHead className="w-[100px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedClients.map((client, index) => {
+                    const paymentStatus = calculatePaymentStatus(client);
+                    const paymentWithRemaining =
+                      getPaymentWithRemaining(client);
+                    const hasPendingPayment =
+                      client.plan_id && !paymentStatus.isFullyPaid;
+                    // Calcular el índice real considerando la paginación
+                    const realIndex = (currentPage - 1) * pageSize + index + 1;
 
-                  return (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium text-center">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell>
-                        <TruncatedCell
-                          value={`${client.first_name} ${client.last_name}`}
-                          maxWidth="150px"
-                          className="font-medium"
-                        />
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          <IdCard className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          <span>{client.cedula}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <TruncatedCell
-                          value={client.email}
-                          maxWidth="160px"
-                          fallback="N/A"
-                        />
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell whitespace-nowrap">
-                        {client.phone ? (
+                    return (
+                      <TableRow key={client.id}>
+                        <TableCell className="font-medium text-center">
+                          {realIndex}
+                        </TableCell>
+                        <TableCell>
+                          <TruncatedCell
+                            value={`${client.first_name} ${client.last_name}`}
+                            maxWidth="150px"
+                            className="font-medium"
+                          />
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell whitespace-nowrap">
                           <div className="flex items-center gap-1">
-                            <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                            <span>{client.phone}</span>
+                            <IdCard className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span>{client.cedula}</span>
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground">N/A</span>
-                        )}
-                      </TableCell>
-                      {/* <TableCell className="hidden xl:table-cell">
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <TruncatedCell
+                            value={client.email}
+                            maxWidth="160px"
+                            fallback="N/A"
+                          />
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell whitespace-nowrap">
+                          {client.phone ? (
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                              <span>{client.phone}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">N/A</span>
+                          )}
+                        </TableCell>
+                        {/* <TableCell className="hidden xl:table-cell">
                         <TruncatedCell
                           value={client.address}
                           maxWidth="150px"
                           fallback="N/A"
                         />
                       </TableCell> */}
-                      <TableCell className="hidden xl:table-cell">
-                        <TruncatedCell
-                          value={client.observations}
-                          maxWidth="120px"
-                          className="italic"
-                          fallback="N/A"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TruncatedCell
-                          value={client.plans?.name || "Sin plan"}
-                          maxWidth="100px"
-                          className="font-medium"
-                        />
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell whitespace-nowrap">
-                        {formatDate(client.join_date)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {client.next_payment_date ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">
-                              {formatDate(client.next_payment_date)}
-                            </span>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${client.paymentStatusColor}`}
-                            >
-                              {client.daysUntilPayment < 0
-                                ? `${Math.abs(client.daysUntilPayment)}d vencido`
-                                : `${client.daysUntilPayment}d`}
-                            </span>
+                        <TableCell className="hidden xl:table-cell">
+                          <TruncatedCell
+                            value={client.observations}
+                            maxWidth="120px"
+                            className="italic"
+                            fallback="N/A"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TruncatedCell
+                            value={client.plans?.name || "Sin plan"}
+                            maxWidth="100px"
+                            className="font-medium"
+                          />
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                          {formatDate(client.join_date)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {client.next_payment_date ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">
+                                {formatDate(client.next_payment_date)}
+                              </span>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${client.paymentStatusColor}`}
+                              >
+                                {client.daysUntilPayment < 0
+                                  ? `${Math.abs(client.daysUntilPayment)}d vencido`
+                                  : `${client.daysUntilPayment}d`}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">N/A</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={() =>
+                                    handlePayRemainingForClient(client)
+                                  }
+                                  variant="default"
+                                  size="icon-sm"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  disabled={!hasPendingPayment}
+                                  aria-label={`Registrar pago de ${client.first_name} ${client.last_name}`}
+                                >
+                                  <DollarSignIcon />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>
+                                  {paymentWithRemaining
+                                    ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
+                                    : "Registrar pago"}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={() => handleEditClient(client)}
+                                  variant="outline"
+                                  size="icon-sm"
+                                  aria-label={`Editar cliente ${client.first_name} ${client.last_name}`}
+                                >
+                                  <EditIcon />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Editar cliente</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={() => handleDeleteClick(client)}
+                                  variant="destructive"
+                                  size="icon-sm"
+                                  disabled={deletingId === client.id}
+                                  aria-label={`Eliminar cliente ${client.first_name} ${client.last_name}`}
+                                >
+                                  {deletingId === client.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <TrashIcon />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Eliminar cliente</p>
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground">N/A</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() =>
-                                  handlePayRemainingForClient(client)
-                                }
-                                variant="default"
-                                size="icon-sm"
-                                className="bg-green-600 hover:bg-green-700"
-                                disabled={!hasPendingPayment}
-                                aria-label={`Registrar pago de ${client.first_name} ${client.last_name}`}
-                              >
-                                <DollarSignIcon />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {paymentWithRemaining
-                                  ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
-                                  : "Registrar pago"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() => handleEditClient(client)}
-                                variant="outline"
-                                size="icon-sm"
-                                aria-label={`Editar cliente ${client.first_name} ${client.last_name}`}
-                              >
-                                <EditIcon />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Editar cliente</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() => handleDeleteClick(client)}
-                                variant="destructive"
-                                size="icon-sm"
-                                disabled={deletingId === client.id}
-                                aria-label={`Eliminar cliente ${client.first_name} ${client.last_name}`}
-                              >
-                                {deletingId === client.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <TrashIcon />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Eliminar cliente</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Paginación */}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredClients.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </CardContent>
 
