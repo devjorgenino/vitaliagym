@@ -644,6 +644,16 @@ export function PaymentsTable({
       return;
     }
 
+    // Máscara para teléfono de pago
+    if (name === "phone_payment") {
+      const cleanValue = value.replace(/\D/g, "").slice(0, 7);
+      setFormData((prev) => ({
+        ...prev,
+        [name]: cleanValue,
+      }));
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -767,6 +777,17 @@ export function PaymentsTable({
 
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
+
+    // Máscara para teléfono de pago
+    if (name === "phone_payment") {
+      const cleanValue = value.replace(/\D/g, "").slice(0, 7);
+      setEditFormData((prev) => ({
+        ...prev,
+        [name]: cleanValue,
+      }));
+      return;
+    }
+
     setEditFormData((prev) => ({
       ...prev,
       [name]: value,

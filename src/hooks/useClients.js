@@ -366,6 +366,71 @@ export function useClients() {
     }
   };
 
+  const fixAllPhones = useCallback(async () => {
+    setLoading(true);
+    let updatedCount = 0;
+    let errors = [];
+
+    try {
+      const { data: allClients, error: fetchError } = await client
+        .from("clients")
+        .select("id, phone");
+
+      if (fetchError) throw fetchError;
+
+      for (const cli of allClients) {
+        if (!cli.phone) continue;
+
+        // Normalización de teléfono
+        let newPhone = cli.phone.trim();
+
+        // Si ya tiene el formato correcto (4 dígitos, guión, 7 dígitos), saltar
+        if (/^\d{4}-\d{7}$/.test(newPhone)) continue;
+
+        // Limpiar caracteres no numéricos
+        const cleanNums = newPhone.replace(/\D/g, "");
+
+        // Si tiene 11 dígitos y empieza por 0 (ej: 04141234567)
+        if (cleanNums.length === 11 && cleanNums.startsWith("0")) {
+          newPhone = `${cleanNums.substring(0, 4)}-${cleanNums.substring(4)}`;
+        }
+        // Si tiene 10 dígitos y no empieza por 0 (ej: 4141234567)
+        else if (cleanNums.length === 10) {
+          newPhone = `0${cleanNums.substring(0, 3)}-${cleanNums.substring(3)}`;
+        } else {
+          continue;
+        }
+
+        if (newPhone !== cli.phone) {
+          const { error: updateError } = await client
+            .from("clients")
+            .update({ phone: newPhone })
+            .eq("id", cli.id);
+
+          if (updateError) {
+            errors.push(`Error cliente ${cli.id}: ${updateError.message}`);
+          } else {
+            updatedCount++;
+          }
+        }
+      }
+
+      if (updatedCount > 0) await fetchClients();
+
+      return {
+        success: true,
+        updated: updatedCount,
+        total: allClients.length,
+        errors,
+      };
+    } catch (err) {
+      console.error("Error fixing phones:", err);
+      return { success: false, errors: [err.message] };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchClients();
   }, []);
@@ -381,5 +446,6 @@ export function useClients() {
     deleteClient,
     calculateAge,
     recalculateAllNextPaymentDates,
+    fixAllPhones,
   };
 }
