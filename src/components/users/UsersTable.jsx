@@ -13,10 +13,19 @@ import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EditIcon, TrashIcon, SearchIcon, FilterXIcon } from "@/components/ui/icons";
+import {
+  EditIcon,
+  TrashIcon,
+  SearchIcon,
+  FilterXIcon,
+} from "@/components/ui/icons";
 import { Badge } from "@/components/ui/badge";
 import { TruncatedCell } from "@/components/ui/truncated-cell";
 import {
@@ -90,24 +99,26 @@ export function UsersTable() {
 
       setLoadingUserRoles(true);
       try {
-        const userIds = users.map(u => u.id);
-        
+        const userIds = users.map((u) => u.id);
+
         const { data, error } = await client
-          .from('user_roles')
-          .select(`
+          .from("user_roles")
+          .select(
+            `
             user_id,
             roles (
               id,
               name
             )
-          `)
-          .in('user_id', userIds);
+          `,
+          )
+          .in("user_id", userIds);
 
         if (error) throw error;
 
         // Crear mapa de userId -> roles[]
         const rolesMap = {};
-        data?.forEach(ur => {
+        data?.forEach((ur) => {
           if (!rolesMap[ur.user_id]) {
             rolesMap[ur.user_id] = [];
           }
@@ -130,8 +141,10 @@ export function UsersTable() {
   // Establecer rol por defecto cuando cargan los roles
   useEffect(() => {
     if (availableRoles.length > 0 && !formData.roleId) {
-      const defaultRole = availableRoles.find(r => r.name === 'Entrenador') || availableRoles[0];
-      setFormData(prev => ({ ...prev, roleId: defaultRole.id }));
+      const defaultRole =
+        availableRoles.find((r) => r.name === "Entrenador") ||
+        availableRoles[0];
+      setFormData((prev) => ({ ...prev, roleId: defaultRole.id }));
     }
   }, [availableRoles, formData.roleId]);
 
@@ -162,11 +175,11 @@ export function UsersTable() {
   // Handlers
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleRoleChange = (value) => {
-    setFormData(prev => ({ ...prev, roleId: value }));
+    setFormData((prev) => ({ ...prev, roleId: value }));
   };
 
   const handleCreateUser = async () => {
@@ -191,7 +204,9 @@ export function UsersTable() {
         options: {
           data: {
             full_name: formData.full_name,
-            phone: formData.phone ? formatPhone(formData.phone_operator, formData.phone) : "",
+            phone: formData.phone
+              ? formatPhone(formData.phone_operator, formData.phone)
+              : "",
           },
         },
       });
@@ -204,7 +219,9 @@ export function UsersTable() {
           id: authData.user.id,
           email: formData.email,
           full_name: formData.full_name,
-          phone: formData.phone ? formatPhone(formData.phone_operator, formData.phone) : "",
+          phone: formData.phone
+            ? formatPhone(formData.phone_operator, formData.phone)
+            : "",
         });
 
         if (profileError && profileError.code !== "PGRST116") {
@@ -236,7 +253,7 @@ export function UsersTable() {
 
       toast.success(
         `Usuario creado exitosamente. Contraseña temporal: ${tempPassword}`,
-        { duration: 15000 }
+        { duration: 15000 },
       );
     } catch (err) {
       console.error("Error al crear usuario:", err);
@@ -262,7 +279,7 @@ export function UsersTable() {
 
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
-    setEditFormData(prev => ({ ...prev, [name]: value }));
+    setEditFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleUpdateUser = async () => {
@@ -275,7 +292,9 @@ export function UsersTable() {
         .update({
           email: editFormData.email,
           full_name: editFormData.full_name,
-          phone: editFormData.phone ? formatPhone(editFormData.phone_operator, editFormData.phone) : "",
+          phone: editFormData.phone
+            ? formatPhone(editFormData.phone_operator, editFormData.phone)
+            : "",
         })
         .eq("id", editingUser.id);
 
@@ -285,7 +304,12 @@ export function UsersTable() {
 
       setEditingUser(null);
       setShowEditForm(false);
-      setEditFormData({ email: "", full_name: "", phone_operator: "0414", phone: "" });
+      setEditFormData({
+        email: "",
+        full_name: "",
+        phone_operator: "0414",
+        phone: "",
+      });
       await refetch();
 
       toast.success("Usuario actualizado exitosamente");
@@ -322,7 +346,20 @@ export function UsersTable() {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES", {
+    // Si es solo fecha (YYYY-MM-DD), parsear manualmente para evitar desfase de zona horaria
+    // Si incluye hora (ISO timestamp), usar new Date() normalmente
+    let date;
+    if (dateString.length === 10 && dateString.includes("-")) {
+      const parts = dateString.split("-");
+      date = new Date(
+        parseInt(parts[0], 10),
+        parseInt(parts[1], 10) - 1,
+        parseInt(parts[2], 10),
+      );
+    } else {
+      date = new Date(dateString);
+    }
+    return date.toLocaleDateString("es-ES", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -339,14 +376,16 @@ export function UsersTable() {
     const matchesSearch =
       searchTerm === "" ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.full_name && user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.phone && user.phone.toLowerCase().includes(searchTerm.toLowerCase()));
+      (user.full_name &&
+        user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.phone &&
+        user.phone.toLowerCase().includes(searchTerm.toLowerCase()));
 
     // Filtrar por rol
     let matchesRole = true;
     if (selectedRoleFilter) {
       const userRoles = getUserRoles(user.id);
-      matchesRole = userRoles.some(r => r.id === selectedRoleFilter);
+      matchesRole = userRoles.some((r) => r.id === selectedRoleFilter);
     }
 
     return matchesSearch && matchesRole;
@@ -357,7 +396,9 @@ export function UsersTable() {
     setSelectedRoleFilter("");
   };
 
-  const activeFiltersCount = [searchTerm, selectedRoleFilter].filter(f => f !== "").length;
+  const activeFiltersCount = [searchTerm, selectedRoleFilter].filter(
+    (f) => f !== "",
+  ).length;
 
   // Renderizado de loading
   if (loading) {
@@ -400,7 +441,8 @@ export function UsersTable() {
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle>
             Usuarios ({filteredUsers.length}
-            {filteredUsers.length !== users.length ? ` de ${users.length}` : ""})
+            {filteredUsers.length !== users.length ? ` de ${users.length}` : ""}
+            )
           </CardTitle>
           <div className="flex space-x-2">
             <PermissionGate permission={PERMISSIONS.USERS_CREATE} hide>
@@ -437,11 +479,15 @@ export function UsersTable() {
             </div>
 
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
+              <span className="text-sm font-medium text-muted-foreground">
+                Filtros:
+              </span>
 
-              <Select 
-                value={selectedRoleFilter || "all"} 
-                onValueChange={(value) => setSelectedRoleFilter(value === "all" ? "" : value)}
+              <Select
+                value={selectedRoleFilter || "all"}
+                onValueChange={(value) =>
+                  setSelectedRoleFilter(value === "all" ? "" : value)
+                }
               >
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Todos los roles" />
@@ -500,10 +546,15 @@ export function UsersTable() {
                   <div className="flex gap-1">
                     <Select
                       value={editFormData.phone_operator}
-                      onValueChange={(value) => setEditFormData(prev => ({ ...prev, phone_operator: value }))}
+                      onValueChange={(value) =>
+                        setEditFormData((prev) => ({
+                          ...prev,
+                          phone_operator: value,
+                        }))
+                      }
                     >
-                      <SelectTrigger 
-                        className="w-[90px] flex-shrink-0" 
+                      <SelectTrigger
+                        className="w-[90px] flex-shrink-0"
                         aria-label="Operador telefónico"
                       >
                         <SelectValue />
@@ -529,10 +580,15 @@ export function UsersTable() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mt-3">
-                Para modificar el rol del usuario, usa el botón de seguridad (escudo) en la tabla.
+                Para modificar el rol del usuario, usa el botón de seguridad
+                (escudo) en la tabla.
               </p>
               <div className="mt-4 flex space-x-2">
-                <Button onClick={handleUpdateUser} disabled={isCreating} size="sm">
+                <Button
+                  onClick={handleUpdateUser}
+                  disabled={isCreating}
+                  size="sm"
+                >
                   {isCreating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -583,10 +639,15 @@ export function UsersTable() {
                   <div className="flex gap-1">
                     <Select
                       value={formData.phone_operator}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          phone_operator: value,
+                        }))
+                      }
                     >
-                      <SelectTrigger 
-                        className="w-[90px] flex-shrink-0" 
+                      <SelectTrigger
+                        className="w-[90px] flex-shrink-0"
                         aria-label="Operador telefónico"
                       >
                         <SelectValue />
@@ -621,7 +682,11 @@ export function UsersTable() {
                     disabled={rolesLoading}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder={rolesLoading ? "Cargando..." : "Selecciona un rol"} />
+                      <SelectValue
+                        placeholder={
+                          rolesLoading ? "Cargando..." : "Selecciona un rol"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {availableRoles.map((role) => (
@@ -641,7 +706,8 @@ export function UsersTable() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mt-3">
-                Se generará una contraseña temporal que se mostrará después de crear el usuario.
+                Se generará una contraseña temporal que se mostrará después de
+                crear el usuario.
               </p>
               <div className="mt-4 flex space-x-2">
                 <Button
@@ -690,38 +756,46 @@ export function UsersTable() {
                   <TableRow>
                     <TableHead className="w-12">#</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead className="hidden md:table-cell">Nombre</TableHead>
-                    <TableHead className="hidden lg:table-cell">Teléfono</TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      Nombre
+                    </TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Teléfono
+                    </TableHead>
                     <TableHead>Rol(es)</TableHead>
-                    <TableHead className="hidden md:table-cell">Creado</TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      Creado
+                    </TableHead>
                     <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredUsers.map((user, index) => {
                     const userRoles = getUserRoles(user.id);
-                    
+
                     return (
                       <TableRow key={user.id}>
                         <TableCell className="font-medium text-center">
                           {index + 1}
                         </TableCell>
                         <TableCell>
-                          <TruncatedCell 
-                            value={user.email} 
+                          <TruncatedCell
+                            value={user.email}
                             maxWidth="180px"
                             className="font-medium"
                             fallback="N/A"
                           />
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <TruncatedCell 
-                            value={user.full_name} 
+                          <TruncatedCell
+                            value={user.full_name}
                             maxWidth="150px"
                             fallback="Sin nombre"
                           />
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell whitespace-nowrap">{user.phone || "N/A"}</TableCell>
+                        <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                          {user.phone || "N/A"}
+                        </TableCell>
                         <TableCell>
                           {loadingUserRoles ? (
                             <Skeleton className="h-5 w-20" />
@@ -734,8 +808,8 @@ export function UsersTable() {
                                     role.name === "Admin"
                                       ? "default"
                                       : role.name === "Secretaria"
-                                      ? "secondary"
-                                      : "outline"
+                                        ? "secondary"
+                                        : "outline"
                                   }
                                   className="text-xs"
                                 >
@@ -749,11 +823,16 @@ export function UsersTable() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell whitespace-nowrap">{formatDate(user.created_at)}</TableCell>
+                        <TableCell className="hidden md:table-cell whitespace-nowrap">
+                          {formatDate(user.created_at)}
+                        </TableCell>
                         <TableCell>
                           <div className="flex space-x-1">
                             {/* Botón de seguridad/roles */}
-                            <PermissionGate permission={PERMISSIONS.USERS_MANAGE_ROLES} hide>
+                            <PermissionGate
+                              permission={PERMISSIONS.USERS_MANAGE_ROLES}
+                              hide
+                            >
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -771,7 +850,10 @@ export function UsersTable() {
                             </PermissionGate>
 
                             {/* Botón de editar */}
-                            <PermissionGate permission={PERMISSIONS.USERS_EDIT} hide>
+                            <PermissionGate
+                              permission={PERMISSIONS.USERS_EDIT}
+                              hide
+                            >
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -789,7 +871,10 @@ export function UsersTable() {
                             </PermissionGate>
 
                             {/* Botón de eliminar */}
-                            <PermissionGate permission={PERMISSIONS.USERS_DELETE} hide>
+                            <PermissionGate
+                              permission={PERMISSIONS.USERS_DELETE}
+                              hide
+                            >
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -836,7 +921,8 @@ export function UsersTable() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Seguridad - {securityModalUser?.full_name || securityModalUser?.email}
+              Seguridad -{" "}
+              {securityModalUser?.full_name || securityModalUser?.email}
             </DialogTitle>
             <DialogDescription>
               Gestiona los roles y permisos de este usuario

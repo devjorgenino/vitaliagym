@@ -3,7 +3,12 @@ import { usePayments } from "../../hooks/usePayments";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
-import { VENEZUELAN_BANKS, PHONE_OPERATORS, formatPhone, parsePhone } from "../../lib/venezuelanData";
+import {
+  VENEZUELAN_BANKS,
+  PHONE_OPERATORS,
+  formatPhone,
+  parsePhone,
+} from "../../lib/venezuelanData";
 import { toast } from "sonner";
 import { Loader2, Building2, Phone } from "lucide-react";
 import { Button } from "../ui/button";
@@ -40,33 +45,37 @@ import {
 function debounce(func, delay) {
   let timeout;
   let cancelled = false;
-  
+
   const debounced = function (...args) {
     const context = this;
     clearTimeout(timeout);
-    
+
     if (cancelled) {
       cancelled = false;
       return;
     }
-    
+
     timeout = setTimeout(() => {
       if (!cancelled) {
         func.apply(context, args);
       }
     }, delay);
   };
-  
+
   debounced.cancel = () => {
     clearTimeout(timeout);
     cancelled = true;
   };
-  
+
   return debounced;
 }
 
-
-export function PaymentsTable({ preselectedClient = null, payRemaining = false, remainingAmount = null, paymentId = null }) {
+export function PaymentsTable({
+  preselectedClient = null,
+  payRemaining = false,
+  remainingAmount = null,
+  paymentId = null,
+}) {
   const {
     payments,
     loading,
@@ -87,7 +96,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
   } = useExchangeRate();
 
   const [showCreateForm, setShowCreateForm] = useState(
-    preselectedClient ? true : false
+    preselectedClient ? true : false,
   );
   const [paymentMode, setPaymentMode] = useState("full"); // "full" o "partial"
 
@@ -146,13 +155,13 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
   useEffect(() => {
     if (payRemaining && preselectedClient && remainingAmount && paymentId) {
       // Buscar el plan del cliente
-      const clientPlan = plans.find(p => p.id === preselectedClient.plan_id);
-      
+      const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
+
       if (clientPlan) {
         // Configurar modo de pago restante
         setPaymentMode("partial");
         setIsPayingRemaining(true);
-        
+
         // Precargar formulario con los datos del pago restante
         setFormData({
           client_id: preselectedClient.id,
@@ -166,7 +175,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           payment_type: "pago_movil",
           phone_payment: "",
         });
-        
+
         // Configurar datos del pago restante para visualización
         setRemainingPaymentData({
           client_id: preselectedClient.id,
@@ -175,17 +184,28 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           plan_name: clientPlan.name,
           remaining_amount: parseFloat(remainingAmount),
           plan_price: parseFloat(clientPlan.price),
-          total_paid: parseFloat(clientPlan.price) - parseFloat(remainingAmount),
+          total_paid:
+            parseFloat(clientPlan.price) - parseFloat(remainingAmount),
         });
       }
     }
-  }, [payRemaining, preselectedClient, remainingAmount, paymentId, plans, rate]);
+  }, [
+    payRemaining,
+    preselectedClient,
+    remainingAmount,
+    paymentId,
+    plans,
+    rate,
+  ]);
 
   // Obtener el precio del plan seleccionado
-  const getPlanPrice = useCallback((planId) => {
-    const plan = plans.find((p) => p.id === planId);
-    return plan ? parseFloat(plan.price) || 0 : 0;
-  }, [plans]);
+  const getPlanPrice = useCallback(
+    (planId) => {
+      const plan = plans.find((p) => p.id === planId);
+      return plan ? parseFloat(plan.price) || 0 : 0;
+    },
+    [plans],
+  );
 
   // Memo para calcular el restante y precio del plan actual de forma segura
   const currentPaymentInfo = useMemo(() => {
@@ -197,34 +217,37 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         const allClientPayments = payments.filter(
           (p) =>
             p.client_id === formData.client_id &&
-            p.plan_id === formData.plan_id
+            p.plan_id === formData.plan_id,
         );
-        
+
         const totalPaid = allClientPayments.reduce(
           (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-          0
+          0,
         );
 
         if (planPrice > 0) {
-            let paidForCurrentCycle = totalPaid % planPrice;
-            
-            // Si el módulo es casi cero y se ha pagado, significa que se completó un ciclo.
-            if (paidForCurrentCycle < 0.001 && totalPaid > 0) {
-                paidForCurrentCycle = planPrice;
-            }
+          let paidForCurrentCycle = totalPaid % planPrice;
 
-            const remainingAmount = planPrice - paidForCurrentCycle;
+          // Si el módulo es casi cero y se ha pagado, significa que se completó un ciclo.
+          if (paidForCurrentCycle < 0.001 && totalPaid > 0) {
+            paidForCurrentCycle = planPrice;
+          }
 
-            // Si se está pagando restante, se muestra lo que falta.
-            // Si no, y lo que falta es cero (ciclo completo), se propone el precio completo para un nuevo ciclo.
-            return {
-                planPrice,
-                totalPaid,
-                remainingAmount: (remainingAmount < 0.001 && !isPayingRemaining) ? planPrice : remainingAmount,
-            };
+          const remainingAmount = planPrice - paidForCurrentCycle;
+
+          // Si se está pagando restante, se muestra lo que falta.
+          // Si no, y lo que falta es cero (ciclo completo), se propone el precio completo para un nuevo ciclo.
+          return {
+            planPrice,
+            totalPaid,
+            remainingAmount:
+              remainingAmount < 0.001 && !isPayingRemaining
+                ? planPrice
+                : remainingAmount,
+          };
         }
       }
-      
+
       // Para un pago nuevo sin cliente seleccionado, o si el plan no tiene precio.
       return {
         planPrice,
@@ -264,18 +287,18 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
     // Solo sumar pagos existentes si estamos pagando un restante.
     if (isPayingRemaining) {
       const allClientPayments = payments.filter(
-        (p) => p.client_id === formData.client_id && p.plan_id === planId
+        (p) => p.client_id === formData.client_id && p.plan_id === planId,
       );
       totalPaidSoFar = allClientPayments.reduce(
         (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-        0
+        0,
       );
     }
 
     // Calcular lo que quedaría DESPUÉS de agregar el monto actual
     const remainingAfterCurrentPayment = Math.max(
       0,
-      planPrice - (totalPaidSoFar + amount)
+      planPrice - (totalPaidSoFar + amount),
     );
 
     return {
@@ -288,11 +311,11 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
   // Obtener pagos anteriores de un cliente para un plan específico
   const getPreviousPayments = (clientId, planId) => {
     const clientPayments = payments.filter(
-      (p) => p.client_id === clientId && p.plan_id === planId
+      (p) => p.client_id === clientId && p.plan_id === planId,
     );
     const totalPaid = clientPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+      0,
     );
     return totalPaid;
   };
@@ -313,13 +336,13 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
 
     // Obtener todos los pagos del cliente para este plan
     const allClientPayments = payments.filter(
-      (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id
+      (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
     );
 
     // Calcular el total pagado hasta ahora
     const totalPaidSoFar = allClientPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+      0,
     );
 
     // Lógica para manejar renovaciones/ciclos de pago
@@ -352,13 +375,13 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       (p) =>
         p.client_id === payment.client_id &&
         p.plan_id === payment.plan_id &&
-        p.id !== payment.id // Excluir el pago actual
+        p.id !== payment.id, // Excluir el pago actual
     );
 
     // Calcular el total pagado ANTES del pago actual
     const totalPaidBefore = previousPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+      0,
     );
 
     // Calcular el restante ANTES de hacer un nuevo pago
@@ -376,12 +399,12 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
   // Calcular el total pagado por un cliente-plan (TODOS los pagos)
   const calculateTotalPaidByClientPlan = (clientId, planId) => {
     const allClientPayments = payments.filter(
-      (p) => p.client_id === clientId && p.plan_id === planId
+      (p) => p.client_id === clientId && p.plan_id === planId,
     );
 
     return allClientPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+      0,
     );
   };
 
@@ -424,9 +447,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         ...prev,
         amount_usd: amountToPay > 0 ? amountToPay.toString() : "0",
         amount_bs:
-          amountToPay > 0
-            ? (amountToPay * (rate || 1)).toFixed(2)
-            : "0.00",
+          amountToPay > 0 ? (amountToPay * (rate || 1)).toFixed(2) : "0.00",
       }));
     }
   }, [
@@ -447,8 +468,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       if (amount > planPrice) {
         setPartialValidationError(
           `El monto no puede ser mayor al precio del plan ($${planPrice.toFixed(
-            2
-          )})`
+            2,
+          )})`,
         );
       } else if (amount <= 0) {
         setPartialValidationError("El monto debe ser mayor a 0");
@@ -473,8 +494,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       if (amount > planPrice) {
         setEditPartialValidationError(
           `El monto no puede ser mayor al precio del plan ($${planPrice.toFixed(
-            2
-          )})`
+            2,
+          )})`,
         );
       } else if (amount <= 0) {
         setEditPartialValidationError("El monto debe ser mayor a 0");
@@ -490,26 +511,29 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
   const filteredPayments = useMemo(() => {
     return payments.filter((payment) => {
       // Filtrar por término de búsqueda (nombre, apellido o cédula del cliente)
-      const matchesSearch = 
+      const matchesSearch =
         searchTerm === "" ||
-        (payment.clients?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         payment.clients?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         payment.clients?.cedula?.toLowerCase().includes(searchTerm.toLowerCase()));
+        payment.clients?.first_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        payment.clients?.last_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        payment.clients?.cedula
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
 
       // Filtrar por plan
-      const matchesPlan = 
-        selectedPlan === "" ||
-        payment.plan_id === selectedPlan;
+      const matchesPlan =
+        selectedPlan === "" || payment.plan_id === selectedPlan;
 
       // Filtrar por tipo de pago
-      const matchesPaymentType = 
+      const matchesPaymentType =
         selectedPaymentType === "" ||
         payment.payment_type === selectedPaymentType;
 
       // Filtrar por banco
-      const matchesBank = 
-        selectedBank === "" ||
-        payment.bank === selectedBank;
+      const matchesBank = selectedBank === "" || payment.bank === selectedBank;
 
       // Filtrar por fecha desde
       let matchesDateFrom = true;
@@ -525,9 +549,24 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         matchesDateTo = new Date(payment.payment_date) <= toDate;
       }
 
-      return matchesSearch && matchesPlan && matchesPaymentType && matchesBank && matchesDateFrom && matchesDateTo;
+      return (
+        matchesSearch &&
+        matchesPlan &&
+        matchesPaymentType &&
+        matchesBank &&
+        matchesDateFrom &&
+        matchesDateTo
+      );
     });
-  }, [payments, searchTerm, selectedPlan, selectedPaymentType, selectedBank, dateFrom, dateTo]);
+  }, [
+    payments,
+    searchTerm,
+    selectedPlan,
+    selectedPaymentType,
+    selectedBank,
+    dateFrom,
+    dateTo,
+  ]);
 
   // Sincronizar displayPayments con filteredPayments
   useEffect(() => {
@@ -540,25 +579,26 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       // Calcular el restante actual
       const allClientPayments = payments.filter(
         (p) =>
-          p.client_id === formData.client_id &&
-          p.plan_id === formData.plan_id
+          p.client_id === formData.client_id && p.plan_id === formData.plan_id,
       );
       const totalPaid = allClientPayments.reduce(
         (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-        0
+        0,
       );
       const planPrice = getPlanPrice(formData.plan_id);
       const remainingAmount = Math.max(0, planPrice - totalPaid);
 
       // Encontrar cliente y plan de forma segura para evitar re-renders
-      const selectedClient = clients.find(c => c.id === formData.client_id);
-      const selectedPlan = plans.find(p => p.id === formData.plan_id);
+      const selectedClient = clients.find((c) => c.id === formData.client_id);
+      const selectedPlan = plans.find((p) => p.id === formData.plan_id);
 
       setRemainingPaymentData({
         client_id: formData.client_id,
-        client_name: selectedClient ? `${selectedClient.first_name} ${selectedClient.last_name}` : '',
+        client_name: selectedClient
+          ? `${selectedClient.first_name} ${selectedClient.last_name}`
+          : "",
         plan_id: formData.plan_id,
-        plan_name: selectedPlan ? selectedPlan.name : '',
+        plan_name: selectedPlan ? selectedPlan.name : "",
         remaining_amount: remainingAmount,
         plan_price: planPrice,
         total_paid: totalPaid,
@@ -567,7 +607,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       // Si el modo es "full" (pagar completo), cargar el monto del plan automáticamente
       // Solo si no hay un monto ya establecido por el usuario (para no sobreescribir)
       if (paymentMode === "full" && !formData.amount_usd) {
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           amount_usd: currentPaymentInfo.planPrice.toString(),
           amount_bs: (currentPaymentInfo.planPrice * (rate || 1)).toFixed(2),
@@ -576,8 +616,14 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
     } else {
       setRemainingPaymentData(null);
     }
-        }, [showCreateForm, formData.client_id, formData.plan_id, paymentMode, payments, rate]);
-
+  }, [
+    showCreateForm,
+    formData.client_id,
+    formData.plan_id,
+    paymentMode,
+    payments,
+    rate,
+  ]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -614,7 +660,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
       !formData.payment_type
     ) {
       toast.error(
-        "Los campos de cliente, plan, monto y tipo de pago son obligatorios"
+        "Los campos de cliente, plan, monto y tipo de pago son obligatorios",
       );
       return;
     }
@@ -632,7 +678,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         amount_usd: parseFloat(formData.amount_usd),
         amount_bs: parseFloat(formData.amount_bs),
         exchange_rate: parseFloat(formData.exchange_rate),
-        phone_payment: formData.phone_payment ? formatPhone(formData.phone_operator, formData.phone_payment) : "",
+        phone_payment: formData.phone_payment
+          ? formatPhone(formData.phone_operator, formData.phone_payment)
+          : "",
       };
       // Remove phone_operator from payload as it's only for UI
       delete paymentData.phone_operator;
@@ -665,8 +713,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         if (isPayingRemaining && remainingPaymentData) {
           toast.success(
             `Pago restante de $${parseFloat(formData.amount_usd).toFixed(
-              2
-            )} registrado exitosamente para ${remainingPaymentData.client_name}`
+              2,
+            )} registrado exitosamente para ${remainingPaymentData.client_name}`,
           );
         } else {
           toast.success("Pago registrado exitosamente");
@@ -724,7 +772,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           ...prev,
           amount_usd: planPrice.toString(),
           amount_bs: (planPrice * parseFloat(prev.exchange_rate || 1)).toFixed(
-            2
+            2,
           ),
         }));
       }
@@ -736,13 +784,13 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           (p) =>
             p.client_id === editFormData.client_id &&
             p.plan_id === editFormData.plan_id &&
-            p.id !== editingPayment.id // Excluir el pago que se está editando
+            p.id !== editingPayment.id, // Excluir el pago que se está editando
         );
 
         // Calcular total pagado hasta ahora (excluyendo el pago actual)
         const totalPaid = allClientPayments.reduce(
           (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-          0
+          0,
         );
         const planPrice = getPlanPrice(editFormData.plan_id);
         const remainingAmount = Math.max(0, planPrice - totalPaid);
@@ -751,7 +799,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         setEditFormData((prev) => ({
           ...prev,
           amount_usd: remainingAmount.toString(),
-          amount_bs: (remainingAmount * parseFloat(prev.exchange_rate || 1)).toFixed(2),
+          amount_bs: (
+            remainingAmount * parseFloat(prev.exchange_rate || 1)
+          ).toFixed(2),
         }));
       } else {
         // Si no hay plan, limpiar montos
@@ -780,7 +830,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
         amount_usd: parseFloat(editFormData.amount_usd),
         amount_bs: parseFloat(editFormData.amount_bs),
         exchange_rate: parseFloat(editFormData.exchange_rate),
-        phone_payment: editFormData.phone_payment ? formatPhone(editFormData.phone_operator, editFormData.phone_payment) : "",
+        phone_payment: editFormData.phone_payment
+          ? formatPhone(editFormData.phone_operator, editFormData.phone_payment)
+          : "",
       };
       // Remove phone_operator from payload as it's only for UI
       delete paymentData.phone_operator;
@@ -840,11 +892,11 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
   const handlePayRemaining = (payment) => {
     // Calcular el pago restante INCLUYENDO todos los pagos existentes
     const allClientPayments = payments.filter(
-      (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id
+      (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
     );
     const totalPaid = allClientPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+      0,
     );
     const planPrice = getPlanPrice(payment.plan_id);
     const remainingAmount = Math.max(0, planPrice - totalPaid);
@@ -896,8 +948,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
 
     toast.info(
       `Preparando pago restante de $${remainingStatus.remaining.toFixed(
-        2
-      )} para ${payment.clients?.first_name} ${payment.clients?.last_name}`
+        2,
+      )} para ${payment.clients?.first_name} ${payment.clients?.last_name}`,
     );
   };
 
@@ -920,7 +972,14 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES");
+    // Parsear la fecha manualmente para evitar problemas de zona horaria
+    const parts = dateString.split("-");
+    const date = new Date(
+      parseInt(parts[0], 10),
+      parseInt(parts[1], 10) - 1,
+      parseInt(parts[2], 10),
+    );
+    return date.toLocaleDateString("es-ES");
   };
 
   const formatPaymentType = (type) => {
@@ -1003,8 +1062,17 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           >
             {showCreateForm ? "Cancelar" : "+ Nuevo Pago"}
           </Button>
-          <Button onClick={refetch} variant="outline" size="sm" disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Actualizar"}
+          <Button
+            onClick={refetch}
+            variant="outline"
+            size="sm"
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              "Actualizar"
+            )}
           </Button>
         </div>
       </CardHeader>
@@ -1046,9 +1114,14 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
             {/* Filtro por tipo de pago */}
             <Select
               value={selectedPaymentType || "all"}
-              onValueChange={(value) => setSelectedPaymentType(value === "all" ? "" : value)}
+              onValueChange={(value) =>
+                setSelectedPaymentType(value === "all" ? "" : value)
+              }
             >
-              <SelectTrigger className="w-[160px]" aria-label="Filtrar por tipo de pago">
+              <SelectTrigger
+                className="w-[160px]"
+                aria-label="Filtrar por tipo de pago"
+              >
                 <SelectValue placeholder="Todos los tipos" />
               </SelectTrigger>
               <SelectContent>
@@ -1066,9 +1139,14 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               selectedPaymentType === "") && (
               <Select
                 value={selectedBank || "all"}
-                onValueChange={(value) => setSelectedBank(value === "all" ? "" : value)}
+                onValueChange={(value) =>
+                  setSelectedBank(value === "all" ? "" : value)
+                }
               >
-                <SelectTrigger className="w-[200px]" aria-label="Filtrar por banco">
+                <SelectTrigger
+                  className="w-[200px]"
+                  aria-label="Filtrar por banco"
+                >
                   <SelectValue placeholder="Todos los bancos" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1134,8 +1212,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               {isPayingRemaining
                 ? `Pagar Restante - ${remainingPaymentData?.client_name}`
                 : preselectedClient
-                ? `Nuevo Pago - ${preselectedClient.first_name} ${preselectedClient.last_name}`
-                : "Registrar Nuevo Pago"}
+                  ? `Nuevo Pago - ${preselectedClient.first_name} ${preselectedClient.last_name}`
+                  : "Registrar Nuevo Pago"}
             </h3>
             {isPayingRemaining && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
@@ -1229,7 +1307,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                         className="mr-2"
                       />
                       Pagar Completo ($
-                      {currentPaymentInfo.remainingAmount > 0 ? currentPaymentInfo.remainingAmount.toFixed(2) : "0.00"}
+                      {currentPaymentInfo.remainingAmount > 0
+                        ? currentPaymentInfo.remainingAmount.toFixed(2)
+                        : "0.00"}
                       )
                     </label>
                     <label className="flex items-center">
@@ -1242,7 +1322,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                         className="mr-2"
                       />
                       Pago Parcial (restante: $
-                      {currentPaymentInfo.remainingAmount > 0 ? currentPaymentInfo.remainingAmount.toFixed(2) : "0.00"}
+                      {currentPaymentInfo.remainingAmount > 0
+                        ? currentPaymentInfo.remainingAmount.toFixed(2)
+                        : "0.00"}
                       )
                     </label>
                   </div>
@@ -1302,7 +1384,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                       {
                         calculateRemainingAfterCurrentAmount(
                           formData.plan_id,
-                          formData.amount_usd
+                          formData.amount_usd,
                         ).formattedAmount
                       }
                     </div>
@@ -1341,7 +1423,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               </div>
 
               {/* Campos de referencia y banco - solo para pago móvil y transferencia */}
-              {(formData.payment_type === "pago_movil" || formData.payment_type === "transferencia") && (
+              {(formData.payment_type === "pago_movil" ||
+                formData.payment_type === "transferencia") && (
                 <>
                   <div>
                     <label className="block text-sm font-medium mb-2">
@@ -1360,7 +1443,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                     <Label htmlFor="create-bank">Banco</Label>
                     <Select
                       value={formData.bank}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, bank: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, bank: value }))
+                      }
                     >
                       <SelectTrigger id="create-bank" className="w-full">
                         <SelectValue placeholder="Seleccionar banco" />
@@ -1383,16 +1468,24 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               {/* Campo de teléfono - solo para pago móvil */}
               {formData.payment_type === "pago_movil" && (
                 <div>
-                  <Label htmlFor="phone_payment" className="block text-sm font-medium mb-2">
+                  <Label
+                    htmlFor="phone_payment"
+                    className="block text-sm font-medium mb-2"
+                  >
                     Teléfono Pago Móvil
                   </Label>
                   <div className="flex gap-1">
                     <Select
                       value={formData.phone_operator}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          phone_operator: value,
+                        }))
+                      }
                     >
-                      <SelectTrigger 
-                        className="w-[90px] flex-shrink-0" 
+                      <SelectTrigger
+                        className="w-[90px] flex-shrink-0"
                         aria-label="Operador telefónico"
                       >
                         <SelectValue />
@@ -1584,7 +1677,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                       {
                         calculateRemainingAmount(
                           editFormData.plan_id,
-                          editFormData.amount_usd
+                          editFormData.amount_usd,
                         ).formattedAmount
                       }
                     </div>
@@ -1637,7 +1730,8 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               </div>
 
               {/* Campos de referencia y banco - solo para pago móvil y transferencia */}
-              {(editFormData.payment_type === "pago_movil" || editFormData.payment_type === "transferencia") && (
+              {(editFormData.payment_type === "pago_movil" ||
+                editFormData.payment_type === "transferencia") && (
                 <>
                   <div>
                     <label className="block text-sm font-medium mb-2">
@@ -1656,7 +1750,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                     <Label htmlFor="edit-bank">Banco</Label>
                     <Select
                       value={editFormData.bank}
-                      onValueChange={(value) => setEditFormData(prev => ({ ...prev, bank: value }))}
+                      onValueChange={(value) =>
+                        setEditFormData((prev) => ({ ...prev, bank: value }))
+                      }
                     >
                       <SelectTrigger id="edit-bank" className="w-full">
                         <SelectValue placeholder="Seleccionar banco" />
@@ -1679,16 +1775,24 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
               {/* Campo de teléfono - solo para pago móvil */}
               {editFormData.payment_type === "pago_movil" && (
                 <div>
-                  <Label htmlFor="edit_phone_payment" className="block text-sm font-medium mb-2">
+                  <Label
+                    htmlFor="edit_phone_payment"
+                    className="block text-sm font-medium mb-2"
+                  >
                     Teléfono Pago Móvil
                   </Label>
                   <div className="flex gap-1">
                     <Select
                       value={editFormData.phone_operator}
-                      onValueChange={(value) => setEditFormData(prev => ({ ...prev, phone_operator: value }))}
+                      onValueChange={(value) =>
+                        setEditFormData((prev) => ({
+                          ...prev,
+                          phone_operator: value,
+                        }))
+                      }
                     >
-                      <SelectTrigger 
-                        className="w-[90px] flex-shrink-0" 
+                      <SelectTrigger
+                        className="w-[90px] flex-shrink-0"
                         aria-label="Operador telefónico"
                       >
                         <SelectValue />
@@ -1764,9 +1868,13 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
           </div>
         ) : displayPayments.length === 0 && payments.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-muted-foreground mb-4">No hay pagos registrados</p>
+            <p className="text-muted-foreground mb-4">
+              No hay pagos registrados
+            </p>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-              <h4 className="font-semibold text-blue-900 mb-2">💰 Para empezar:</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">
+                💰 Para empezar:
+              </h4>
               <ol className="text-sm text-blue-800 text-left space-y-1">
                 <li>Haz clic en "+ Nuevo Pago"</li>
               </ol>
@@ -1783,7 +1891,9 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                   <TableHead>Plan</TableHead>
                   <TableHead>USD</TableHead>
                   <TableHead className="hidden md:table-cell">Bs</TableHead>
-                  <TableHead className="hidden lg:table-cell">Restante</TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Restante
+                  </TableHead>
                   <TableHead className="hidden xl:table-cell">Ref.</TableHead>
                   <TableHead className="hidden xl:table-cell">Banco</TableHead>
                   <TableHead className="hidden sm:table-cell">Tipo</TableHead>
@@ -1801,15 +1911,17 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                         {index + 1}
                       </TableCell>
                       <TableCell>
-                        <TruncatedCell 
+                        <TruncatedCell
                           value={`${payment.clients?.first_name} ${payment.clients?.last_name}`}
                           maxWidth="120px"
                           className="font-medium"
                         />
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell whitespace-nowrap">{payment.clients?.cedula}</TableCell>
+                      <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                        {payment.clients?.cedula}
+                      </TableCell>
                       <TableCell>
-                        <TruncatedCell 
+                        <TruncatedCell
                           value={payment.plans?.name || "N/A"}
                           maxWidth="100px"
                           className="font-medium"
@@ -1825,7 +1937,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                           <span className="text-green-600 whitespace-nowrap">
                             {formatCurrency(
                               parseFloat(payment.amount_bs) || 0,
-                              "VES"
+                              "VES",
                             )}
                           </span>
                         )}
@@ -1845,7 +1957,7 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                         {payment.reference || "N/A"}
                       </TableCell>
                       <TableCell className="hidden xl:table-cell">
-                        <TruncatedCell 
+                        <TruncatedCell
                           value={payment.bank}
                           maxWidth="100px"
                           fallback="N/A"
@@ -1856,8 +1968,12 @@ export function PaymentsTable({ preselectedClient = null, payRemaining = false, 
                           {formatPaymentType(payment.payment_type)}
                         </span>
                       </TableCell>
-                      <TableCell className="hidden xl:table-cell whitespace-nowrap">{payment.phone_payment || "N/A"}</TableCell>
-                      <TableCell className="whitespace-nowrap">{formatDate(payment.payment_date)}</TableCell>
+                      <TableCell className="hidden xl:table-cell whitespace-nowrap">
+                        {payment.phone_payment || "N/A"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {formatDate(payment.payment_date)}
+                      </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Tooltip>

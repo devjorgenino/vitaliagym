@@ -23,7 +23,10 @@ import {
 } from "../../../components/ui/card";
 import { Skeleton } from "../../../components/ui/skeleton";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
-import { EmptyState, SearchEmptyState } from "../../../components/ui/empty-state";
+import {
+  EmptyState,
+  SearchEmptyState,
+} from "../../../components/ui/empty-state";
 import {
   Tooltip,
   TooltipContent,
@@ -35,12 +38,12 @@ import {
   SearchIcon,
   FilterXIcon,
 } from "../../../components/ui/icons";
-import { 
-  Loader2, 
-  RefreshCw, 
-  UserCheck, 
-  UserX, 
-  Clock, 
+import {
+  Loader2,
+  RefreshCw,
+  UserCheck,
+  UserX,
+  Clock,
   CheckCircle2,
   XCircle,
   Search,
@@ -71,7 +74,10 @@ const Asistencia = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [checking, setChecking] = useState(false);
   const [markingAttendance, setMarkingAttendance] = useState(false);
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, record: null });
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    record: null,
+  });
   const [isDeleting, setIsDeleting] = useState(false);
   const [clientStatus, setClientStatus] = useState(null);
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
@@ -133,7 +139,7 @@ const Asistencia = () => {
 
   const handleDeleteAttendance = async () => {
     if (!deleteDialog.record) return;
-    
+
     setIsDeleting(true);
     try {
       const result = await deleteAttendance(deleteDialog.record.id);
@@ -153,7 +159,14 @@ const Asistencia = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES");
+    // Parsear la fecha manualmente para evitar problemas de zona horaria
+    const parts = dateString.split("-");
+    const date = new Date(
+      parseInt(parts[0], 10),
+      parseInt(parts[1], 10) - 1,
+      parseInt(parts[2], 10),
+    );
+    return date.toLocaleDateString("es-ES");
   };
 
   const formatTime = (timeString) => {
@@ -164,29 +177,32 @@ const Asistencia = () => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      present: { 
+      present: {
         variant: "default",
         icon: CheckCircle2,
         text: "Presente",
-        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+        className:
+          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
       },
-      absent: { 
+      absent: {
         variant: "destructive",
         icon: XCircle,
         text: "Ausente",
-        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+        className:
+          "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
       },
-      late: { 
+      late: {
         variant: "secondary",
         icon: Clock,
         text: "Tarde",
-        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+        className:
+          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
       },
     };
 
     const config = statusConfig[status] || statusConfig.present;
     const Icon = config.icon;
-    
+
     return (
       <Badge variant="outline" className={`gap-1 ${config.className}`}>
         <Icon className="h-3 w-3" aria-hidden="true" />
@@ -228,14 +244,18 @@ const Asistencia = () => {
 
   // Contar filtros activos
   const activeTableFiltersCount = [
-    tableSearchTerm ? 1 : 0, 
-    statusFilter !== "all" ? 1 : 0
+    tableSearchTerm ? 1 : 0,
+    statusFilter !== "all" ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   if (loading) {
     return (
       <div className="container mx-auto py-6">
-        <div className="space-y-6" role="status" aria-label="Cargando asistencia">
+        <div
+          className="space-y-6"
+          role="status"
+          aria-label="Cargando asistencia"
+        >
           <Skeleton className="h-32 w-full" />
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
@@ -280,9 +300,9 @@ const Asistencia = () => {
                 Registro de asistencia y control de acceso al gimnasio
               </p>
             </div>
-            <Button 
-              onClick={refetch} 
-              variant="outline" 
+            <Button
+              onClick={refetch}
+              variant="outline"
               size="sm"
               className="gap-2 w-fit"
               aria-label="Actualizar lista de asistencia"
@@ -300,7 +320,8 @@ const Asistencia = () => {
                 Verificar Cliente
               </CardTitle>
               <CardDescription>
-                Ingresa la cédula o nombre del cliente para verificar su membresía y registrar asistencia
+                Ingresa la cédula o nombre del cliente para verificar su
+                membresía y registrar asistencia
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -347,7 +368,11 @@ const Asistencia = () => {
 
               {/* Resultado de verificación */}
               {clientStatus && (
-                <div className="mt-4" role="region" aria-label="Resultado de verificación">
+                <div
+                  className="mt-4"
+                  role="region"
+                  aria-label="Resultado de verificación"
+                >
                   {clientStatus.found ? (
                     <div
                       className={`p-4 rounded-lg border ${
@@ -357,15 +382,23 @@ const Asistencia = () => {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-full ${
-                          clientStatus.canEnter 
-                            ? "bg-green-100 dark:bg-green-800" 
-                            : "bg-red-100 dark:bg-red-800"
-                        }`}>
+                        <div
+                          className={`p-2 rounded-full ${
+                            clientStatus.canEnter
+                              ? "bg-green-100 dark:bg-green-800"
+                              : "bg-red-100 dark:bg-red-800"
+                          }`}
+                        >
                           {clientStatus.canEnter ? (
-                            <UserCheck className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />
+                            <UserCheck
+                              className="h-5 w-5 text-green-600 dark:text-green-400"
+                              aria-hidden="true"
+                            />
                           ) : (
-                            <UserX className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+                            <UserX
+                              className="h-5 w-5 text-red-600 dark:text-red-400"
+                              aria-hidden="true"
+                            />
                           )}
                         </div>
                         <div className="flex-1">
@@ -382,11 +415,17 @@ const Asistencia = () => {
                             </div>
                             <div className="flex gap-2">
                               <dt className="font-medium">Plan:</dt>
-                              <dd>{clientStatus.client.plans?.name || "Sin plan"}</dd>
+                              <dd>
+                                {clientStatus.client.plans?.name || "Sin plan"}
+                              </dd>
                             </div>
                             <div className="flex gap-2">
                               <dt className="font-medium">Próximo pago:</dt>
-                              <dd>{formatDate(clientStatus.client.next_payment_date)}</dd>
+                              <dd>
+                                {formatDate(
+                                  clientStatus.client.next_payment_date,
+                                )}
+                              </dd>
                             </div>
                           </dl>
                           <div
@@ -437,14 +476,18 @@ const Asistencia = () => {
                     <div className="p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-900/20 dark:border-red-800">
                       <div className="flex items-start gap-3">
                         <div className="p-2 rounded-full bg-red-100 dark:bg-red-800">
-                          <UserX className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+                          <UserX
+                            className="h-5 w-5 text-red-600 dark:text-red-400"
+                            aria-hidden="true"
+                          />
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold text-red-800 dark:text-red-200">
                             Cliente No Encontrado
                           </h3>
                           <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                            No se encontró ningún cliente con la cédula o nombre "{searchTerm}"
+                            No se encontró ningún cliente con la cédula o nombre
+                            "{searchTerm}"
                           </p>
                         </div>
                       </div>
@@ -474,12 +517,16 @@ const Asistencia = () => {
                 <Badge variant="secondary" className="ml-2">
                   {filteredAttendance.length}
                   {filteredAttendance.length !== attendance.length && (
-                    <span className="text-muted-foreground"> de {attendance.length}</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      de {attendance.length}
+                    </span>
                   )}
                 </Badge>
               </CardTitle>
               <CardDescription>
-                Historial de asistencias registradas. Usa los filtros para encontrar registros específicos.
+                Historial de asistencias registradas. Usa los filtros para
+                encontrar registros específicos.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -490,7 +537,10 @@ const Asistencia = () => {
                   <Label htmlFor="table-search" className="sr-only">
                     Buscar por nombre o cédula
                   </Label>
-                  <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" aria-hidden="true" />
+                  <SearchIcon
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4"
+                    aria-hidden="true"
+                  />
                   <Input
                     id="table-search"
                     type="text"
@@ -503,15 +553,15 @@ const Asistencia = () => {
 
                 {/* Filtros */}
                 <div className="flex flex-wrap gap-3 items-center">
-                  <Label htmlFor="status-filter" className="text-sm font-medium text-muted-foreground">
+                  <Label
+                    htmlFor="status-filter"
+                    className="text-sm font-medium text-muted-foreground"
+                  >
                     Filtrar por estado:
                   </Label>
 
                   {/* Filtro por estado */}
-                  <Select
-                    value={statusFilter}
-                    onValueChange={setStatusFilter}
-                  >
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger id="status-filter" className="w-[180px]">
                       <SelectValue placeholder="Todos los estados" />
                     </SelectTrigger>
@@ -561,7 +611,8 @@ const Asistencia = () => {
                   description="Las asistencias aparecerán aquí cuando verifiques clientes y registres su entrada al gimnasio."
                   action={{
                     label: "Verificar Cliente",
-                    onClick: () => document.getElementById("client-search")?.focus(),
+                    onClick: () =>
+                      document.getElementById("client-search")?.focus(),
                   }}
                 />
               ) : filteredAttendance.length === 0 ? (
@@ -610,7 +661,9 @@ const Asistencia = () => {
                               title={record.notes}
                             >
                               {record.notes || (
-                                <span className="text-muted-foreground italic">Sin notas</span>
+                                <span className="text-muted-foreground italic">
+                                  Sin notas
+                                </span>
                               )}
                             </div>
                           </TableCell>
@@ -665,7 +718,9 @@ const Asistencia = () => {
       {/* Diálogo de confirmación para eliminar */}
       <ConfirmDialog
         open={deleteDialog.open}
-        onOpenChange={(open) => setDeleteDialog({ open, record: open ? deleteDialog.record : null })}
+        onOpenChange={(open) =>
+          setDeleteDialog({ open, record: open ? deleteDialog.record : null })
+        }
         title="Eliminar Registro de Asistencia"
         description={
           deleteDialog.record

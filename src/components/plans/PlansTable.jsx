@@ -4,7 +4,13 @@ import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, X } from "lucide-react";
 import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -26,7 +32,7 @@ import {
 export function PlansTable() {
   const { plans, loading, error, refetch, createPlan, updatePlan, deletePlan } =
     usePlans();
-  
+
   const { formatMultiCurrency, loading: rateLoading } = useExchangeRate();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -57,7 +63,11 @@ export function PlansTable() {
   };
 
   const handleCreatePlan = async () => {
-    if (!formData.name.trim() || !formData.price || parseFloat(formData.price) <= 0) {
+    if (
+      !formData.name.trim() ||
+      !formData.price ||
+      parseFloat(formData.price) <= 0
+    ) {
       toast.error("El nombre y el precio del plan son obligatorios");
       return;
     }
@@ -135,7 +145,7 @@ export function PlansTable() {
 
   const handleDeletePlan = async () => {
     if (!deleteDialog.plan) return;
-    
+
     setIsDeleting(true);
     try {
       const result = await deletePlan(deleteDialog.plan.id);
@@ -155,7 +165,20 @@ export function PlansTable() {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES", {
+    // Si es solo fecha (YYYY-MM-DD), parsear manualmente para evitar desfase de zona horaria
+    // Si incluye hora (ISO timestamp), usar new Date() normalmente
+    let date;
+    if (dateString.length === 10 && dateString.includes("-")) {
+      const parts = dateString.split("-");
+      date = new Date(
+        parseInt(parts[0], 10),
+        parseInt(parts[1], 10) - 1,
+        parseInt(parts[2], 10),
+      );
+    } else {
+      date = new Date(dateString);
+    }
+    return date.toLocaleDateString("es-ES", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -169,7 +192,9 @@ export function PlansTable() {
       <Card>
         <CardHeader>
           <CardTitle>Planes</CardTitle>
-          <CardDescription>Gestiona los planes de membresía del gimnasio</CardDescription>
+          <CardDescription>
+            Gestiona los planes de membresía del gimnasio
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2" role="status" aria-label="Cargando planes">
@@ -233,9 +258,9 @@ export function PlansTable() {
                 </>
               )}
             </Button>
-            <Button 
-              onClick={refetch} 
-              variant="outline" 
+            <Button
+              onClick={refetch}
+              variant="outline"
               size="sm"
               className="gap-2"
               aria-label="Actualizar lista de planes"
@@ -248,7 +273,7 @@ export function PlansTable() {
         <CardContent>
           {/* Formulario de Edición */}
           {showEditForm && (
-            <div 
+            <div
               className="mb-6 p-4 border rounded-lg bg-muted/50"
               role="form"
               aria-labelledby="edit-form-title"
@@ -291,7 +316,10 @@ export function PlansTable() {
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="edit-description">
-                    Descripción <span className="text-muted-foreground text-xs">(opcional)</span>
+                    Descripción{" "}
+                    <span className="text-muted-foreground text-xs">
+                      (opcional)
+                    </span>
                   </Label>
                   <Textarea
                     id="edit-description"
@@ -327,7 +355,7 @@ export function PlansTable() {
 
           {/* Formulario de Creación */}
           {showCreateForm && (
-            <div 
+            <div
               className="mb-6 p-4 border rounded-lg bg-muted/50"
               role="form"
               aria-labelledby="create-form-title"
@@ -336,7 +364,8 @@ export function PlansTable() {
                 Crear Nuevo Plan
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Define un nuevo plan de membresía con su nombre, precio y descripción.
+                Define un nuevo plan de membresía con su nombre, precio y
+                descripción.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2 space-y-2">
@@ -376,7 +405,10 @@ export function PlansTable() {
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="create-description">
-                    Descripción <span className="text-muted-foreground text-xs">(opcional)</span>
+                    Descripción{" "}
+                    <span className="text-muted-foreground text-xs">
+                      (opcional)
+                    </span>
                   </Label>
                   <Textarea
                     id="create-description"
@@ -430,12 +462,20 @@ export function PlansTable() {
               <Table aria-label="Lista de planes del gimnasio">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12" scope="col">#</TableHead>
+                    <TableHead className="w-12" scope="col">
+                      #
+                    </TableHead>
                     <TableHead scope="col">Nombre</TableHead>
-                    <TableHead className="hidden md:table-cell" scope="col">Descripción</TableHead>
+                    <TableHead className="hidden md:table-cell" scope="col">
+                      Descripción
+                    </TableHead>
                     <TableHead scope="col">Precio</TableHead>
-                    <TableHead className="hidden lg:table-cell" scope="col">Creado</TableHead>
-                    <TableHead scope="col" className="w-[100px]">Acciones</TableHead>
+                    <TableHead className="hidden lg:table-cell" scope="col">
+                      Creado
+                    </TableHead>
+                    <TableHead scope="col" className="w-[100px]">
+                      Acciones
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -445,14 +485,14 @@ export function PlansTable() {
                         {index + 1}
                       </TableCell>
                       <TableCell className="font-medium">
-                        <TruncatedCell 
+                        <TruncatedCell
                           value={plan.name}
                           maxWidth="140px"
                           fallback="Sin nombre"
                         />
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        <TruncatedCell 
+                        <TruncatedCell
                           value={plan.description}
                           maxWidth="180px"
                           className="italic"
@@ -465,10 +505,16 @@ export function PlansTable() {
                         ) : (
                           <div className="text-sm">
                             <div className="font-medium">
-                              {formatMultiCurrency(parseFloat(plan.price) || 0).usd}
+                              {
+                                formatMultiCurrency(parseFloat(plan.price) || 0)
+                                  .usd
+                              }
                             </div>
                             <div className="text-muted-foreground">
-                              {formatMultiCurrency(parseFloat(plan.price) || 0).bs}
+                              {
+                                formatMultiCurrency(parseFloat(plan.price) || 0)
+                                  .bs
+                              }
                             </div>
                           </div>
                         )}
@@ -522,7 +568,9 @@ export function PlansTable() {
       {/* Diálogo de confirmación para eliminar */}
       <ConfirmDialog
         open={deleteDialog.open}
-        onOpenChange={(open) => setDeleteDialog({ open, plan: open ? deleteDialog.plan : null })}
+        onOpenChange={(open) =>
+          setDeleteDialog({ open, plan: open ? deleteDialog.plan : null })
+        }
         title="Eliminar Plan"
         description={
           deleteDialog.plan

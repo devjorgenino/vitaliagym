@@ -63,7 +63,12 @@ export function DashboardView() {
         </div>
         <div className="flex items-center gap-2">
           <ExchangeRateCard compact={true} />
-          <Button onClick={refetch} variant="outline" size="sm" className="gap-2">
+          <Button
+            onClick={refetch}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
             <RefreshCw className="h-4 w-4" />
             Actualizar
           </Button>
@@ -121,9 +126,20 @@ export function DashboardView() {
             {metrics.expiringSoon?.length > 0 ? (
               <div className="space-y-3">
                 {metrics.expiringSoon.map((client, index) => {
-                  const daysUntil = Math.ceil(
-                    (new Date(client.next_payment_date) - new Date()) /
-                      (1000 * 60 * 60 * 24)
+                  // Parsear la fecha correctamente evitando problemas de zona horaria
+                  const paymentDateParts = client.next_payment_date.split("-");
+                  const paymentDate = new Date(
+                    parseInt(paymentDateParts[0], 10),
+                    parseInt(paymentDateParts[1], 10) - 1,
+                    parseInt(paymentDateParts[2], 10),
+                  );
+                  paymentDate.setHours(0, 0, 0, 0);
+
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+
+                  const daysUntil = Math.round(
+                    (paymentDate - today) / (1000 * 60 * 60 * 24),
                   );
                   return (
                     <div
@@ -145,9 +161,7 @@ export function DashboardView() {
                             : `${daysUntil} días`}
                         </span>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(
-                            client.next_payment_date
-                          ).toLocaleDateString("es-ES")}
+                          {paymentDate.toLocaleDateString("es-ES")}
                         </p>
                       </div>
                     </div>
@@ -181,13 +195,13 @@ export function DashboardView() {
                   const nextBirthday = new Date(
                     today.getFullYear(),
                     birthDate.getMonth(),
-                    birthDate.getDate()
+                    birthDate.getDate(),
                   );
                   if (nextBirthday < today) {
                     nextBirthday.setFullYear(today.getFullYear());
                   }
                   const daysUntil = Math.ceil(
-                    (nextBirthday - today) / (1000 * 60 * 60 * 24)
+                    (nextBirthday - today) / (1000 * 60 * 60 * 24),
                   );
 
                   return (

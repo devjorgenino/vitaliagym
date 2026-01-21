@@ -4,7 +4,14 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
-import { DOCUMENT_TYPES, PHONE_OPERATORS, formatCedula, parseCedula, formatPhone, parsePhone } from "../../lib/venezuelanData";
+import {
+  DOCUMENT_TYPES,
+  PHONE_OPERATORS,
+  formatCedula,
+  parseCedula,
+  formatPhone,
+  parsePhone,
+} from "../../lib/venezuelanData";
 import { toast } from "sonner";
 import { Loader2, IdCard, Phone } from "lucide-react";
 import { Button } from "../ui/button";
@@ -16,8 +23,18 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { ConfirmDialog } from "../ui/confirm-dialog";
-import { EmptyState, SearchEmptyState, GettingStartedState } from "../ui/empty-state";
-import { EditIcon, TrashIcon, SearchIcon, FilterXIcon, DollarSignIcon } from "../ui/icons";
+import {
+  EmptyState,
+  SearchEmptyState,
+  GettingStartedState,
+} from "../ui/empty-state";
+import {
+  EditIcon,
+  TrashIcon,
+  SearchIcon,
+  FilterXIcon,
+  DollarSignIcon,
+} from "../ui/icons";
 import {
   Table,
   TableBody,
@@ -110,12 +127,12 @@ export function ClientsTable() {
     }
 
     const allClientPayments = payments.filter(
-      (p) => p.client_id === client.id && p.plan_id === client.plan_id
+      (p) => p.client_id === client.id && p.plan_id === client.plan_id,
     );
 
     const totalPaidSoFar = allClientPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+      0,
     );
 
     let paidForCurrentCycle = totalPaidSoFar % planPrice;
@@ -139,7 +156,7 @@ export function ClientsTable() {
     }
 
     const allClientPayments = payments.filter(
-      (p) => p.client_id === client.id && p.plan_id === client.plan_id
+      (p) => p.client_id === client.id && p.plan_id === client.plan_id,
     );
 
     if (allClientPayments.length === 0) {
@@ -149,33 +166,35 @@ export function ClientsTable() {
     const planPrice = getPlanPrice(client.plan_id);
     const totalPaid = allClientPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+      0,
     );
 
     const remainingAmount = Math.max(0, planPrice - totalPaid);
-    
+
     if (remainingAmount > 0) {
       // Encontrar el último pago para asociarlo con el saldo restante
-      const lastPayment = allClientPayments.sort((a, b) => 
-        new Date(b.created_at) - new Date(a.created_at)
+      const lastPayment = allClientPayments.sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at),
       )[0];
-      
+
       return {
         ...lastPayment,
         remainingAmount,
-        remainingFormatted: remainingAmount.toFixed(2)
+        remainingFormatted: remainingAmount.toFixed(2),
       };
     }
-    
+
     return null;
   };
 
   const handlePayRemainingForClient = (client) => {
     const paymentWithRemaining = getPaymentWithRemaining(client);
-    
+
     if (paymentWithRemaining) {
       // Redirigir a la página de pagos con parámetros específicos para el pago restante
-      router.push(`/pagos/${client.id}?paymentId=${paymentWithRemaining.id}&remaining=${paymentWithRemaining.remainingAmount}&payRemaining=true`);
+      router.push(
+        `/pagos/${client.id}?paymentId=${paymentWithRemaining.id}&remaining=${paymentWithRemaining.remainingAmount}&payRemaining=true`,
+      );
     } else {
       // Si no hay pago específico con saldo, redirigir a la página normal
       router.push(`/pagos/${client.id}`);
@@ -198,7 +217,7 @@ export function ClientsTable() {
       !formData.birth_date
     ) {
       toast.error(
-        "Los campos de nombre, apellido, cédula y fecha de nacimiento son obligatorios"
+        "Los campos de nombre, apellido, cédula y fecha de nacimiento son obligatorios",
       );
       return;
     }
@@ -213,13 +232,15 @@ export function ClientsTable() {
         cedula: formatCedula(formData.cedula_type, formData.cedula),
         birth_date: formData.birth_date,
         email: formData.email,
-        phone: formData.phone ? formatPhone(formData.phone_operator, formData.phone) : "",
+        phone: formData.phone
+          ? formatPhone(formData.phone_operator, formData.phone)
+          : "",
         address: formData.address,
         observations: formData.observations,
         plan_id: formData.plan_id,
         join_date: formData.join_date,
       };
-      
+
       const result = await createClient(dataToSave);
 
       if (result.success) {
@@ -295,13 +316,15 @@ export function ClientsTable() {
         cedula: formatCedula(editFormData.cedula_type, editFormData.cedula),
         birth_date: editFormData.birth_date,
         email: editFormData.email,
-        phone: editFormData.phone ? formatPhone(editFormData.phone_operator, editFormData.phone) : "",
+        phone: editFormData.phone
+          ? formatPhone(editFormData.phone_operator, editFormData.phone)
+          : "",
         address: editFormData.address,
         observations: editFormData.observations,
         plan_id: editFormData.plan_id,
         join_date: editFormData.join_date,
       };
-      
+
       const result = await updateClient(editingClient.id, dataToSave);
 
       if (result.success) {
@@ -359,7 +382,7 @@ export function ClientsTable() {
 
   const handleDeleteClient = async () => {
     if (!clientToDelete) return;
-    
+
     setDeletingId(clientToDelete.id);
     try {
       const result = await deleteClient(clientToDelete.id);
@@ -380,31 +403,44 @@ export function ClientsTable() {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES");
+    // Parsear la fecha manualmente para evitar problemas de zona horaria
+    // new Date("YYYY-MM-DD") se interpreta como UTC, causando desfase de 1 día
+    const parts = dateString.split("-");
+    const date = new Date(
+      parseInt(parts[0], 10),
+      parseInt(parts[1], 10) - 1,
+      parseInt(parts[2], 10),
+    );
+    return date.toLocaleDateString("es-ES");
   };
 
   // Lógica de filtrado
   const filteredClients = clients.filter((client) => {
     // Filtrar por término de búsqueda (nombre o cédula)
-    const matchesSearch = 
+    const matchesSearch =
       searchTerm === "" ||
       client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.cedula.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Filtrar por plan
-    const matchesPlan = 
-      selectedPlan === "" ||
-      client.plan_id === selectedPlan;
+    const matchesPlan = selectedPlan === "" || client.plan_id === selectedPlan;
 
     // Filtrar por próximos pagos
     let matchesPayment = true;
     if (paymentFilter === "5days") {
-      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment <= 5 && client.daysUntilPayment >= 0;
+      matchesPayment =
+        client.daysUntilPayment !== null &&
+        client.daysUntilPayment <= 5 &&
+        client.daysUntilPayment >= 0;
     } else if (paymentFilter === "10days") {
-      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment <= 10 && client.daysUntilPayment >= 0;
+      matchesPayment =
+        client.daysUntilPayment !== null &&
+        client.daysUntilPayment <= 10 &&
+        client.daysUntilPayment >= 0;
     } else if (paymentFilter === "overdue") {
-      matchesPayment = client.daysUntilPayment !== null && client.daysUntilPayment < 0;
+      matchesPayment =
+        client.daysUntilPayment !== null && client.daysUntilPayment < 0;
     }
 
     return matchesSearch && matchesPlan && matchesPayment;
@@ -419,7 +455,7 @@ export function ClientsTable() {
 
   // Contar filtros activos
   const activeFiltersCount = [searchTerm, selectedPlan, paymentFilter].filter(
-    (filter) => filter !== ""
+    (filter) => filter !== "",
   ).length;
 
   if (loading || paymentsLoading) {
@@ -458,7 +494,13 @@ export function ClientsTable() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle>Clientes ({filteredClients.length}{filteredClients.length !== clients.length ? ` de ${clients.length}` : ""})</CardTitle>
+        <CardTitle>
+          Clientes ({filteredClients.length}
+          {filteredClients.length !== clients.length
+            ? ` de ${clients.length}`
+            : ""}
+          )
+        </CardTitle>
         <div className="flex space-x-2">
           <Button
             onClick={() => setShowCreateForm(!showCreateForm)}
@@ -489,12 +531,16 @@ export function ClientsTable() {
 
           {/* Filtros */}
           <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
-            
+            <span className="text-sm font-medium text-muted-foreground">
+              Filtros:
+            </span>
+
             {/* Filtro por plan */}
             <Select
               value={selectedPlan}
-              onValueChange={(value) => setSelectedPlan(value === "all" ? "" : value)}
+              onValueChange={(value) =>
+                setSelectedPlan(value === "all" ? "" : value)
+              }
             >
               <SelectTrigger className="w-[180px] h-8 text-sm">
                 <SelectValue placeholder="Todos los planes" />
@@ -513,21 +559,27 @@ export function ClientsTable() {
             <Button
               variant={paymentFilter === "5days" ? "default" : "outline"}
               size="sm"
-              onClick={() => setPaymentFilter(paymentFilter === "5days" ? "" : "5days")}
+              onClick={() =>
+                setPaymentFilter(paymentFilter === "5days" ? "" : "5days")
+              }
             >
               ≤ 5 días
             </Button>
             <Button
               variant={paymentFilter === "10days" ? "default" : "outline"}
               size="sm"
-              onClick={() => setPaymentFilter(paymentFilter === "10days" ? "" : "10days")}
+              onClick={() =>
+                setPaymentFilter(paymentFilter === "10days" ? "" : "10days")
+              }
             >
               ≤ 10 días
             </Button>
             <Button
               variant={paymentFilter === "overdue" ? "destructive" : "outline"}
               size="sm"
-              onClick={() => setPaymentFilter(paymentFilter === "overdue" ? "" : "overdue")}
+              onClick={() =>
+                setPaymentFilter(paymentFilter === "overdue" ? "" : "overdue")
+              }
             >
               Vencidos
             </Button>
@@ -589,10 +641,15 @@ export function ClientsTable() {
                 <div className="flex gap-1">
                   <Select
                     value={editFormData.cedula_type}
-                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, cedula_type: value }))}
+                    onValueChange={(value) =>
+                      setEditFormData((prev) => ({
+                        ...prev,
+                        cedula_type: value,
+                      }))
+                    }
                   >
-                    <SelectTrigger 
-                      className="w-[70px] flex-shrink-0" 
+                    <SelectTrigger
+                      className="w-[70px] flex-shrink-0"
                       aria-label="Tipo de documento"
                     >
                       <SelectValue />
@@ -646,10 +703,15 @@ export function ClientsTable() {
                 <div className="flex gap-1">
                   <Select
                     value={editFormData.phone_operator}
-                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, phone_operator: value }))}
+                    onValueChange={(value) =>
+                      setEditFormData((prev) => ({
+                        ...prev,
+                        phone_operator: value,
+                      }))
+                    }
                   >
-                    <SelectTrigger 
-                      className="w-[90px] flex-shrink-0" 
+                    <SelectTrigger
+                      className="w-[90px] flex-shrink-0"
                       aria-label="Operador telefónico"
                     >
                       <SelectValue />
@@ -703,7 +765,9 @@ export function ClientsTable() {
                 <Label htmlFor="edit_plan_id">Plan</Label>
                 <Select
                   value={editFormData.plan_id}
-                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, plan_id: value }))}
+                  onValueChange={(value) =>
+                    setEditFormData((prev) => ({ ...prev, plan_id: value }))
+                  }
                 >
                   <SelectTrigger id="edit_plan_id">
                     <SelectValue placeholder="Seleccionar plan" />
@@ -787,10 +851,12 @@ export function ClientsTable() {
                 <div className="flex gap-1">
                   <Select
                     value={formData.cedula_type}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, cedula_type: value }))}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, cedula_type: value }))
+                    }
                   >
-                    <SelectTrigger 
-                      className="w-[70px] flex-shrink-0" 
+                    <SelectTrigger
+                      className="w-[70px] flex-shrink-0"
                       aria-label="Tipo de documento"
                     >
                       <SelectValue />
@@ -848,10 +914,15 @@ export function ClientsTable() {
                 <div className="flex gap-1">
                   <Select
                     value={formData.phone_operator}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, phone_operator: value }))}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        phone_operator: value,
+                      }))
+                    }
                   >
-                    <SelectTrigger 
-                      className="w-[90px] flex-shrink-0" 
+                    <SelectTrigger
+                      className="w-[90px] flex-shrink-0"
                       aria-label="Operador telefónico"
                     >
                       <SelectValue />
@@ -905,7 +976,9 @@ export function ClientsTable() {
                 <Label htmlFor="create_plan_id">Plan</Label>
                 <Select
                   value={formData.plan_id}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, plan_id: value }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, plan_id: value }))
+                  }
                   disabled={plansLoading}
                 >
                   <SelectTrigger id="create_plan_id">
@@ -964,13 +1037,13 @@ export function ClientsTable() {
             <GettingStartedState
               title="No hay clientes registrados"
               steps={[
-                "Haz clic en \"+ Nuevo Cliente\"",
+                'Haz clic en "+ Nuevo Cliente"',
                 "Completa el formulario con los datos del cliente",
-                "Selecciona un plan para el cliente"
+                "Selecciona un plan para el cliente",
               ]}
               action={{
                 label: "Nuevo Cliente",
-                onClick: () => setShowCreateForm(true)
+                onClick: () => setShowCreateForm(true),
               }}
             />
           ) : (
@@ -989,11 +1062,19 @@ export function ClientsTable() {
                   <TableHead>Nombre</TableHead>
                   <TableHead className="hidden sm:table-cell">Cédula</TableHead>
                   <TableHead className="hidden lg:table-cell">Email</TableHead>
-                  <TableHead className="hidden md:table-cell">Teléfono</TableHead>
-                  <TableHead className="hidden xl:table-cell">Dirección</TableHead>
-                  <TableHead className="hidden xl:table-cell">Observaciones</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Teléfono
+                  </TableHead>
+                  {/* <TableHead className="hidden xl:table-cell">
+                    Dirección
+                  </TableHead> */}
+                  <TableHead className="hidden xl:table-cell">
+                    Observaciones
+                  </TableHead>
                   <TableHead>Plan</TableHead>
-                  <TableHead className="hidden lg:table-cell">Ingreso</TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Ingreso
+                  </TableHead>
                   <TableHead>Próx. Pago</TableHead>
                   <TableHead className="w-[100px]">Acciones</TableHead>
                 </TableRow>
@@ -1002,146 +1083,152 @@ export function ClientsTable() {
                 {filteredClients.map((client, index) => {
                   const paymentStatus = calculatePaymentStatus(client);
                   const paymentWithRemaining = getPaymentWithRemaining(client);
-                  const hasPendingPayment = client.plan_id && !paymentStatus.isFullyPaid;
+                  const hasPendingPayment =
+                    client.plan_id && !paymentStatus.isFullyPaid;
 
                   return (
-                  <TableRow key={client.id}>
-                    <TableCell className="font-medium text-center">
-                      {index + 1}
-                    </TableCell>
-                    <TableCell>
-                      <TruncatedCell 
-                        value={`${client.first_name} ${client.last_name}`}
-                        maxWidth="150px"
-                        className="font-medium"
-                      />
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        <IdCard className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <span>{client.cedula}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <TruncatedCell 
-                        value={client.email} 
-                        maxWidth="160px"
-                        fallback="N/A"
-                      />
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell whitespace-nowrap">
-                      {client.phone ? (
+                    <TableRow key={client.id}>
+                      <TableCell className="font-medium text-center">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <TruncatedCell
+                          value={`${client.first_name} ${client.last_name}`}
+                          maxWidth="150px"
+                          className="font-medium"
+                        />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell whitespace-nowrap">
                         <div className="flex items-center gap-1">
-                          <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                          <span>{client.phone}</span>
+                          <IdCard className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span>{client.cedula}</span>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="hidden xl:table-cell">
-                      <TruncatedCell 
-                        value={client.address} 
-                        maxWidth="150px"
-                        fallback="N/A"
-                      />
-                    </TableCell>
-                    <TableCell className="hidden xl:table-cell">
-                      <TruncatedCell 
-                        value={client.observations} 
-                        maxWidth="120px"
-                        className="italic"
-                        fallback="N/A"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TruncatedCell 
-                        value={client.plans?.name || "Sin plan"}
-                        maxWidth="100px"
-                        className="font-medium"
-                      />
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell whitespace-nowrap">{formatDate(client.join_date)}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {client.next_payment_date ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{formatDate(client.next_payment_date)}</span>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${client.paymentStatusColor}`}
-                          >
-                            {client.daysUntilPayment < 0
-                              ? `${Math.abs(client.daysUntilPayment)}d vencido`
-                              : `${client.daysUntilPayment}d`}
-                          </span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <TruncatedCell
+                          value={client.email}
+                          maxWidth="160px"
+                          fallback="N/A"
+                        />
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell whitespace-nowrap">
+                        {client.phone ? (
+                          <div className="flex items-center gap-1">
+                            <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <span>{client.phone}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
+                      </TableCell>
+                      {/* <TableCell className="hidden xl:table-cell">
+                        <TruncatedCell
+                          value={client.address}
+                          maxWidth="150px"
+                          fallback="N/A"
+                        />
+                      </TableCell> */}
+                      <TableCell className="hidden xl:table-cell">
+                        <TruncatedCell
+                          value={client.observations}
+                          maxWidth="120px"
+                          className="italic"
+                          fallback="N/A"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TruncatedCell
+                          value={client.plans?.name || "Sin plan"}
+                          maxWidth="100px"
+                          className="font-medium"
+                        />
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                        {formatDate(client.join_date)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {client.next_payment_date ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">
+                              {formatDate(client.next_payment_date)}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${client.paymentStatusColor}`}
+                            >
+                              {client.daysUntilPayment < 0
+                                ? `${Math.abs(client.daysUntilPayment)}d vencido`
+                                : `${client.daysUntilPayment}d`}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                onClick={() =>
+                                  handlePayRemainingForClient(client)
+                                }
+                                variant="default"
+                                size="icon-sm"
+                                className="bg-green-600 hover:bg-green-700"
+                                disabled={!hasPendingPayment}
+                                aria-label={`Registrar pago de ${client.first_name} ${client.last_name}`}
+                              >
+                                <DollarSignIcon />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {paymentWithRemaining
+                                  ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
+                                  : "Registrar pago"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                onClick={() => handleEditClient(client)}
+                                variant="outline"
+                                size="icon-sm"
+                                aria-label={`Editar cliente ${client.first_name} ${client.last_name}`}
+                              >
+                                <EditIcon />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Editar cliente</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                onClick={() => handleDeleteClick(client)}
+                                variant="destructive"
+                                size="icon-sm"
+                                disabled={deletingId === client.id}
+                                aria-label={`Eliminar cliente ${client.first_name} ${client.last_name}`}
+                              >
+                                {deletingId === client.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <TrashIcon />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Eliminar cliente</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              onClick={() => handlePayRemainingForClient(client)}
-                              variant="default"
-                              size="icon-sm"
-                              className="bg-green-600 hover:bg-green-700"
-                              disabled={!hasPendingPayment}
-                              aria-label={`Registrar pago de ${client.first_name} ${client.last_name}`}
-                            >
-                              <DollarSignIcon />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>
-                              {paymentWithRemaining 
-                                ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
-                                : 'Registrar pago'
-                              }
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              onClick={() => handleEditClient(client)}
-                              variant="outline"
-                              size="icon-sm"
-                              aria-label={`Editar cliente ${client.first_name} ${client.last_name}`}
-                            >
-                              <EditIcon />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Editar cliente</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              onClick={() => handleDeleteClick(client)}
-                              variant="destructive"
-                              size="icon-sm"
-                              disabled={deletingId === client.id}
-                              aria-label={`Eliminar cliente ${client.first_name} ${client.last_name}`}
-                            >
-                              {deletingId === client.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <TrashIcon />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Eliminar cliente</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
