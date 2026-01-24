@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { items as sidebarItems, configItems } from "@/lib/sidebarData";
+import { User, Settings, BrickWall } from "lucide-react";
 
 const PrivatePagesLayout = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
@@ -57,26 +58,36 @@ const PrivatePagesLayout = ({ children }) => {
     return (
       <div className="flex h-screen w-full">
         <Skeleton className="h-full w-72" />
-        <div className="flex flex-col flex-1 p-4 gap-4">
+        <div className="flex flex-col flex-1 gap-4">
           <Skeleton className="h-14 w-full" />
-          <Skeleton className="h-full w-full" />
+          <div className="container mx-auto py-6 space-y-4">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-[400px] w-full" />
+          </div>
         </div>
       </div>
     );
   }
 
-  // Determinar el título de la página
-  let pageTitle;
-  if (pathname.startsWith("/perfil")) {
-    pageTitle = "Perfil";
-  } else if (pathname.startsWith("/configuracion/roles")) {
-    pageTitle = "Gestión de Roles";
-  } else {
-    const currentPage = allItems.find(
-      (item) => pathname === item.url || pathname.startsWith(item.url + "/")
-    );
-    pageTitle = currentPage ? currentPage.title : "Dashboard";
-  }
+  // Obtener información de la página actual (título e icono)
+  const getCurrentPageInfo = () => {
+    if (pathname.startsWith("/perfil")) {
+      return { title: "Perfil", icon: User };
+    } else if (pathname.startsWith("/configuracion/roles")) {
+      return { title: "Gestión de Roles", icon: BrickWall };
+    } else {
+      const currentPage = allItems.find(
+        (item) => pathname === item.url || pathname.startsWith(item.url + "/")
+      );
+      return currentPage 
+        ? { title: currentPage.title, icon: currentPage.icon }
+        : { title: "Dashboard", icon: sidebarItems[0]?.icon };
+    }
+  };
+
+  const currentPageInfo = getCurrentPageInfo();
+  const PageIcon = currentPageInfo.icon;
+  const DashboardIcon = sidebarItems.find(i => i.url === "/dashboard")?.icon;
 
   // Determinar si mostrar el link al dashboard
   const showDashboardLink =
@@ -87,10 +98,15 @@ const PrivatePagesLayout = ({ children }) => {
     const crumbs = [];
 
     if (pathname.startsWith("/configuracion")) {
-      crumbs.push({ label: "Configuración", href: null });
+      crumbs.push({ label: "Configuración", href: null, icon: Settings });
       
       if (pathname.includes("/roles")) {
-        crumbs.push({ label: "Roles", href: "/configuracion/roles" });
+        const rolesItem = configItems.find(i => i.url === "/configuracion/roles");
+        crumbs.push({ 
+          label: "Roles", 
+          href: "/configuracion/roles",
+          icon: rolesItem?.icon
+        });
       }
     }
 
@@ -106,10 +122,11 @@ const PrivatePagesLayout = ({ children }) => {
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
             <div className="flex items-center gap-2 px-4">
-              <SidebarTrigger className="-ml-1" />
+              {/* Trigger visible solo en móvil */}
+              <SidebarTrigger className="-ml-1 md:hidden" />
               <Separator
                 orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
+                className="mr-2 data-[orientation=vertical]:h-4 md:hidden"
               />
               <Breadcrumb>
                 <BreadcrumbList>
@@ -117,31 +134,44 @@ const PrivatePagesLayout = ({ children }) => {
                     <>
                       <BreadcrumbItem>
                         <BreadcrumbLink asChild>
-                          <Link href="/dashboard">Dashboard</Link>
+                          <Link href="/dashboard" className="flex items-center gap-1.5">
+                            {DashboardIcon && <DashboardIcon className="size-4" aria-hidden="true" />}
+                            <span>Dashboard</span>
+                          </Link>
                         </BreadcrumbLink>
                       </BreadcrumbItem>
                       <BreadcrumbSeparator />
                     </>
                   )}
-                  {breadcrumbs.map((crumb, index) => (
-                    <React.Fragment key={index}>
-                      <BreadcrumbItem>
-                        {crumb.href ? (
-                          <BreadcrumbLink asChild>
-                            <Link href={crumb.href}>{crumb.label}</Link>
-                          </BreadcrumbLink>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            {crumb.label}
-                          </span>
-                        )}
-                      </BreadcrumbItem>
-                      {index < breadcrumbs.length - 1 && <BreadcrumbSeparator />}
-                    </React.Fragment>
-                  ))}
+                  {breadcrumbs.map((crumb, index) => {
+                    const CrumbIcon = crumb.icon;
+                    return (
+                      <React.Fragment key={index}>
+                        <BreadcrumbItem>
+                          {crumb.href ? (
+                            <BreadcrumbLink asChild>
+                              <Link href={crumb.href} className="flex items-center gap-1.5">
+                                {CrumbIcon && <CrumbIcon className="size-4" aria-hidden="true" />}
+                                <span>{crumb.label}</span>
+                              </Link>
+                            </BreadcrumbLink>
+                          ) : (
+                            <span className="text-muted-foreground flex items-center gap-1.5">
+                              {CrumbIcon && <CrumbIcon className="size-4" aria-hidden="true" />}
+                              <span>{crumb.label}</span>
+                            </span>
+                          )}
+                        </BreadcrumbItem>
+                        {index < breadcrumbs.length - 1 && <BreadcrumbSeparator />}
+                      </React.Fragment>
+                    );
+                  })}
                   {breadcrumbs.length > 0 && <BreadcrumbSeparator />}
                   <BreadcrumbItem>
-                    <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                    <BreadcrumbPage className="flex items-center gap-1.5">
+                      {PageIcon && <PageIcon className="size-4" aria-hidden="true" />}
+                      <span>{currentPageInfo.title}</span>
+                    </BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>

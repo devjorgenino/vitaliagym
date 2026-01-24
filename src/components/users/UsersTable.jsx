@@ -492,7 +492,7 @@ export function UsersTable() {
                 variant="default"
                 size="sm"
               >
-                <UserPlus className="h-4 w-4 mr-1" />
+                <UserPlus className="h-4 w-4" />
                 {showCreateForm ? "Cancelar" : "Nuevo Usuario"}
               </Button>
             </PermissionGate>

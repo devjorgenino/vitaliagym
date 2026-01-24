@@ -15,6 +15,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -57,7 +62,9 @@ import {
   Dumbbell,
   Settings,
   Smile,
+  ChevronDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Íconos por módulo
 const MODULE_ICONS = {
@@ -99,10 +106,10 @@ export default function RolesConfigPage() {
       permission={PERMISSIONS.SETTINGS_MANAGE_ROLES} 
       showAccessDenied
     >
-      <div className="w-full space-y-6">
+      <div className="container mx-auto py-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Gestión de Roles</h1>
+            <h1 className="text-3xl font-bold">Gestión de Roles</h1>
             <p className="text-muted-foreground">
               Configura los roles del sistema y sus permisos asociados
             </p>
@@ -210,7 +217,7 @@ function RolesManagement() {
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4" />
               Nuevo Rol
             </Button>
           </DialogTrigger>
@@ -255,100 +262,23 @@ function RolesManagement() {
 
       {/* Lista de roles con sus permisos */}
       <div className="grid gap-6">
-        {roles.map((role) => (
-          <Card key={role.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Shield className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {role.name}
-                      {role.isSystemRole && (
-                        <Badge variant="secondary" className="text-xs">
-                          <Lock className="h-3 w-3 mr-1" />
-                          Sistema
-                        </Badge>
-                      )}
-                    </CardTitle>
-                    <CardDescription>{role.description}</CardDescription>
-                  </div>
-                </div>
-                {!role.isSystemRole && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteRole(role.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="multiple" className="w-full">
-                {Object.entries(permissionsByModule).map(([moduleName, modulePermissions]) => {
-                  const ModuleIcon = MODULE_ICONS[moduleName] || Settings;
-                  const rolePermissionIds = role.permissions.map(p => p.id);
-                  const activeCount = modulePermissions.filter(p => 
-                    rolePermissionIds.includes(p.id)
-                  ).length;
-
-                  return (
-                    <AccordionItem key={moduleName} value={moduleName}>
-                      <AccordionTrigger className="hover:no-underline">
-                        <div className="flex items-center gap-3">
-                          <ModuleIcon className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">
-                            {MODULE_NAMES[moduleName] || moduleName}
-                          </span>
-                          <Badge variant="outline" className="ml-2">
-                            {activeCount}/{modulePermissions.length}
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-                          {modulePermissions.map((permission) => {
-                            const isActive = rolePermissionIds.includes(permission.id);
-                            
-                            return (
-                              <div
-                                key={permission.id}
-                                className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                              >
-                                <div className="space-y-0.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium text-sm">
-                                      {ACTION_NAMES[permission.action] || permission.action}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {permission.description}
-                                  </p>
-                                </div>
-                                <Switch
-                                  checked={isActive}
-                                  onCheckedChange={() => 
-                                    handleTogglePermission(role.id, permission.id)
-                                  }
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
-            </CardContent>
-          </Card>
-        ))}
+        {roles.map((role) => {
+          // Calcular total de permisos activos para este rol
+          const totalPermissions = Object.values(permissionsByModule).flat().length;
+          const activePermissions = role.permissions.length;
+          
+          return (
+            <RoleCard
+              key={role.id}
+              role={role}
+              permissionsByModule={permissionsByModule}
+              onDeleteRole={handleDeleteRole}
+              onTogglePermission={handleTogglePermission}
+              totalPermissions={totalPermissions}
+              activePermissions={activePermissions}
+            />
+          );
+        })}
       </div>
 
       {/* Matriz de permisos (vista compacta) */}
@@ -419,5 +349,145 @@ function RolesManagement() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Componente de card de rol colapsable
+function RoleCard({ 
+  role, 
+  permissionsByModule, 
+  onDeleteRole, 
+  onTogglePermission,
+  totalPermissions,
+  activePermissions 
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card className="overflow-hidden">
+        <CollapsibleTrigger asChild>
+          <CardHeader 
+            className={cn(
+              "cursor-pointer select-none transition-colors hover:bg-muted/50",
+              "group"
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Shield className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="flex items-center gap-2">
+                    {role.name}
+                    {role.isSystemRole && (
+                      <Badge variant="secondary" className="text-xs">
+                        <Lock className="h-3 w-3 mr-1" />
+                        Sistema
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs ml-2">
+                      {activePermissions}/{totalPermissions} permisos
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription>{role.description}</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {!role.isSystemRole && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteRole(role.id);
+                        }}
+                        aria-label={`Eliminar rol ${role.name}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Eliminar rol</TooltipContent>
+                  </Tooltip>
+                )}
+                <div
+                  className={cn(
+                    "p-1.5 rounded-md transition-transform duration-200",
+                    isOpen && "rotate-180"
+                  )}
+                  aria-hidden="true"
+                >
+                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            <Accordion type="multiple" className="w-full">
+              {Object.entries(permissionsByModule).map(([moduleName, modulePermissions]) => {
+                const ModuleIcon = MODULE_ICONS[moduleName] || Settings;
+                const rolePermissionIds = role.permissions.map(p => p.id);
+                const activeCount = modulePermissions.filter(p => 
+                  rolePermissionIds.includes(p.id)
+                ).length;
+
+                return (
+                  <AccordionItem key={moduleName} value={moduleName}>
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-3">
+                        <ModuleIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        <span className="font-medium">
+                          {MODULE_NAMES[moduleName] || moduleName}
+                        </span>
+                        <Badge variant="outline" className="ml-2">
+                          {activeCount}/{modulePermissions.length}
+                        </Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                        {modulePermissions.map((permission) => {
+                          const isActive = rolePermissionIds.includes(permission.id);
+                          
+                          return (
+                            <div
+                              key={permission.id}
+                              className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">
+                                    {ACTION_NAMES[permission.action] || permission.action}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {permission.description}
+                                </p>
+                              </div>
+                              <Switch
+                                checked={isActive}
+                                onCheckedChange={() => 
+                                  onTogglePermission(role.id, permission.id)
+                                }
+                                aria-label={`${isActive ? 'Desactivar' : 'Activar'} permiso ${permission.action} para ${role.name}`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }

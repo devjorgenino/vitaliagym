@@ -2,7 +2,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, PanelLeftIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -221,9 +221,11 @@ function Sidebar({
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
-          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm relative"
         >
           {children}
+          {/* Floating Toggle Button on sidebar edge */}
+          <SidebarEdgeToggle />
         </div>
       </div>
     </div>
@@ -249,6 +251,143 @@ function SidebarTrigger({ className, onClick, ...props }) {
       <PanelLeftIcon />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
+  );
+}
+
+function SidebarEdgeToggle({ className, ...props }) {
+  const { toggleSidebar, state } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          data-sidebar="edge-toggle"
+          data-slot="sidebar-edge-toggle"
+          onClick={toggleSidebar}
+          aria-label={isCollapsed ? "Expandir menú lateral" : "Contraer menú lateral"}
+          aria-expanded={!isCollapsed}
+          aria-controls="sidebar"
+          className={cn(
+            // Posicionamiento absoluto en el borde derecho, entre logo y primer item
+            "absolute top-14 right-0 translate-x-1/2",
+            // Z-index alto para estar por encima de todo
+            "z-50",
+            // Tamaño y forma - botón pequeño y circular
+            "size-6",
+            "rounded-full",
+            // Fondo sólido con borde
+            "bg-background",
+            "border border-border",
+            // Sombra elegante
+            "shadow-md",
+            // Estados interactivos
+            "hover:bg-accent hover:border-accent",
+            "hover:scale-110",
+            "hover:shadow-lg",
+            // Focus para accesibilidad
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+            // Active state
+            "active:scale-95",
+            // Transiciones suaves
+            "transition-all duration-200 ease-out",
+            // Flex para centrar icono
+            "flex items-center justify-center",
+            // Cursor
+            "cursor-pointer",
+            // Color del icono
+            "text-muted-foreground hover:text-foreground",
+            className,
+          )}
+          {...props}
+        >
+          {isCollapsed ? (
+            <ChevronRight 
+              className="size-3.5" 
+              aria-hidden="true"
+              strokeWidth={2.5}
+            />
+          ) : (
+            <ChevronLeft 
+              className="size-3.5" 
+              aria-hidden="true"
+              strokeWidth={2.5}
+            />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent 
+        side="right" 
+        sideOffset={12}
+        className="font-medium"
+      >
+        <p>{isCollapsed ? "Expandir menú" : "Contraer menú"}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Ctrl + B</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SidebarToggleSticky({ className, ...props }) {
+  const { toggleSidebar, state, isMobile } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
+  // No mostrar en móvil ya que usa Sheet
+  if (isMobile) {
+    return null;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          data-sidebar="toggle-sticky"
+          data-slot="sidebar-toggle-sticky"
+          onClick={toggleSidebar}
+          aria-label={isCollapsed ? "Expandir menú lateral" : "Contraer menú lateral"}
+          aria-expanded={!isCollapsed}
+          aria-controls="sidebar"
+          className={cn(
+            // Posicionamiento sticky
+            "sticky top-4 z-20",
+            // Tamaño y forma
+            "size-8 rounded-full",
+            // Colores y fondo con efecto glassmorphism
+            "bg-background/80 backdrop-blur-sm",
+            "border border-border/50",
+            "shadow-md hover:shadow-lg",
+            // Estados interactivos
+            "hover:bg-accent hover:text-accent-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            "active:scale-95",
+            // Transiciones suaves
+            "transition-all duration-200 ease-in-out",
+            // Flex para centrar icono
+            "flex items-center justify-center",
+            // Cursor
+            "cursor-pointer",
+            className,
+          )}
+          {...props}
+        >
+          <PanelLeftIcon 
+            className={cn(
+              "size-4 transition-transform duration-200",
+              isCollapsed && "rotate-180"
+            )} 
+            aria-hidden="true"
+          />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent 
+        side="right" 
+        sideOffset={8}
+        className="font-medium"
+      >
+        <p>{isCollapsed ? "Expandir menú" : "Contraer menú"}</p>
+        <p className="text-xs text-muted-foreground">Ctrl + B</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -632,6 +771,7 @@ function SidebarMenuSubButton({
 export {
   Sidebar,
   SidebarContent,
+  SidebarEdgeToggle,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,
@@ -653,5 +793,6 @@ export {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
+  SidebarToggleSticky,
   useSidebar,
 };

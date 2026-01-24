@@ -86,7 +86,7 @@ export const AppSidebar = () => {
   };
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" id="sidebar">
       <SidebarGroup>
         <SidebarHeader className="flex justify-center items-center m-auto">
           {state === "collapsed" ? (
