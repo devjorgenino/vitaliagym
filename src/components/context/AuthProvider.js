@@ -39,6 +39,8 @@ const AuthProvider = ({ children }) => {
         // Si el usuario inicia sesión, el layout manejará la redirección
         // Si cierra sesión, redirigir al login
         if (event === 'SIGNED_OUT') {
+          // Clear offline data for security
+          import('@/lib/offline-db').then(mod => mod.clearAllMutations()).catch(console.error);
           window.location.href = '/';
         }
       }

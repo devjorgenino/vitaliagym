@@ -30,10 +30,12 @@ export function OfflineSyncManager() {
         console.error("Auto-sync failed:", err);
       }
 
-      // Wait a bit to show the icon, then reload
+      // Wait a bit to show the icon, then hide it (optional) or let user dismiss
       setTimeout(() => {
-        window.location.reload();
-      }, 10000);
+         setIsRestored(false); // Optionally hide the restored icon after some time
+         setShowSuccess(true); // Switch to success state
+         setTimeout(() => setShowSuccess(false), 3000); // Hide success after 3s
+      }, 5000);
     };
 
     const handleOffline = () => {
@@ -92,13 +94,13 @@ export function OfflineSyncManager() {
               <button
                   onClick={() => window.location.reload()}
                   className="flex items-center justify-center p-3 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full shadow-lg border border-green-200 dark:border-green-800 animate-in fade-in zoom-in duration-300 cursor-pointer hover:scale-105 transition-transform"
-                  aria-label="Conexión restaurada. Click para recargar"
+                  aria-label="Conexión restaurada. Click para recargar si es necesario"
               >
                    <Wifi className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="left">
-              <p>Conexión restaurada. Recargando en breve... (Click para ya)</p>
+              <p>Conexión restaurada. (Click para recargar si deseas)</p>
             </TooltipContent>
          </Tooltip>
       </div>

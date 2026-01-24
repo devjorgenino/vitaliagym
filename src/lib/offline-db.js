@@ -33,3 +33,8 @@ export async function clearMutation(id) {
   const db = await initDB();
   return db.delete(STORE_NAME, id);
 }
+
+export async function clearAllMutations() {
+  const db = await initDB();
+  return db.clear(STORE_NAME);
+}
