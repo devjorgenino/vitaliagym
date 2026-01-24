@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import client from '../api/client';
+import { fetchWithOffline } from '../lib/offline-read';
 
 export function useDashboardMetrics() {
   const [metrics, setMetrics] = useState({
@@ -21,7 +22,7 @@ export function useDashboardMetrics() {
       setError(null);
 
       // 1. Clientes próximos a vencer (5 días)
-      const { data: expiringData } = await client
+      const { data: expiringData } = await fetchWithOffline('dashboard-expiring', () => client
         .from('clients')
         .select(`
           *,
@@ -34,15 +35,14 @@ export function useDashboardMetrics() {
         .gte('next_payment_date', new Date().toISOString().split('T')[0])
         .lte('next_payment_date', new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
         .order('next_payment_date', { ascending: true })
-        .limit(5);
+        .limit(5));
 
       // 2. Cumpleaños del mes actual
       const today = new Date();
       const currentMonth = today.getMonth();
-      const currentYear = today.getFullYear();
       const currentDay = today.getDate();
       
-      const { data: birthdayData } = await client
+      const { data: birthdayData } = await fetchWithOffline('dashboard-birthdays', () => client
         .from('clients')
         .select(`
           id,
@@ -50,35 +50,18 @@ export function useDashboardMetrics() {
           last_name,
           birth_date
         `)
-        .not('birth_date', 'is', null);
-
-      console.log('Todos los clientes con birth_date:', birthdayData);
+        .not('birth_date', 'is', null));
 
       const currentMonthBirthdays = birthdayData ? birthdayData.filter(client => {
         const birthDate = new Date(client.birth_date);
         const birthMonth = birthDate.getMonth();
         const birthDay = birthDate.getDate();
         
-        // Solo clientes que cumplen años en el mes actual
         const isCurrentMonth = birthMonth === currentMonth;
-        
-        // Si ya pasó el cumpleaños este mes, no mostrar
         const hasPassed = birthDay < currentDay;
-        
-        console.log(`Birthday check for ${client.first_name} ${client.last_name}:`, {
-          birthDate: client.birth_date,
-          birthMonth,
-          birthDay,
-          currentMonth,
-          currentDay,
-          isCurrentMonth,
-          hasPassed,
-          shouldShow: isCurrentMonth && !hasPassed
-        });
         
         return isCurrentMonth && !hasPassed;
       }).sort((a, b) => {
-        // Ordenar por día del mes (ascendente)
         const aDay = new Date(a.birth_date).getDate();
         const bDay = new Date(b.birth_date).getDate();
         return aDay - bDay;
@@ -86,7 +69,7 @@ export function useDashboardMetrics() {
 
       // 3. Clientes nuevos del mes actual
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      const { data: newClientsData } = await client
+      const { data: newClientsData } = await fetchWithOffline('dashboard-new-clients', () => client
         .from('clients')
         .select(`
           id,
@@ -96,11 +79,11 @@ export function useDashboardMetrics() {
           created_at
         `)
         .gte('join_date', monthStart.toISOString().split('T')[0])
-        .order('join_date', { ascending: false });
+        .order('join_date', { ascending: false }));
 
-      // 4. Ingresos semanales (planes activos)
+      // 4. Ingresos semanales
       const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const { data: revenueData } = await client
+      const { data: revenueData } = await fetchWithOffline('dashboard-revenue', () => client
         .from('clients')
         .select(`
           plans!inner (
@@ -108,11 +91,11 @@ export function useDashboardMetrics() {
           ),
           join_date
         `)
-        .gte('join_date', lastWeek.toISOString());
+        .gte('join_date', lastWeek.toISOString()));
 
       const weeklyRevenue = revenueData ? revenueData.reduce((total, client) => {
         return total + (parseFloat(client.plans?.price || 0) || 0);
-}, 0) : 0;
+      }, 0) : 0;
       
       // 5. Estadísticas de asistencia
       const attendanceStats = await getAttendanceStats();
@@ -144,66 +127,61 @@ export function useDashboardMetrics() {
   const getAttendanceStats = async () => {
     try {
       const today = new Date();
-      
-      // Calcular inicio de la semana (lunes)
       const weekStart = new Date(today);
       weekStart.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
       weekStart.setHours(0, 0, 0, 0);
       
-      // Calcular inicio del mes
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       
-      // Asistencia semanal (registros totales esta semana)
-      const { data: weeklyData, error: weeklyError } = await client
+      // Wrap attendance queries with offline fetch
+      const { data: weeklyData } = await fetchWithOffline('dashboard-attendance-weekly', () => client
         .from('attendance')
         .select('client_id, date, status')
         .gte('date', weekStart.toISOString().split('T')[0])
-        .lte('date', today.toISOString().split('T')[0]);
+        .lte('date', today.toISOString().split('T')[0]));
 
-      // Asistencia mensual (registros totales este mes)
-      const { data: monthlyData, error: monthlyError } = await client
+      const { data: monthlyData } = await fetchWithOffline('dashboard-attendance-monthly', () => client
         .from('attendance')
         .select('client_id, date, status')
         .gte('date', monthStart.toISOString().split('T')[0])
-        .lte('date', today.toISOString().split('T')[0]);
+        .lte('date', today.toISOString().split('T')[0]));
 
-      // Obtener total de clientes activos
-      const { count: totalClientsCount, error: countError } = await client
-        .from('clients')
-        .select('id', { count: 'exact', head: true });
+      const { data: totalClients, count: totalClientsCount } = await fetchWithOffline('dashboard-total-clients', async () => {
+         // fetchWithOffline expects a { data, error } response format, but .select(..., { count: 'exact' }) returns { data, count, error }
+         // We'll wrap it to cache the count inside data or just cache the result object
+         const res = await client
+          .from('clients')
+          .select('id', { count: 'exact', head: true });
+         
+         // Fix: Supabase 'head: true' returns null data. We need to store the count manually if we want to cache it.
+         // Let's actually fetch IDs so we have data to cache, or just construct a fake data object with count.
+         return { data: { count: res.count }, error: res.error };
+      });
 
-      if (weeklyError || monthlyError || countError) {
-        throw new Error('Error fetching attendance data');
-      }
+      const count = totalClients?.count || 0;
 
-      // Calcular métricas semanales
       const weeklyRecords = weeklyData || [];
       const weeklyUniqueClients = [...new Set(weeklyRecords.map(record => record.client_id))].length;
-      
-      // Calcular días hábiles esta semana
       const weekDays = Math.floor((today - weekStart) / (1000 * 60 * 60 * 24)) + 1;
       
-      // Calcular métricas mensuales
       const monthlyRecords = monthlyData || [];
       const monthlyUniqueClients = [...new Set(monthlyRecords.map(record => record.client_id))].length;
-      
-      // Calcular días transcurridos del mes
-      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
       const daysPassedInMonth = today.getDate();
       
       return {
-        weeklyAttendance: weeklyRecords.length, // Total de registros esta semana
-        weeklyUniqueClients, // Clientes únicos esta semana
-        weeklyPercentage: totalClientsCount > 0 ? (weeklyUniqueClients / totalClientsCount) * 100 : 0,
-        monthlyAttendance: monthlyRecords.length, // Total de registros este mes
-        monthlyUniqueClients, // Clientes únicos este mes
-        monthlyPercentage: totalClientsCount > 0 ? (monthlyUniqueClients / totalClientsCount) * 100 : 0,
-        weekDays, // Días transcurridos esta semana
-        daysPassedInMonth, // Días transcurridos este mes
-        totalClients: totalClientsCount || 0
+        weeklyAttendance: weeklyRecords.length,
+        weeklyUniqueClients,
+        weeklyPercentage: count > 0 ? (weeklyUniqueClients / count) * 100 : 0,
+        monthlyAttendance: monthlyRecords.length,
+        monthlyUniqueClients,
+        monthlyPercentage: count > 0 ? (monthlyUniqueClients / count) * 100 : 0,
+        weekDays,
+        daysPassedInMonth,
+        totalClients: count
       };
     } catch (err) {
       console.error('Error fetching attendance stats:', err);
+      // Return default empty stats on error
       return {
         weeklyAttendance: 0,
         weeklyUniqueClients: 0,
@@ -220,6 +198,11 @@ export function useDashboardMetrics() {
 
   useEffect(() => {
     fetchMetrics();
+    
+    const handleOnline = () => fetchMetrics();
+    window.addEventListener('online', handleOnline); // Re-fetch when connection returns
+    
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   return {

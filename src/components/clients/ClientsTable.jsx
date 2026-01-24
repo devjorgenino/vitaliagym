@@ -13,7 +13,15 @@ import {
   parsePhone,
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2, IdCard, Phone } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { Loader2, IdCard, Phone, Settings2, CalendarClock } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -63,6 +71,8 @@ export function ClientsTable() {
     createClient,
     updateClient,
     deleteClient,
+    recalculateAllNextPaymentDates,
+    fixAllPhones,
   } = useClients();
 
   const { plans, loading: plansLoading } = usePlans();
@@ -556,6 +566,35 @@ export function ClientsTable() {
           <Button onClick={refetch} variant="outline" size="sm">
             Actualizar
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Mantenimiento</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={async () => {
+                toast.loading("Corrigiendo teléfonos...");
+                const res = await fixAllPhones();
+                toast.dismiss();
+                if(res.success) toast.success(`Teléfonos corregidos: ${res.updated}`);
+                else toast.error("Error al corregir teléfonos");
+              }}>
+                <Phone className="mr-2 h-4 w-4" /> Corregir Teléfonos
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => {
+                 toast.loading("Recalculando fechas...");
+                 const res = await recalculateAllNextPaymentDates();
+                 toast.dismiss();
+                 if(res.success) toast.success(`Fechas corregidas: ${res.updated}`);
+                 else toast.error("Error al corregir fechas");
+              }}>
+                <CalendarClock className="mr-2 h-4 w-4" /> Corregir Fechas Pago
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
       <CardContent>

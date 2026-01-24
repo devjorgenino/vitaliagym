@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import client from "../api/client";
+import { fetchWithOffline } from "../lib/offline-read";
+import { executeWithSync } from "../lib/data-sync";
 
 export function useClients() {
   const [clients, setClients] = useState([]);
@@ -121,7 +123,7 @@ export function useClients() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await client
+      const { data, error } = await fetchWithOffline("clients-list", () => client
         .from("clients")
         .select(
           `
@@ -132,16 +134,17 @@ export function useClients() {
           )
         `,
         )
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }));
 
       if (error) {
         if (
+          error.message &&
           error.message.includes("relation") &&
           error.message.includes("does not exist")
         ) {
           setError('La tabla "clients" no existe.');
         } else {
-          setError(`Error: ${error.message}`);
+          setError(`Error: ${error.message || "Error desconocido"}`);
         }
         return;
       }
@@ -170,25 +173,21 @@ export function useClients() {
       // Calcular próxima fecha de pago usando la función que maneja meses con diferentes días
       const nextPaymentDate = calculateNextPaymentDate(clientData.join_date);
 
-      const { data, error } = await client.from("clients").insert([
-        {
+      const { data, error } = await executeWithSync({
+        table: 'clients',
+        type: 'INSERT',
+        data: {
           ...clientData,
           next_payment_date: formatDateToLocal(nextPaymentDate),
-        },
-      ]).select(`
-          *,
-          plans (
-            id,
-            name
-          )
-        `);
+        }
+      });
 
       if (error) {
         throw error;
       }
 
       await fetchClients();
-      return { success: true, data: data[0] };
+      return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error("Error creating client:", err);
       return { success: false, error: err.message };
@@ -204,26 +203,22 @@ export function useClients() {
         updatedData.next_payment_date = formatDateToLocal(nextPaymentDate);
       }
 
-      const { data, error } = await client
-        .from("clients")
-        .update(updatedData)
-        .eq("id", id).select(`
-          *,
-          plans (
-            id,
-            name
-          )
-        `);
+      const { data, error } = await executeWithSync({
+        table: 'clients',
+        type: 'UPDATE',
+        data: updatedData,
+        match: { id }
+      });
 
       if (error) {
         throw error;
       }
 
       await fetchClients();
-      return { success: true, data: data[0] };
+      return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error("Error updating client:", err);
-      alert("Error al actualizar plan: " + err.message);
+      alert("Error al actualizar cliente: " + err.message);
     } finally {
       setIsUpdating(false);
     }
@@ -232,11 +227,11 @@ export function useClients() {
   const getClientAttendanceStats = async (clientId) => {
     try {
       // Obtener asistencias del cliente
-      const { data: attendanceData } = await client
+      const { data: attendanceData } = await fetchWithOffline(`attendance-${clientId}`, () => client
         .from("attendance")
         .select("*")
         .eq("client_id", clientId)
-        .order("date", { ascending: false });
+        .order("date", { ascending: false }));
 
       // Calcular asistencias del mes actual
       const today = new Date();
@@ -279,7 +274,11 @@ export function useClients() {
 
   const deleteClient = async (id) => {
     try {
-      const { error } = await client.from("clients").delete().eq("id", id);
+      const { error } = await executeWithSync({
+        table: 'clients',
+        type: 'DELETE',
+        match: { id }
+      });
 
       if (error) {
         throw error;
@@ -301,68 +300,72 @@ export function useClients() {
    */
   const recalculateAllNextPaymentDates = async () => {
     try {
-      // Obtener todos los clientes con su fecha de ingreso
       const { data: allClients, error: fetchError } = await client
         .from("clients")
         .select("id, join_date, next_payment_date");
 
-      if (fetchError) {
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
+      if (!allClients || allClients.length === 0) return { success: true, updated: 0, errors: [] };
 
-      if (!allClients || allClients.length === 0) {
-        return { success: true, updated: 0, errors: [] };
-      }
-
+      const updates = [];
       const errors = [];
-      let updatedCount = 0;
 
-      // Procesar cada cliente
+      // Calculate updates locally
       for (const c of allClients) {
-        if (!c.join_date) {
-          errors.push(`Cliente ${c.id}: Sin fecha de ingreso`);
-          continue;
-        }
-
+        if (!c.join_date) continue;
+        
         try {
-          // Calcular la nueva fecha de próximo pago
           const newNextPaymentDate = calculateNextPaymentDate(c.join_date);
           const formattedDate = formatDateToLocal(newNextPaymentDate);
 
-          // Solo actualizar si la fecha es diferente
           if (c.next_payment_date !== formattedDate) {
-            const { error: updateError } = await client
-              .from("clients")
-              .update({ next_payment_date: formattedDate })
-              .eq("id", c.id);
-
-            if (updateError) {
-              errors.push(`Cliente ${c.id}: ${updateError.message}`);
-            } else {
-              updatedCount++;
-            }
+             updates.push({
+               id: c.id,
+               next_payment_date: formattedDate
+             });
           }
         } catch (err) {
           errors.push(`Cliente ${c.id}: ${err.message}`);
         }
       }
 
-      // Recargar los clientes con los datos actualizados
-      await fetchClients();
+      if (updates.length > 0) {
+        // Perform bulk upsert (Supabase handles batch updates efficiently via upsert)
+        // Note: upsert requires all non-nullable fields or partial update logic carefully. 
+        // Since we only want to update 'next_payment_date', we should be careful. 
+        // Actually, Supabase upsert updates rows if primary key matches.
+        // However, standard upsert needs all required columns if it were an insert.
+        // For partial updates on ID match, we can use upsert if we are sure ID exists.
+        // But the cleanest way for partial bulk update is often simpler to just execute in chunks or use an RPC if available.
+        // Given Supabase JS client doesn't support "UPDATE WHERE id IN (...)" with different values per row easily without RPC,
+        // we will stick to parallel requests but batched with Promise.all to improve speed over sequential await loops.
+        
+        // Optimización: Usar Promise.all con concurrencia limitada para no saturar
+        const batchSize = 50;
+        let updatedCount = 0;
+        
+        for (let i = 0; i < updates.length; i += batchSize) {
+            const chunk = updates.slice(i, i + batchSize);
+            await Promise.all(chunk.map(async (u) => {
+                const { error } = await client
+                    .from("clients")
+                    .update({ next_payment_date: u.next_payment_date })
+                    .eq("id", u.id);
+                
+                if (error) errors.push(`Error updating ${u.id}: ${error.message}`);
+                else updatedCount++;
+            }));
+        }
+        
+        await fetchClients();
+        return { success: errors.length === 0, updated: updatedCount, total: allClients.length, errors };
+      }
 
-      return {
-        success: errors.length === 0,
-        updated: updatedCount,
-        total: allClients.length,
-        errors,
-      };
+      return { success: true, updated: 0, total: allClients.length, errors: [] };
+
     } catch (err) {
       console.error("Error recalculating payment dates:", err);
-      return {
-        success: false,
-        updated: 0,
-        errors: [err.message],
-      };
+      return { success: false, updated: 0, errors: [err.message] };
     }
   };
 
@@ -429,11 +432,17 @@ export function useClients() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchClients]);
 
   useEffect(() => {
     fetchClients();
-  }, []);
+    
+    // Auto-update when online
+    const handleOnline = () => fetchClients();
+    window.addEventListener('online', handleOnline);
+
+    return () => window.removeEventListener('online', handleOnline);
+  }, [fetchClients]);
 
   return {
     clients,

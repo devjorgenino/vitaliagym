@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import client from "@/api/client";
 import useAuth from "@/hooks/useAuth";
+import { fetchWithOffline } from "../lib/offline-read";
+import { executeWithSync } from "../lib/data-sync";
 
 /**
  * Hook para gestionar los pagos al personal
@@ -18,36 +20,39 @@ export default function useStaffPayments() {
     try {
       setLoading(true);
       setError(null);
+      const filterKey = JSON.stringify(filters);
 
-      let query = client
-        .from("staff_payments")
-        .select(`
-          *,
-          staff:staff_id (
-            id,
-            first_name,
-            last_name,
-            position,
-            email
-          )
-        `)
-        .order("payment_date", { ascending: false });
-
-      // Aplicar filtros
-      if (filters.staffId) {
-        query = query.eq("staff_id", filters.staffId);
-      }
-      if (filters.status) {
-        query = query.eq("status", filters.status);
-      }
-      if (filters.startDate) {
-        query = query.gte("payment_date", filters.startDate);
-      }
-      if (filters.endDate) {
-        query = query.lte("payment_date", filters.endDate);
-      }
-
-      const { data, error: fetchError } = await query;
+      const { data, error: fetchError } = await fetchWithOffline(`staff-payments-list-${filterKey}`, async () => {
+          let query = client
+            .from("staff_payments")
+            .select(`
+              *,
+              staff:staff_id (
+                id,
+                first_name,
+                last_name,
+                position,
+                email
+              )
+            `)
+            .order("payment_date", { ascending: false });
+    
+          // Aplicar filtros
+          if (filters.staffId) {
+            query = query.eq("staff_id", filters.staffId);
+          }
+          if (filters.status) {
+            query = query.eq("status", filters.status);
+          }
+          if (filters.startDate) {
+            query = query.gte("payment_date", filters.startDate);
+          }
+          if (filters.endDate) {
+            query = query.lte("payment_date", filters.endDate);
+          }
+          
+          return query;
+      });
 
       if (fetchError) throw fetchError;
       setPayments(data || []);
@@ -62,133 +67,114 @@ export default function useStaffPayments() {
   // Crear pago
   const createPayment = useCallback(async (paymentData) => {
     try {
-      const { data, error: createError } = await client
-        .from("staff_payments")
-        .insert([{
+      const { data, error: createError } = await executeWithSync({
+        table: 'staff_payments',
+        type: 'INSERT',
+        data: {
           ...paymentData,
           created_by: user?.id,
-        }])
-        .select(`
-          *,
-          staff:staff_id (
-            id,
-            first_name,
-            last_name,
-            position,
-            email
-          )
-        `)
-        .single();
+        }
+      });
 
       if (createError) throw createError;
       
-      setPayments((prev) => [data, ...prev]);
-      return { data, error: null };
+      if (data && data[0]) {
+          setPayments((prev) => [data[0], ...prev]);
+      } else {
+          fetchPayments();
+      }
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error creating payment:", err);
       return { data: null, error: err.message };
     }
-  }, [user?.id]);
+  }, [user?.id, fetchPayments]);
 
   // Actualizar pago
   const updatePayment = useCallback(async (id, paymentData) => {
     try {
-      const { data, error: updateError } = await client
-        .from("staff_payments")
-        .update(paymentData)
-        .eq("id", id)
-        .select(`
-          *,
-          staff:staff_id (
-            id,
-            first_name,
-            last_name,
-            position,
-            email
-          )
-        `)
-        .single();
+      const { data, error: updateError } = await executeWithSync({
+        table: 'staff_payments',
+        type: 'UPDATE',
+        data: paymentData,
+        match: { id }
+      });
 
       if (updateError) throw updateError;
       
-      setPayments((prev) => prev.map((p) => (p.id === id ? data : p)));
-      return { data, error: null };
+      if (data && data[0]) {
+          setPayments((prev) => prev.map((p) => (p.id === id ? data[0] : p)));
+      } else {
+          fetchPayments();
+      }
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error updating payment:", err);
       return { data: null, error: err.message };
     }
-  }, []);
+  }, [fetchPayments]);
 
   // Marcar pago como pagado
   const markAsPaid = useCallback(async (id, reference = "") => {
     try {
-      const { data, error: updateError } = await client
-        .from("staff_payments")
-        .update({
+      const { data, error: updateError } = await executeWithSync({
+        table: 'staff_payments',
+        type: 'UPDATE',
+        data: {
           status: "paid",
           paid_by: user?.id,
           paid_at: new Date().toISOString(),
           payment_reference: reference,
-        })
-        .eq("id", id)
-        .select(`
-          *,
-          staff:staff_id (
-            id,
-            first_name,
-            last_name,
-            position,
-            email
-          )
-        `)
-        .single();
+        },
+        match: { id }
+      });
 
       if (updateError) throw updateError;
       
-      setPayments((prev) => prev.map((p) => (p.id === id ? data : p)));
-      return { data, error: null };
+      if (data && data[0]) {
+          setPayments((prev) => prev.map((p) => (p.id === id ? data[0] : p)));
+      } else {
+          fetchPayments();
+      }
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error marking payment as paid:", err);
       return { data: null, error: err.message };
     }
-  }, [user?.id]);
+  }, [user?.id, fetchPayments]);
 
   // Cancelar pago
   const cancelPayment = useCallback(async (id) => {
     try {
-      const { data, error: updateError } = await client
-        .from("staff_payments")
-        .update({ status: "cancelled" })
-        .eq("id", id)
-        .select(`
-          *,
-          staff:staff_id (
-            id,
-            first_name,
-            last_name,
-            position,
-            email
-          )
-        `)
-        .single();
+      const { data, error: updateError } = await executeWithSync({
+         table: 'staff_payments',
+         type: 'UPDATE',
+         data: { status: "cancelled" },
+         match: { id }
+      });
 
       if (updateError) throw updateError;
       
-      setPayments((prev) => prev.map((p) => (p.id === id ? data : p)));
-      return { data, error: null };
+      if (data && data[0]) {
+          setPayments((prev) => prev.map((p) => (p.id === id ? data[0] : p)));
+      } else {
+          fetchPayments();
+      }
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error cancelling payment:", err);
       return { data: null, error: err.message };
     }
-  }, []);
+  }, [fetchPayments]);
 
   // Eliminar pago
   const deletePayment = useCallback(async (id) => {
     try {
-      const { error: deleteError } = await client
-        .from("staff_payments")
-        .delete()
-        .eq("id", id);
+      const { error: deleteError } = await executeWithSync({
+         table: 'staff_payments',
+         type: 'DELETE',
+         match: { id }
+      });
 
       if (deleteError) throw deleteError;
       

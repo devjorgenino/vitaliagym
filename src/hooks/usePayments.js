@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import client from '../api/client';
+import { fetchWithOffline } from '../lib/offline-read';
+import { executeWithSync } from '../lib/data-sync';
 
 export function usePayments() {
   const [payments, setPayments] = useState([]);
@@ -12,7 +14,7 @@ export function usePayments() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await client
+      const { data, error } = await fetchWithOffline('payments-list', () => client
         .from('payments')
         .select(`
           *,
@@ -28,7 +30,7 @@ export function usePayments() {
             price
           )
         `)
-        .order('payment_date', { ascending: false });
+        .order('payment_date', { ascending: false }));
 
       if (error) {
         if (error.message.includes('relation') && error.message.includes('does not exist')) {
@@ -51,30 +53,29 @@ export function usePayments() {
 
   const createPayment = async (paymentData) => {
     try {
-      const { data, error } = await client
-        .from('payments')
-        .insert([paymentData])
-        .select(`
-          *,
-          clients (
-            id,
-            first_name,
-            last_name,
-            cedula
-          ),
-          plans (
-            id,
-            name,
-            price
-          )
-        `);
+      const { data, error } = await executeWithSync({
+        table: 'payments',
+        type: 'INSERT',
+        data: paymentData
+      });
 
       if (error) {
         throw error;
       }
+      
+      // Optimistic update
+      if (data && data[0]) {
+          // data[0] is the raw inserted row. We might be missing joined data.
+          // We can try to guess/mock or just accept partial display.
+          setPayments(prev => [data[0], ...prev]);
+      } else {
+        await fetchPayments();
+      }
 
-      await fetchPayments();
-      return { success: true, data: data[0] };
+      // Note: Data sync returns the raw inserted data, but our UI usually expects joined data.
+      // fetchPayments refreshes the list with joins, so returning basic data is usually fine,
+      // or we can just return success: true.
+      return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error("Error creating payment:", err);
       return { success: false, error: err.message };
@@ -83,31 +84,25 @@ export function usePayments() {
 
   const updatePayment = async (id, paymentData) => {
     try {
-      const { data, error } = await client
-        .from('payments')
-        .update(paymentData)
-        .eq('id', id)
-        .select(`
-          *,
-          clients (
-            id,
-            first_name,
-            last_name,
-            cedula
-          ),
-          plans (
-            id,
-            name,
-            price
-          )
-        `);
+      const { data, error } = await executeWithSync({
+        table: 'payments',
+        type: 'UPDATE',
+        data: paymentData,
+        match: { id }
+      });
 
       if (error) {
         throw error;
       }
+      
+      // Optimistic update
+      if (data && data[0]) {
+           setPayments(prev => prev.map(p => p.id === id ? { ...p, ...data[0] } : p));
+      } else {
+           await fetchPayments();
+      }
 
-      await fetchPayments();
-      return { success: true, data: data[0] };
+      return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error("Error updating payment:", err);
       return { success: false, error: err.message };
@@ -116,16 +111,19 @@ export function usePayments() {
 
   const deletePayment = async (id) => {
     try {
-      const { error } = await client
-        .from('payments')
-        .delete()
-        .eq('id', id);
+      const { error } = await executeWithSync({
+        table: 'payments',
+        type: 'DELETE',
+        match: { id }
+      });
 
       if (error) {
         throw error;
       }
+      
+      // Optimistic update
+      setPayments(prev => prev.filter(p => p.id !== id));
 
-      await fetchPayments();
       return { success: true };
     } catch (err) {
       console.error("Error deleting payment:", err);
@@ -142,9 +140,9 @@ export function usePayments() {
       setLoading(true);
       setError(null);
   
-      const { data, error } = await client.rpc('search_payments_by_client', {
+      const { data, error } = await fetchWithOffline(`payments-search-${searchTerm}`, () => client.rpc('search_payments_by_client', {
         search_term: searchTerm,
-      });
+      }));
   
       if (error) {
         throw error;
@@ -162,27 +160,20 @@ export function usePayments() {
 
   // Nueva función unificada para búsqueda con filtros
   const searchPaymentsWithFilters = async (filters = {}) => {
-    const {
-      searchTerm,
-      plan_id,
-      payment_type,
-      bank,
-      date_from,
-      date_to,
-    } = filters;
+    const filterKey = JSON.stringify(filters);
 
     try {
       setSearchLoading(true);
       setError(null);
 
-      const { data, error } = await client.rpc('search_payments_with_filters', {
-        search_term: searchTerm || null,
-        filter_plan_id: plan_id || null,
-        filter_payment_type: payment_type || null,
-        filter_bank: bank || null,
-        filter_date_from: date_from || null,
-        filter_date_to: date_to || null,
-      });
+      const { data, error } = await fetchWithOffline(`payments-filter-${filterKey}`, () => client.rpc('search_payments_with_filters', {
+        search_term: filters.searchTerm || null,
+        filter_plan_id: filters.plan_id || null,
+        filter_payment_type: filters.payment_type || null,
+        filter_bank: filters.bank || null,
+        filter_date_from: filters.date_from || null,
+        filter_date_to: filters.date_to || null,
+      }));
 
       if (error) {
         throw error;
@@ -203,45 +194,48 @@ export function usePayments() {
     try {
       setLoading(true);
       setError(null);
+      const filterKey = JSON.stringify(filters);
 
-      let query = client
-        .from('payments')
-        .select(`
-          *,
-          clients (
-            id,
-            first_name,
-            last_name,
-            cedula
-          ),
-          plans (
-            id,
-            name,
-            price
-          )
-        `);
-
-      if (filters.plan_id) {
-        query = query.eq('plan_id', filters.plan_id);
-      }
-
-      if (filters.payment_type) {
-        query = query.eq('payment_type', filters.payment_type);
-      }
-
-      if (filters.bank) {
-        query = query.eq('bank', filters.bank);
-      }
-
-      if (filters.date_from) {
-        query = query.gte('payment_date', filters.date_from);
-      }
-
-      if (filters.date_to) {
-        query = query.lte('payment_date', filters.date_to);
-      }
-
-      const { data, error } = await query.order('payment_date', { ascending: false });
+      const { data, error } = await fetchWithOffline(`payments-apply-filters-${filterKey}`, async () => {
+          let query = client
+            .from('payments')
+            .select(`
+              *,
+              clients (
+                id,
+                first_name,
+                last_name,
+                cedula
+              ),
+              plans (
+                id,
+                name,
+                price
+              )
+            `);
+    
+          if (filters.plan_id) {
+            query = query.eq('plan_id', filters.plan_id);
+          }
+    
+          if (filters.payment_type) {
+            query = query.eq('payment_type', filters.payment_type);
+          }
+    
+          if (filters.bank) {
+            query = query.eq('bank', filters.bank);
+          }
+    
+          if (filters.date_from) {
+            query = query.gte('payment_date', filters.date_from);
+          }
+    
+          if (filters.date_to) {
+            query = query.lte('payment_date', filters.date_to);
+          }
+          
+          return query.order('payment_date', { ascending: false });
+      });
 
       if (error) {
         throw error;
@@ -260,6 +254,12 @@ export function usePayments() {
 
   useEffect(() => {
     fetchPayments();
+    
+    // Auto-update when online
+    const handleOnline = () => fetchPayments();
+    window.addEventListener('online', handleOnline);
+
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   return {

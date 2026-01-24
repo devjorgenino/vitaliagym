@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
 import client from "@/api/client";
+import { fetchWithOffline } from "../lib/offline-read";
+import { executeWithSync } from "../lib/data-sync";
 
 /**
  * Hook para gestionar roles y permisos de un usuario específico
@@ -19,7 +21,7 @@ const useUserSecurity = (userId) => {
     if (!userId) return [];
 
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline(`user-roles-${userId}`, () => client
         .from('user_roles')
         .select(`
           id,
@@ -32,7 +34,7 @@ const useUserSecurity = (userId) => {
             is_system_role
           )
         `)
-        .eq('user_id', userId);
+        .eq('user_id', userId));
 
       if (fetchError) throw fetchError;
 
@@ -60,7 +62,7 @@ const useUserSecurity = (userId) => {
     if (!userId) return [];
 
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline(`user-permissions-override-${userId}`, () => client
         .from('user_permission_overrides')
         .select(`
           id,
@@ -77,7 +79,7 @@ const useUserSecurity = (userId) => {
             action
           )
         `)
-        .eq('user_id', userId);
+        .eq('user_id', userId));
 
       if (fetchError) throw fetchError;
 
@@ -106,11 +108,11 @@ const useUserSecurity = (userId) => {
   // Cargar todos los roles disponibles
   const fetchAllRoles = useCallback(async () => {
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline("all-roles", () => client
         .from('roles')
         .select('*')
         .eq('is_active', true)
-        .order('name');
+        .order('name'));
 
       if (fetchError) throw fetchError;
 
@@ -125,11 +127,11 @@ const useUserSecurity = (userId) => {
   // Cargar todos los permisos
   const fetchAllPermissions = useCallback(async () => {
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline("all-permissions", () => client
         .from('permissions')
         .select('*')
         .order('module')
-        .order('action');
+        .order('action'));
 
       if (fetchError) throw fetchError;
 
@@ -170,13 +172,15 @@ const useUserSecurity = (userId) => {
       // Obtener el usuario actual para assigned_by
       const { data: { user: currentUser } } = await client.auth.getUser();
 
-      const { error: insertError } = await client
-        .from('user_roles')
-        .insert({
+      const { error: insertError } = await executeWithSync({
+        table: 'user_roles',
+        type: 'INSERT',
+        data: {
           user_id: userId,
           role_id: roleId,
           assigned_by: currentUser?.id,
-        });
+        }
+      });
 
       if (insertError) throw insertError;
 
@@ -195,11 +199,14 @@ const useUserSecurity = (userId) => {
     try {
       setError(null);
 
-      const { error: deleteError } = await client
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId)
-        .eq('role_id', roleId);
+      // We need to delete by user_id AND role_id. 
+      // executeWithSync standard delete works with specific match, usually ID.
+      // But delete supports match object.
+      const { error: deleteError } = await executeWithSync({
+        table: 'user_roles',
+        type: 'DELETE',
+        match: { user_id: userId, role_id: roleId }
+      });
 
       if (deleteError) throw deleteError;
 
@@ -222,36 +229,52 @@ const useUserSecurity = (userId) => {
       const { data: { user: currentUser } } = await client.auth.getUser();
 
       // Primero intentar actualizar si existe
+      // We can use upsert or just insert/update logic.
+      // fetchWithOffline shouldn't be used for simple existence check if we are going to mutate immediately unless we want to rely on cache?
+      // Actually consistent reads are better.
+      // But let's stick to existing logic for now.
+      
       const { data: existing } = await client
         .from('user_permission_overrides')
         .select('id')
         .eq('user_id', userId)
         .eq('permission_id', permissionId)
         .single();
-
+        
+      // If offline, this existence check might fail or be stale.
+      // Ideally executeWithSync handles upsert? Our helper does not.
+      // If offline and check fails, we might try to INSERT, which might conflict later.
+      // Or we can try UPSERT if table supports it.
+      // Or we accept that offline complex logic is hard.
+      // Let's assume we can try to update if ID exists, else insert.
+      
       if (existing) {
         // Actualizar
-        const { error: updateError } = await client
-          .from('user_permission_overrides')
-          .update({
+        const { error: updateError } = await executeWithSync({
+          table: 'user_permission_overrides',
+          type: 'UPDATE',
+          data: {
             granted,
             reason,
             granted_by: currentUser?.id,
-          })
-          .eq('id', existing.id);
+          },
+          match: { id: existing.id }
+        });
 
         if (updateError) throw updateError;
       } else {
         // Insertar
-        const { error: insertError } = await client
-          .from('user_permission_overrides')
-          .insert({
+        const { error: insertError } = await executeWithSync({
+          table: 'user_permission_overrides',
+          type: 'INSERT',
+          data: {
             user_id: userId,
             permission_id: permissionId,
             granted,
             reason,
             granted_by: currentUser?.id,
-          });
+          }
+        });
 
         if (insertError) throw insertError;
       }
@@ -271,11 +294,11 @@ const useUserSecurity = (userId) => {
     try {
       setError(null);
 
-      const { error: deleteError } = await client
-        .from('user_permission_overrides')
-        .delete()
-        .eq('user_id', userId)
-        .eq('permission_id', permissionId);
+      const { error: deleteError } = await executeWithSync({
+        table: 'user_permission_overrides',
+        type: 'DELETE',
+        match: { user_id: userId, permission_id: permissionId }
+      });
 
       if (deleteError) throw deleteError;
 

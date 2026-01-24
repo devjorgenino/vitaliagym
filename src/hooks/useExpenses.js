@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import client from "@/api/client";
 import useAuth from "@/hooks/useAuth";
+import { fetchWithOffline } from "../lib/offline-read";
+import { executeWithSync } from "../lib/data-sync";
 
 /**
  * Hook para gestionar los gastos operativos
@@ -19,32 +21,40 @@ export default function useExpenses() {
     try {
       setLoading(true);
       setError(null);
+      const filterKey = JSON.stringify(filters);
 
-      let query = client
-        .from("expenses")
-        .select("*")
-        .order("expense_date", { ascending: false });
+      const { data, error: fetchError } = await fetchWithOffline(`expenses-list-${filterKey}`, async () => {
+          let query = client
+            .from("expenses")
+            .select("*")
+            .order("expense_date", { ascending: false });
+    
+          // Aplicar filtros
+          if (filters.category) {
+            query = query.eq("category", filters.category);
+          }
+          if (filters.status) {
+            query = query.eq("status", filters.status);
+          }
+          if (filters.startDate) {
+            query = query.gte("expense_date", filters.startDate);
+          }
+          if (filters.endDate) {
+            query = query.lte("expense_date", filters.endDate);
+          }
 
-      // Aplicar filtros
-      if (filters.category) {
-        query = query.eq("category", filters.category);
-      }
-      if (filters.status) {
-        query = query.eq("status", filters.status);
-      }
-      if (filters.startDate) {
-        query = query.gte("expense_date", filters.startDate);
-      }
-      if (filters.endDate) {
-        query = query.lte("expense_date", filters.endDate);
-      }
-
-      const { data, error: fetchError } = await query;
+          return query;
+      });
 
       if (fetchError) throw fetchError;
       setExpenses(data || []);
     } catch (err) {
       console.error("Error fetching expenses:", err);
+      // Fallback: don't error out hard if offline
+      if (!navigator.onLine) {
+           // We might want to clear expenses or keep old ones if error
+           // fetchWithOffline already handles caching, so if we are here it implies both failed.
+      }
       setError(err.message);
     } finally {
       setLoading(false);
@@ -54,11 +64,11 @@ export default function useExpenses() {
   // Cargar categorías
   const fetchCategories = useCallback(async () => {
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline("expense-categories", () => client
         .from("expense_categories")
         .select("*")
         .eq("is_active", true)
-        .order("name");
+        .order("name"));
 
       if (fetchError) throw fetchError;
       setCategories(data || []);
@@ -70,52 +80,67 @@ export default function useExpenses() {
   // Crear gasto
   const createExpense = useCallback(async (expenseData) => {
     try {
-      const { data, error: createError } = await client
-        .from("expenses")
-        .insert([{
+      const { data, error: createError } = await executeWithSync({
+        table: 'expenses',
+        type: 'INSERT',
+        data: {
           ...expenseData,
           created_by: user?.id,
-        }])
-        .select()
-        .single();
+        }
+      });
 
       if (createError) throw createError;
       
-      setExpenses((prev) => [data, ...prev]);
-      return { data, error: null };
+      // Manually update state for immediate feedback using the returned (potentially partial) data
+      if (data && data[0]) {
+          setExpenses((prev) => [data[0], ...prev]);
+      } else {
+          // If purely offline sync pending, we might want to re-fetch to be consistent
+          // but re-fetch might use cached data without the new item.
+          // For now, reload.
+          fetchExpenses();
+      }
+      
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error creating expense:", err);
       return { data: null, error: err.message };
     }
-  }, [user?.id]);
+  }, [user?.id, fetchExpenses]);
 
   // Actualizar gasto
   const updateExpense = useCallback(async (id, expenseData) => {
     try {
-      const { data, error: updateError } = await client
-        .from("expenses")
-        .update(expenseData)
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error: updateError } = await executeWithSync({
+        table: 'expenses',
+        type: 'UPDATE',
+        data: expenseData,
+        match: { id }
+      });
 
       if (updateError) throw updateError;
       
-      setExpenses((prev) => prev.map((e) => (e.id === id ? data : e)));
-      return { data, error: null };
+      if (data && data[0]) {
+        setExpenses((prev) => prev.map((e) => (e.id === id ? data[0] : e)));
+      } else {
+          fetchExpenses();
+      }
+      
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error updating expense:", err);
       return { data: null, error: err.message };
     }
-  }, []);
+  }, [fetchExpenses]);
 
   // Eliminar gasto
   const deleteExpense = useCallback(async (id) => {
     try {
-      const { error: deleteError } = await client
-        .from("expenses")
-        .delete()
-        .eq("id", id);
+      const { error: deleteError } = await executeWithSync({
+        table: 'expenses',
+        type: 'DELETE',
+        match: { id }
+      });
 
       if (deleteError) throw deleteError;
       
@@ -170,6 +195,14 @@ export default function useExpenses() {
   useEffect(() => {
     fetchExpenses();
     fetchCategories();
+    
+    const handleOnline = () => {
+        fetchExpenses();
+        fetchCategories();
+    };
+    window.addEventListener('online', handleOnline);
+
+    return () => window.removeEventListener('online', handleOnline);
   }, [fetchExpenses, fetchCategories]);
 
   return {

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import client from "@/api/client";
+import { fetchWithOffline } from "../lib/offline-read";
+import { executeWithSync } from "../lib/data-sync";
 
 /**
  * Hook para gestionar el personal del gimnasio
@@ -18,10 +20,10 @@ export default function useStaff() {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline("staff-list", () => client
         .from("staff")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }));
 
       if (fetchError) throw fetchError;
       setStaff(data || []);
@@ -36,11 +38,11 @@ export default function useStaff() {
   // Cargar posiciones disponibles
   const fetchPositions = useCallback(async () => {
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline("staff-positions", () => client
         .from("staff_positions")
         .select("*")
         .eq("is_active", true)
-        .order("name");
+        .order("name"));
 
       if (fetchError) throw fetchError;
       setPositions(data || []);
@@ -52,49 +54,58 @@ export default function useStaff() {
   // Crear nuevo personal
   const createStaff = useCallback(async (staffData) => {
     try {
-      const { data, error: createError } = await client
-        .from("staff")
-        .insert([staffData])
-        .select()
-        .single();
+      const { data, error: createError } = await executeWithSync({
+        table: 'staff',
+        type: 'INSERT',
+        data: staffData
+      });
 
       if (createError) throw createError;
       
-      setStaff((prev) => [data, ...prev]);
-      return { data, error: null };
+      if (data && data[0]) {
+          setStaff((prev) => [data[0], ...prev]);
+      } else {
+          fetchStaff();
+      }
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error creating staff:", err);
       return { data: null, error: err.message };
     }
-  }, []);
+  }, [fetchStaff]);
 
   // Actualizar personal
   const updateStaff = useCallback(async (id, staffData) => {
     try {
-      const { data, error: updateError } = await client
-        .from("staff")
-        .update(staffData)
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error: updateError } = await executeWithSync({
+        table: 'staff',
+        type: 'UPDATE',
+        data: staffData,
+        match: { id }
+      });
 
       if (updateError) throw updateError;
       
-      setStaff((prev) => prev.map((s) => (s.id === id ? data : s)));
-      return { data, error: null };
+      if (data && data[0]) {
+          setStaff((prev) => prev.map((s) => (s.id === id ? data[0] : s)));
+      } else {
+          fetchStaff();
+      }
+      return { data: data ? data[0] : null, error: null };
     } catch (err) {
       console.error("Error updating staff:", err);
       return { data: null, error: err.message };
     }
-  }, []);
+  }, [fetchStaff]);
 
   // Eliminar personal
   const deleteStaff = useCallback(async (id) => {
     try {
-      const { error: deleteError } = await client
-        .from("staff")
-        .delete()
-        .eq("id", id);
+      const { error: deleteError } = await executeWithSync({
+        table: 'staff',
+        type: 'DELETE',
+        match: { id }
+      });
 
       if (deleteError) throw deleteError;
       
@@ -109,11 +120,11 @@ export default function useStaff() {
   // Obtener un miembro del personal por ID
   const getStaffById = useCallback(async (id) => {
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline(`staff-${id}`, () => client
         .from("staff")
         .select("*")
         .eq("id", id)
-        .single();
+        .single());
 
       if (fetchError) throw fetchError;
       return { data, error: null };
@@ -147,6 +158,14 @@ export default function useStaff() {
   useEffect(() => {
     fetchStaff();
     fetchPositions();
+    
+    const handleOnline = () => {
+        fetchStaff();
+        fetchPositions();
+    };
+    window.addEventListener('online', handleOnline);
+
+    return () => window.removeEventListener('online', handleOnline);
   }, [fetchStaff, fetchPositions]);
 
   return {

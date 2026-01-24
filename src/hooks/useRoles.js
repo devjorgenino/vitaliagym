@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import client from "@/api/client";
+import { fetchWithOffline } from "../lib/offline-read";
+import { executeWithSync } from "../lib/data-sync";
 
 /**
  * Hook para gestionar roles y permisos del sistema
@@ -19,7 +21,7 @@ const useRoles = () => {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline("roles-list-full", () => client
         .from('roles')
         .select(`
           id,
@@ -41,7 +43,7 @@ const useRoles = () => {
             )
           )
         `)
-        .order('name');
+        .order('name'));
 
       if (fetchError) throw fetchError;
 
@@ -71,11 +73,11 @@ const useRoles = () => {
   // Cargar todos los permisos
   const fetchPermissions = useCallback(async () => {
     try {
-      const { data, error: fetchError } = await client
+      const { data, error: fetchError } = await fetchWithOffline("permissions-list", () => client
         .from('permissions')
         .select('*')
         .order('module')
-        .order('action');
+        .order('action'));
 
       if (fetchError) throw fetchError;
 
@@ -104,22 +106,25 @@ const useRoles = () => {
     try {
       setError(null);
 
-      const { data, error: createError } = await client
-        .from('roles')
-        .insert({
+      const { data, error: createError } = await executeWithSync({
+        table: 'roles',
+        type: 'INSERT',
+        data: {
           name: roleData.name,
           description: roleData.description,
           is_active: true,
           is_system_role: false,
-        })
-        .select()
-        .single();
+        }
+      });
 
       if (createError) throw createError;
 
       // Refrescar lista
+      // We could optimistically update state but with roles it's safer to re-fetch or carefully merge
+      // Because `executeWithSync` returns raw inserted row, but we need permissions structure for state
+      // We will just re-fetch for now or append basic role
       await fetchRoles();
-      return { success: true, data };
+      return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error('Error creating role:', err);
       return { success: false, error: err.message };
@@ -131,22 +136,22 @@ const useRoles = () => {
     try {
       setError(null);
 
-      const { data, error: updateError } = await client
-        .from('roles')
-        .update({
+      const { data, error: updateError } = await executeWithSync({
+        table: 'roles',
+        type: 'UPDATE',
+        data: {
           name: roleData.name,
           description: roleData.description,
           is_active: roleData.isActive,
-        })
-        .eq('id', roleId)
-        .select()
-        .single();
+        },
+        match: { id: roleId }
+      });
 
       if (updateError) throw updateError;
 
       // Refrescar lista
       await fetchRoles();
-      return { success: true, data };
+      return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error('Error updating role:', err);
       return { success: false, error: err.message };
@@ -164,10 +169,11 @@ const useRoles = () => {
         return { success: false, error: 'No se pueden eliminar roles del sistema' };
       }
 
-      const { error: deleteError } = await client
-        .from('roles')
-        .delete()
-        .eq('id', roleId);
+      const { error: deleteError } = await executeWithSync({
+        table: 'roles',
+        type: 'DELETE',
+        match: { id: roleId }
+      });
 
       if (deleteError) throw deleteError;
 
@@ -185,12 +191,14 @@ const useRoles = () => {
     try {
       setError(null);
 
-      const { error: assignError } = await client
-        .from('role_permissions')
-        .insert({
+      const { error: assignError } = await executeWithSync({
+        table: 'role_permissions',
+        type: 'INSERT',
+        data: {
           role_id: roleId,
           permission_id: permissionId,
-        });
+        }
+      });
 
       if (assignError) throw assignError;
 
@@ -208,11 +216,13 @@ const useRoles = () => {
     try {
       setError(null);
 
-      const { error: revokeError } = await client
-        .from('role_permissions')
-        .delete()
-        .eq('role_id', roleId)
-        .eq('permission_id', permissionId);
+      // Delete with composite key match is tricky in generic executeWithSync if it assumes 'id'
+      // executeWithSync uses `match` object for delete.
+      const { error: revokeError } = await executeWithSync({
+        table: 'role_permissions',
+        type: 'DELETE',
+        match: { role_id: roleId, permission_id: permissionId }
+      });
 
       if (revokeError) throw revokeError;
 
@@ -243,6 +253,16 @@ const useRoles = () => {
       setError(null);
 
       // Eliminar todos los permisos actuales
+      // This is a bulk delete. executeWithSync currently supports DELETE with match.
+      // But we are doing multiple operations (Delete All + Insert Many).
+      // For proper sync, each should be recorded.
+      // OR we just record them as online-only or try to batch.
+      // Since this is a restricted admin action, maybe we can assume online for safety?
+      // Or we just try to execute.
+      
+      // Let's rely on standard online execution for this complex transaction for now to avoid complexity in sync logic
+      // OR just wrap them.
+      
       const { error: deleteError } = await client
         .from('role_permissions')
         .delete()
@@ -277,6 +297,13 @@ const useRoles = () => {
   useEffect(() => {
     const loadData = async () => {
       await Promise.all([fetchRoles(), fetchPermissions()]);
+      
+      const handleOnline = () => {
+        fetchRoles();
+        fetchPermissions();
+      };
+      window.addEventListener('online', handleOnline);
+      return () => window.removeEventListener('online', handleOnline);
     };
     loadData();
   }, [fetchRoles, fetchPermissions]);
