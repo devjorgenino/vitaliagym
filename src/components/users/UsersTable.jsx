@@ -533,26 +533,29 @@ const openDeleteDialog = (user) => {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle>
-            Usuarios ({filteredUsers.length}
-            {filteredUsers.length !== users.length ? ` de ${users.length}` : ""}
-            )
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
+          <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
+            <User className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
+            <span>
+              Usuarios ({filteredUsers.length}
+              {filteredUsers.length !== users.length ? ` de ${users.length}` : ""})
+            </span>
           </CardTitle>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             <PermissionGate permission={PERMISSIONS.USERS_CREATE} hide>
               <Button
                 onClick={handleOpenCreateDialog}
                 variant="default"
                 size="sm"
+                className="text-xs sm:text-sm"
               >
-                <UserPlus className="h-4 w-4 mr-1" />
-                Nuevo Usuario
+                <UserPlus className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+                <span className="hidden sm:inline">Nuevo Usuario</span>
               </Button>
             </PermissionGate>
-            <Button onClick={refetch} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Actualizar
+            <Button onClick={refetch} variant="outline" size="sm" className="text-xs sm:text-sm" aria-label="Actualizar lista de usuarios">
+              <RefreshCw className="h-3.5 w-3.5 sm:mr-1" aria-hidden="true" />
+              <span className="hidden sm:inline">Actualizar</span>
             </Button>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -561,33 +564,36 @@ const openDeleteDialog = (user) => {
                   variant="outline" 
                   size="sm"
                   disabled={isNormalizingPhones || users.length === 0}
+                  className="text-xs sm:text-sm"
+                  aria-label="Corregir formato de telefonos"
                 >
-                  <PhoneForwarded className={`h-4 w-4 mr-1 ${isNormalizingPhones ? 'animate-pulse' : ''}`} />
-                  {isNormalizingPhones ? 'Corrigiendo...' : 'Corregir Teléfonos'}
+                  <PhoneForwarded className={`h-3.5 w-3.5 sm:mr-1 ${isNormalizingPhones ? 'animate-pulse' : ''}`} aria-hidden="true" />
+                  <span className="hidden md:inline">{isNormalizingPhones ? 'Corrigiendo...' : 'Corregir Tel.'}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Corrige el formato de todos los teléfonos (0414-1234567)</p>
+                <p>Corrige el formato de todos los telefonos (0414-1234567)</p>
               </TooltipContent>
             </Tooltip>
           </div>
         </CardHeader>
         <CardContent>
-          {/* Barra de búsqueda y filtros */}
-          <div className="mb-6 space-y-4">
+          {/* Barra de busqueda y filtros */}
+          <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
             <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" aria-hidden="true" />
               <Input
                 type="text"
-                placeholder="Buscar por email, nombre o teléfono..."
+                placeholder="Buscar por email, nombre o telefono..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 text-sm"
+                aria-label="Buscar usuarios"
               />
             </div>
 
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-sm font-medium text-muted-foreground">
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Filtros:
               </span>
 
@@ -597,7 +603,7 @@ const openDeleteDialog = (user) => {
                   setSelectedRoleFilter(value === "all" ? "" : value)
                 }
               >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[140px] sm:w-[180px] h-8 text-xs sm:text-sm">
                   <SelectValue placeholder="Todos los roles" />
                 </SelectTrigger>
                 <SelectContent>
@@ -615,9 +621,9 @@ const openDeleteDialog = (user) => {
                   variant="ghost"
                   size="sm"
                   onClick={clearFilters}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-xs h-8 text-muted-foreground hover:text-foreground"
                 >
-                  <FilterXIcon className="h-4 w-4 mr-1" />
+                  <FilterXIcon className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                   Limpiar ({activeFiltersCount})
                 </Button>
               )}

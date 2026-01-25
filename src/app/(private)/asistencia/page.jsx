@@ -312,84 +312,84 @@ const Asistencia = () => {
 
   return (
     <>
-      <div className="container mx-auto py-6">
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">Asistencia</h1>
-              <p className="text-muted-foreground">
-                Registro de asistencia y control de acceso al gimnasio
-              </p>
-            </div>
-            <Button
-              onClick={refetch}
-              variant="outline"
-              size="sm"
-              className="gap-2 w-fit"
-              aria-label="Actualizar lista de asistencia"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Actualizar
-            </Button>
+      <div className="space-y-4 sm:space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Asistencia</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Registro de asistencia y control de acceso al gimnasio
+            </p>
           </div>
+          <Button
+            onClick={refetch}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm w-fit"
+            aria-label="Actualizar lista de asistencia"
+          >
+            <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true" />
+            <span className="hidden xs:inline">Actualizar</span>
+          </Button>
+        </div>
 
-          {/* Verificación de cliente */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" aria-hidden="true" />
-                Verificar Cliente
-              </CardTitle>
-              <CardDescription>
-                Ingresa la cédula o nombre del cliente para verificar su
-                membresía y registrar asistencia
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="client-search" className="sr-only">
-                    Cédula o nombre del cliente
-                  </Label>
-                  <Input
-                    id="client-search"
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Ingrese cédula o nombre del cliente"
-                    aria-describedby="search-hint"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleCheckCedula();
-                      }
-                    }}
-                  />
-                  <p id="search-hint" className="text-xs text-muted-foreground">
-                    Presiona Enter o haz clic en Verificar para buscar
-                  </p>
-                </div>
-                <Button
-                  onClick={handleCheckCedula}
-                  disabled={checking || !searchTerm.trim()}
-                  className="gap-2 sm:self-start"
-                >
-                  {checking ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Verificando...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4" />
-                      Verificar
-                    </>
-                  )}
-                </Button>
+        {/* Verificacion de cliente */}
+        <Card>
+          <CardHeader className="pb-3 sm:pb-4">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Search className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
+              <span>Verificar Cliente</span>
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Ingresa la cedula o nombre del cliente para verificar su
+              membresia y registrar asistencia
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="client-search" className="sr-only">
+                  Cedula o nombre del cliente
+                </Label>
+                <Input
+                  id="client-search"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Ingrese cedula o nombre del cliente"
+                  aria-describedby="search-hint"
+                  className="text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleCheckCedula();
+                    }
+                  }}
+                />
+                <p id="search-hint" className="text-[10px] sm:text-xs text-muted-foreground">
+                  Presiona Enter o haz clic en Verificar para buscar
+                </p>
               </div>
+              <Button
+                onClick={handleCheckCedula}
+                disabled={checking || !searchTerm.trim()}
+                className="gap-2 sm:self-start text-sm"
+              >
+                {checking ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="hidden xs:inline">Verificando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4" />
+                    Verificar
+                  </>
+                )}
+              </Button>
+            </div>
 
-              {/* Resultado de verificación */}
-              {clientStatus && (
+            {/* Resultado de verificacion */}
+            {clientStatus && (
                 <div
                   className="mt-4"
                   role="region"
@@ -748,9 +748,8 @@ const Asistencia = () => {
             </CardContent>
           </Card>
         </div>
-      </div>
 
-      {/* Diálogo de confirmación para eliminar */}
+      {/* Dialogo de confirmacion para eliminar */}
       <ConfirmDialog
         open={deleteDialog.open}
         onOpenChange={(open) =>
@@ -759,7 +758,7 @@ const Asistencia = () => {
         title="Eliminar Registro de Asistencia"
         description={
           deleteDialog.record
-            ? `¿Estás seguro de que deseas eliminar el registro de asistencia de ${deleteDialog.record.clients?.first_name} ${deleteDialog.record.clients?.last_name} del ${formatDate(deleteDialog.record.date)}? Esta acción no se puede deshacer.`
+            ? `Estas seguro de que deseas eliminar el registro de asistencia de ${deleteDialog.record.clients?.first_name} ${deleteDialog.record.clients?.last_name} del ${formatDate(deleteDialog.record.date)}? Esta accion no se puede deshacer.`
             : ""
         }
         confirmText="Eliminar"

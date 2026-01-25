@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Loader2, IdCard, Phone, Settings2, CalendarClock, Users } from "lucide-react";
+import { Loader2, IdCard, Phone, Settings2, CalendarClock, Users, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -485,28 +485,32 @@ export function ClientsTable() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle>
-          Clientes ({filteredClients.length}
-          {filteredClients.length !== clients.length
-            ? ` de ${clients.length}`
-            : ""}
-          )
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
+        <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
+          <Users className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
+          <span>
+            Clientes ({filteredClients.length}
+            {filteredClients.length !== clients.length
+              ? ` de ${clients.length}`
+              : ""})
+          </span>
         </CardTitle>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleOpenCreateDialog}
             variant="default"
             size="sm"
+            className="text-xs sm:text-sm"
           >
             + Nuevo Cliente
           </Button>
-          <Button onClick={refetch} variant="outline" size="sm">
-            Actualizar
+          <Button onClick={refetch} variant="outline" size="sm" className="text-xs sm:text-sm" aria-label="Actualizar lista de clientes">
+            <RefreshCw className="h-3.5 w-3.5 sm:mr-1.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Actualizar</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Menu de mantenimiento">
                 <Settings2 className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -514,13 +518,13 @@ export function ClientsTable() {
               <DropdownMenuLabel>Mantenimiento</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={async () => {
-                toast.loading("Corrigiendo teléfonos...");
+                toast.loading("Corrigiendo telefonos...");
                 const res = await fixAllPhones();
                 toast.dismiss();
-                if(res.success) toast.success(`Teléfonos corregidos: ${res.updated}`);
-                else toast.error("Error al corregir teléfonos");
+                if(res.success) toast.success(`Telefonos corregidos: ${res.updated}`);
+                else toast.error("Error al corregir telefonos");
               }}>
-                <Phone className="mr-2 h-4 w-4" /> Corregir Teléfonos
+                <Phone className="mr-2 h-4 w-4" /> Corregir Telefonos
               </DropdownMenuItem>
               <DropdownMenuItem onClick={async () => {
                  toast.loading("Recalculando fechas...");
@@ -536,23 +540,24 @@ export function ClientsTable() {
         </div>
       </CardHeader>
       <CardContent>
-        {/* Barra de búsqueda y filtros */}
-        <div className="mb-6 space-y-4">
-          {/* Barra de búsqueda */}
+        {/* Barra de busqueda y filtros */}
+        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+          {/* Barra de busqueda */}
           <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" aria-hidden="true" />
             <Input
               type="text"
-              placeholder="Buscar por nombre o cédula..."
+              placeholder="Buscar por nombre o cedula..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 text-sm"
+              aria-label="Buscar clientes"
             />
           </div>
 
           {/* Filtros */}
           <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-sm font-medium text-muted-foreground">
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground">
               Filtros:
             </span>
 
@@ -563,7 +568,7 @@ export function ClientsTable() {
                 setSelectedPlan(value === "all" ? "" : value)
               }
             >
-              <SelectTrigger className="w-[180px] h-8 text-sm">
+              <SelectTrigger className="w-[140px] sm:w-[180px] h-8 text-xs sm:text-sm">
                 <SelectValue placeholder="Todos los planes" />
               </SelectTrigger>
               <SelectContent>
@@ -580,24 +585,27 @@ export function ClientsTable() {
             <Button
               variant={paymentFilter === "5days" ? "default" : "outline"}
               size="sm"
+              className="text-xs h-8"
               onClick={() =>
                 setPaymentFilter(paymentFilter === "5days" ? "" : "5days")
               }
             >
-              ≤ 5 días
+              5d
             </Button>
             <Button
               variant={paymentFilter === "10days" ? "default" : "outline"}
               size="sm"
+              className="text-xs h-8"
               onClick={() =>
                 setPaymentFilter(paymentFilter === "10days" ? "" : "10days")
               }
             >
-              ≤ 10 días
+              10d
             </Button>
             <Button
               variant={paymentFilter === "overdue" ? "destructive" : "outline"}
               size="sm"
+              className="text-xs h-8"
               onClick={() =>
                 setPaymentFilter(paymentFilter === "overdue" ? "" : "overdue")
               }
@@ -605,15 +613,15 @@ export function ClientsTable() {
               Vencidos
             </Button>
 
-            {/* Botón para limpiar filtros */}
+            {/* Boton para limpiar filtros */}
             {activeFiltersCount > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={clearFilters}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-xs h-8 text-muted-foreground hover:text-foreground"
               >
-                <FilterXIcon className="h-4 w-4 mr-1" />
+                <FilterXIcon className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                 Limpiar ({activeFiltersCount})
               </Button>
             )}
@@ -621,7 +629,7 @@ export function ClientsTable() {
 
           {/* Indicador de resultados */}
           {filteredClients.length !== clients.length && (
-            <div className="text-sm text-muted-foreground">
+            <div className="text-xs sm:text-sm text-muted-foreground">
               Mostrando {filteredClients.length} de {clients.length} clientes
             </div>
           )}

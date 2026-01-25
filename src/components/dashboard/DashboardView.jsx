@@ -13,18 +13,19 @@ export function DashboardView() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <Skeleton key="1" className="h-12 w-full" />
+      <div className="space-y-4 sm:space-y-6" role="status" aria-label="Cargando dashboard">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <Skeleton className="h-10 sm:h-12 flex-1" />
+          <Skeleton className="h-10 sm:h-12 w-full sm:w-32" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
           {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <Skeleton key={i} className="h-24 sm:h-28 md:h-32 w-full" />
           ))}
         </div>
-        <div className="space-y-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {[...Array(2)].map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
+            <Skeleton key={i} className="h-48 sm:h-64 w-full" />
           ))}
         </div>
       </div>
@@ -54,41 +55,42 @@ export function DashboardView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Vista general del gimnasio</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">Dashboard</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Vista general del gimnasio</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <ExchangeRateCard compact={true} />
           <Button
             onClick={refetch}
             variant="outline"
             size="sm"
-            className="gap-2"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm"
+            aria-label="Actualizar datos del dashboard"
           >
-            <RefreshCw className="h-4 w-4" />
-            Actualizar
+            <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true" />
+            <span className="hidden xs:inline">Actualizar</span>
           </Button>
         </div>
       </div>
 
-      {/* Métricas Principales */}
+      {/* Metricas Principales - Grid responsive */}
       <StatsGrid>
         <StatCard
           title="Clientes por Vencer"
           value={metrics.expiringSoon?.length || 0}
-          subtitle="Próximos 5 días"
+          subtitle="Proximos 5 dias"
           icon={Clock}
           color="amber"
         />
 
         <StatCard
-          title="Cumpleaños Próximos"
+          title="Cumpleanos Proximos"
           value={metrics.upcomingBirthdays?.length || 0}
-          subtitle="Próximos 7 días"
+          subtitle="Proximos 7 dias"
           icon={Cake}
           color="purple"
         />
@@ -104,7 +106,7 @@ export function DashboardView() {
         <StatCard
           title="Asistencia Semanal"
           value={metrics.weeklyAttendance || 0}
-          subtitle={`${metrics.weeklyUniqueClients || 0} clientes únicos (${(
+          subtitle={`${metrics.weeklyUniqueClients || 0} clientes unicos (${(
             metrics.weeklyPercentage || 0
           ).toFixed(1)}%)`}
           icon={Activity}
@@ -112,19 +114,19 @@ export function DashboardView() {
         />
       </StatsGrid>
 
-      {/* Gráficos y Listas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Clientes próximos a vencer */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-600" />
-              Clientes Próximos a Vencer
+      {/* Graficos y Listas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Clientes proximos a vencer */}
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3 sm:pb-4">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0" aria-hidden="true" />
+              <span className="truncate">Clientes Proximos a Vencer</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {metrics.expiringSoon?.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3 max-h-[300px] sm:max-h-[400px] overflow-y-auto scrollbar-thin">
                 {metrics.expiringSoon.map((client, index) => {
                   // Parsear la fecha correctamente evitando problemas de zona horaria
                   const paymentDateParts = client.next_payment_date.split("-");
@@ -144,23 +146,23 @@ export function DashboardView() {
                   return (
                     <div
                       key={client.id}
-                      className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800"
+                      className="flex items-center justify-between p-2.5 sm:p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 gap-2"
                     >
-                      <div>
-                        <p className="font-medium">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm sm:text-base truncate">
                           {client.first_name} {client.last_name}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate">
                           {client.plans?.name || "Sin plan"}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
                           {daysUntil <= 0
-                            ? `${Math.abs(daysUntil)} días vencido`
-                            : `${daysUntil} días`}
+                            ? `${Math.abs(daysUntil)} dias vencido`
+                            : `${daysUntil} dias`}
                         </span>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">
                           {paymentDate.toLocaleDateString("es-ES")}
                         </p>
                       </div>
@@ -172,23 +174,23 @@ export function DashboardView() {
               <EmptyState
                 icon={Clock}
                 title="Sin clientes por vencer"
-                description="No hay clientes con pagos próximos a vencer en los próximos 5 días"
+                description="No hay clientes con pagos proximos a vencer en los proximos 5 dias"
               />
             )}
           </CardContent>
         </Card>
 
-        {/* Próximos cumpleaños */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Cake className="h-5 w-5 text-purple-600" />
-              Cumpleaños del Mes
+        {/* Proximos cumpleanos */}
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3 sm:pb-4">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Cake className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" aria-hidden="true" />
+              <span className="truncate">Cumpleanos del Mes</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {metrics.upcomingBirthdays?.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3 max-h-[300px] sm:max-h-[400px] overflow-y-auto scrollbar-thin">
                 {metrics.upcomingBirthdays.map((client, index) => {
                   const birthDate = new Date(client.birth_date);
                   const today = new Date();
@@ -207,24 +209,24 @@ export function DashboardView() {
                   return (
                     <div
                       key={client.id}
-                      className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800"
+                      className="flex items-center justify-between p-2.5 sm:p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800 gap-2"
                     >
-                      <div>
-                        <p className="font-medium">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm sm:text-base truncate">
                           {client.first_name} {client.last_name}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                           {birthDate.toLocaleDateString("es-ES", {
                             month: "long",
                             day: "numeric",
                           })}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
-                          {daysUntil === 0 ? "Hoy!" : `En ${daysUntil} días`}
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-xs sm:text-sm font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap">
+                          {daysUntil === 0 ? "Hoy!" : `En ${daysUntil} dias`}
                         </span>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">
                           {nextBirthday.toLocaleDateString("es-ES")}
                         </p>
                       </div>
@@ -235,8 +237,8 @@ export function DashboardView() {
             ) : (
               <EmptyState
                 icon={Cake}
-                title="Sin cumpleaños próximos"
-                description="No hay clientes con cumpleaños en los próximos 7 días"
+                title="Sin cumpleanos proximos"
+                description="No hay clientes con cumpleanos en los proximos 7 dias"
               />
             )}
           </CardContent>

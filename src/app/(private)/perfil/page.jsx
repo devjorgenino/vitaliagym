@@ -237,27 +237,27 @@ const Perfil = () => {
 
   if (!user) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
         <div className="max-w-2xl mx-auto">
           <Card>
-            <CardHeader>
-              <CardTitle>Mi Perfil</CardTitle>
-              <CardDescription>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Mi Perfil</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 Cargando información del usuario...
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6 pt-0">
               <div
                 className="space-y-4"
                 role="status"
                 aria-label="Cargando perfil"
               >
                 <div className="flex justify-center">
-                  <Skeleton className="h-24 w-24 rounded-full" />
+                  <Skeleton className="h-20 w-20 sm:h-24 sm:w-24 rounded-full" />
                 </div>
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-10 sm:h-12 w-full" />
+                <Skeleton className="h-10 sm:h-12 w-full" />
+                <Skeleton className="h-10 sm:h-12 w-full" />
               </div>
             </CardContent>
           </Card>
@@ -267,25 +267,25 @@ const Perfil = () => {
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold">Mi Perfil</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Mi Perfil</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Gestiona tu información personal y preferencias de cuenta
           </p>
         </div>
 
         {/* Card principal */}
         <Card>
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" aria-hidden="true" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <User className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
                 Información Personal
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs sm:text-sm">
                 {isEditing
                   ? "Modifica tus datos y guarda los cambios"
                   : "Haz clic en Editar para modificar tu información"}
@@ -295,10 +295,12 @@ const Perfil = () => {
               <Button
                 onClick={() => setIsEditing(true)}
                 variant="outline"
-                className="gap-2 w-fit"
+                className="gap-2 w-fit text-xs sm:text-sm"
+                size="sm"
               >
                 <Edit3 className="h-4 w-4" />
-                Editar Perfil
+                <span className="hidden sm:inline">Editar Perfil</span>
+                <span className="sm:hidden">Editar</span>
               </Button>
             ) : (
               <div className="flex gap-2">
@@ -306,38 +308,38 @@ const Perfil = () => {
                   onClick={handleCancel}
                   variant="outline"
                   size="sm"
-                  className="gap-2"
+                  className="gap-1 sm:gap-2 text-xs sm:text-sm"
                 >
                   <X className="h-4 w-4" />
-                  Cancelar
+                  <span className="hidden sm:inline">Cancelar</span>
                 </Button>
                 <Button
                   onClick={handleSave}
                   disabled={loading}
                   size="sm"
-                  className="gap-2"
+                  className="gap-1 sm:gap-2 text-xs sm:text-sm"
                 >
                   {loading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Guardando...
+                      <span className="hidden sm:inline">Guardando...</span>
                     </>
                   ) : (
                     <>
                       <Save className="h-4 w-4" />
-                      Guardar
+                      <span className="hidden sm:inline">Guardar</span>
                     </>
                   )}
                 </Button>
               </div>
             )}
           </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
+          <CardContent className="p-4 sm:p-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Avatar */}
               <div className="flex flex-col items-center">
                 <div className="relative">
-                  <Avatar className="w-24 h-24">
+                  <Avatar className="w-20 h-20 sm:w-24 sm:h-24">
                     <AvatarImage
                       src={
                         avatarPreview ||
@@ -418,32 +420,32 @@ const Perfil = () => {
               </div>
 
               {/* Información de solo lectura */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4" aria-hidden="true" />
+                  <Label className="flex items-center gap-2 text-muted-foreground text-xs sm:text-sm">
+                    <Mail className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
                     Email
                   </Label>
-                  <div className="px-3 py-2 bg-muted/50 border rounded-md text-sm">
+                  <div className="px-3 py-2 bg-muted/50 border rounded-md text-xs sm:text-sm break-all">
                     {user?.email || "N/A"}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">ID de Usuario</Label>
-                  <div className="px-3 py-2 bg-muted/50 border rounded-md font-mono text-xs">
+                  <Label className="text-muted-foreground text-xs sm:text-sm">ID de Usuario</Label>
+                  <div className="px-3 py-2 bg-muted/50 border rounded-md font-mono text-xs break-all">
                     {user?.id?.slice(0, 8) || "N/A"}...
                   </div>
                 </div>
               </div>
 
               {/* Información editable */}
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <div className="space-y-2">
                   <Label
                     htmlFor="full_name"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 text-xs sm:text-sm"
                   >
-                    <User className="h-4 w-4" aria-hidden="true" />
+                    <User className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
                     Nombre Completo
                     {isEditing && <span className="text-destructive">*</span>}
                   </Label>
@@ -457,9 +459,10 @@ const Perfil = () => {
                       placeholder="Ingresa tu nombre completo"
                       disabled={loading}
                       aria-required="true"
+                      className="text-sm"
                     />
                   ) : (
-                    <div className="px-3 py-2 bg-muted/30 border rounded-md">
+                    <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
                       {formData.full_name || (
                         <span className="text-muted-foreground italic">
                           No especificado
@@ -470,8 +473,8 @@ const Perfil = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone" className="flex items-center gap-2">
-                    <Phone className="h-4 w-4" aria-hidden="true" />
+                  <Label htmlFor="phone" className="flex items-center gap-2 text-xs sm:text-sm">
+                    <Phone className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
                     Teléfono
                   </Label>
                   {isEditing ? (
@@ -487,7 +490,7 @@ const Perfil = () => {
                         disabled={loading}
                       >
                         <SelectTrigger
-                          className="w-[90px] flex-shrink-0"
+                          className="w-[80px] sm:w-[90px] flex-shrink-0 text-xs sm:text-sm"
                           aria-label="Operador telefónico"
                         >
                           <SelectValue />
@@ -509,11 +512,11 @@ const Perfil = () => {
                         placeholder="1234567"
                         maxLength={7}
                         disabled={loading}
-                        className="flex-1"
+                        className="flex-1 text-sm"
                       />
                     </div>
                   ) : (
-                    <div className="px-3 py-2 bg-muted/30 border rounded-md">
+                    <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
                       {formData.phone ? (
                         <span>
                           {formData.phone_operator}-{formData.phone}
@@ -528,8 +531,8 @@ const Perfil = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="role" className="flex items-center gap-2">
-                    <Shield className="h-4 w-4" aria-hidden="true" />
+                  <Label htmlFor="role" className="flex items-center gap-2 text-xs sm:text-sm">
+                    <Shield className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
                     Rol
                   </Label>
                   {isEditing ? (
@@ -567,31 +570,31 @@ const Perfil = () => {
 
         {/* Información de sesión */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" aria-hidden="true" />
+          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-4">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
               Información de Sesión
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               Detalles sobre tu cuenta y actividad
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Último Ingreso</Label>
-                <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
+                <Label className="text-muted-foreground text-xs sm:text-sm">Último Ingreso</Label>
+                <div className="px-3 py-2 bg-muted/30 border rounded-md text-xs sm:text-sm">
                   {formatDateTime(user?.last_sign_in_at)}
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">
+                <Label className="text-muted-foreground text-xs sm:text-sm">
                   Email Verificado
                 </Label>
                 <div className="px-3 py-2 bg-muted/30 border rounded-md">
                   <Badge
                     variant={user?.email_confirmed_at ? "default" : "secondary"}
-                    className="gap-1"
+                    className="gap-1 text-xs"
                   >
                     {user?.email_confirmed_at ? (
                       <>
@@ -607,12 +610,12 @@ const Perfil = () => {
                   </Badge>
                 </div>
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label className="flex items-center gap-2 text-muted-foreground">
-                  <Calendar className="h-4 w-4" aria-hidden="true" />
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="flex items-center gap-2 text-muted-foreground text-xs sm:text-sm">
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
                   Miembro desde
                 </Label>
-                <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
+                <div className="px-3 py-2 bg-muted/30 border rounded-md text-xs sm:text-sm">
                   {formatDate(user?.created_at)}
                 </div>
               </div>

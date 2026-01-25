@@ -68,7 +68,7 @@ const DialogContent = React.forwardRef(
       const el = contentRef.current;
       if (!el) return;
 
-      // Animación snappy de entrada
+      // Animacion snappy de entrada
       gsap.fromTo(
         el,
         {
@@ -90,13 +90,21 @@ const DialogContent = React.forwardRef(
         <DialogPrimitive.Content
           ref={combinedRef}
           className={cn(
-            // Positioning
-            "fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%]",
+            // Positioning - full screen en movil, centrado en desktop
+            "fixed z-50",
+            "inset-0 sm:inset-auto",
+            "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]",
             // Layout
-            "grid w-full max-w-lg gap-4",
+            "flex flex-col sm:grid w-full sm:max-w-lg gap-3 sm:gap-4",
             // Appearance
-            "border bg-background p-6 shadow-xl sm:rounded-lg",
-            // Animación de salida CSS ultra rápida
+            "border-0 sm:border bg-background shadow-xl",
+            "rounded-none sm:rounded-lg",
+            // Padding responsive
+            "p-4 sm:p-6",
+            // Max height y scroll
+            "max-h-screen sm:max-h-[90vh]",
+            "overflow-y-auto",
+            // Animacion de salida CSS ultra rapida
             "data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0",
             "data-[state=closed]:zoom-out-[0.98]",
@@ -112,17 +120,21 @@ const DialogContent = React.forwardRef(
           {children}
           <DialogPrimitive.Close
             className={cn(
-              "absolute right-3 top-3",
-              "rounded-sm p-1",
+              "absolute right-3 top-3 sm:right-4 sm:top-4",
+              "rounded-sm p-1.5 sm:p-1",
               "text-muted-foreground/60",
               "transition-colors duration-75",
               "hover:text-foreground hover:bg-accent",
               "focus:outline-none focus:ring-2 focus:ring-ring",
               "active:scale-95",
-              "disabled:pointer-events-none"
+              "disabled:pointer-events-none",
+              // Touch target mas grande en movil
+              "min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0",
+              "flex items-center justify-center"
             )}
+            aria-label="Cerrar dialogo"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5 sm:h-4 sm:w-4" />
             <span className="sr-only">Cerrar</span>
           </DialogPrimitive.Close>
         </DialogPrimitive.Content>

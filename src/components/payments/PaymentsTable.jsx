@@ -10,7 +10,7 @@ import {
   parsePhone,
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2, Building2, Phone, CreditCard } from "lucide-react";
+import { Loader2, Building2, Phone, CreditCard, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -949,51 +949,62 @@ export function PaymentsTable({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle>
-          Pagos ({displayPayments.length}
-          {activeFiltersCount > 0 ? ` de ${payments.length}` : ""})
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+          <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
+          <span>
+            Pagos ({displayPayments.length}
+            {activeFiltersCount > 0 ? ` de ${payments.length}` : ""})
+          </span>
         </CardTitle>
-        <div className="flex space-x-2">
+        <div className="flex gap-2">
           <Button
             onClick={handleOpenCreateDialog}
             variant="default"
             size="sm"
+            className="text-xs sm:text-sm"
           >
-            + Nuevo Pago
+            <DollarSignIcon className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Nuevo Pago</span>
           </Button>
           <Button
             onClick={refetch}
             variant="outline"
             size="sm"
             disabled={loading}
+            className="text-xs sm:text-sm"
+            aria-label="Actualizar lista de pagos"
           >
             {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              "Actualizar"
+              <>
+                <RefreshCw className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Actualizar</span>
+              </>
             )}
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         {/* Barra de búsqueda y filtros */}
-        <div className="mb-6 space-y-4">
+        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
           {/* Barra de búsqueda */}
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               type="text"
-              placeholder="Buscar por nombre del cliente o cédula..."
+              placeholder="Buscar por nombre o cédula..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 text-sm"
+              aria-label="Buscar por nombre del cliente o cédula"
             />
           </div>
 
           {/* Filtros */}
           <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-sm font-medium text-muted-foreground">
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground">
               Filtros:
             </span>
 
@@ -1001,7 +1012,8 @@ export function PaymentsTable({
             <select
               value={selectedPlan}
               onChange={(e) => setSelectedPlan(e.target.value)}
-              className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-2 sm:px-3 py-1 border rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Filtrar por plan"
             >
               <option value="">Todos los planes</option>
               {plans.map((plan) => (
@@ -1019,7 +1031,7 @@ export function PaymentsTable({
               }
             >
               <SelectTrigger
-                className="w-[160px]"
+                className="w-[130px] sm:w-[160px] text-xs sm:text-sm"
                 aria-label="Filtrar por tipo de pago"
               >
                 <SelectValue placeholder="Todos los tipos" />
@@ -1043,10 +1055,10 @@ export function PaymentsTable({
                   setSelectedBank(value === "all" ? "" : value)
                 }
               >
-                <SelectTrigger
-                  className="w-[200px]"
-                  aria-label="Filtrar por banco"
-                >
+              <SelectTrigger
+                className="w-[140px] sm:w-[200px] text-xs sm:text-sm"
+                aria-label="Filtrar por banco"
+              >
                   <SelectValue placeholder="Todos los bancos" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1065,21 +1077,23 @@ export function PaymentsTable({
 
             {/* Filtros de fecha */}
             <div className="flex gap-2 items-center">
-              <span className="text-sm">Desde:</span>
+              <span className="text-xs sm:text-sm">Desde:</span>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-1.5 sm:px-2 py-1 border rounded text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Fecha desde"
               />
             </div>
             <div className="flex gap-2 items-center">
-              <span className="text-sm">Hasta:</span>
+              <span className="text-xs sm:text-sm">Hasta:</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-1.5 sm:px-2 py-1 border rounded text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Fecha hasta"
               />
             </div>
 
@@ -1089,10 +1103,11 @@ export function PaymentsTable({
                 variant="ghost"
                 size="sm"
                 onClick={clearFilters}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground text-xs sm:text-sm"
               >
-                <FilterXIcon className="h-4 w-4 mr-1" />
-                Limpiar ({activeFiltersCount})
+                <FilterXIcon className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Limpiar ({activeFiltersCount})</span>
+                <span className="sm:hidden">({activeFiltersCount})</span>
               </Button>
             )}
           </div>
