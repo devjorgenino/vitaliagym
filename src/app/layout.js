@@ -1,7 +1,6 @@
 import { AuthProvider } from "@/components/context/AuthProvider.js";
 import { PermissionsProvider } from "@/components/context/PermissionsProvider.js";
 import { OfflineSyncManager } from "@/components/OfflineSyncManager.jsx";
-import { InstallPWA } from "@/components/ui/install-pwa.jsx";
 import { Toaster } from "sonner";
 import { Poppins } from "next/font/google";
 import "./globals.css";
@@ -38,7 +37,6 @@ export default function RootLayout({ children }) {
           <PermissionsProvider>
             {children}
             <OfflineSyncManager />
-            <InstallPWA />
           </PermissionsProvider>
         </AuthProvider>
         <Toaster />

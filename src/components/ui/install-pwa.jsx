@@ -54,24 +54,24 @@ export function InstallPWA() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-4">
-      <div className="flex items-center bg-zinc-900 text-white rounded-full shadow-xl overflow-hidden dark:bg-zinc-100 dark:text-zinc-950 border border-white/10 dark:border-black/5">
+      <div className="flex items-center bg-background text-foreground rounded-full shadow-xl overflow-hidden border border-input">
         <button 
           onClick={handleInstallClick} 
-          className="flex items-center gap-2 px-5 py-3 font-semibold hover:bg-white/10 dark:hover:bg-black/5 transition-colors active:scale-95 duration-200"
+          className="flex items-center gap-2 px-5 py-3 font-semibold hover:bg-accent transition-colors active:scale-95 duration-200"
         >
           <Download className="h-4 w-4" />
           <span>Instalar App</span>
         </button>
-        <div className="w-px h-5 bg-white/20 dark:bg-black/10"></div>
+        <div className="w-px h-5 bg-border"></div>
         <button
           onClick={(e) => {
             e.stopPropagation();
             setIsDismissed(true);
           }}
-          className="pr-4 pl-3 py-3 hover:bg-white/20 dark:hover:bg-black/10 transition-colors flex items-center justify-center text-white/90 dark:text-zinc-900/90 group"
+          className="pr-4 pl-3 py-3 hover:bg-accent transition-colors flex items-center justify-center group"
           aria-label="Cerrar sugerencia de instalación"
         >
-          <X className="h-4 w-4 group-hover:scale-110 transition-transform" />
+          <X className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:scale-110 transition-all" />
         </button>
       </div>
     </div>

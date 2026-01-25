@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
+import gsap from "gsap"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -12,31 +13,100 @@ const AlertDialogTrigger = AlertDialogPrimitive.Trigger
 
 const AlertDialogPortal = AlertDialogPrimitive.Portal
 
-const AlertDialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Overlay
-    className={cn(
-      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      className
-    )}
-    {...props}
-    ref={ref}
-  />
-))
-AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
+// Hook para combinar refs
+function useCombinedRefs(...refs) {
+  return React.useCallback((element) => {
+    refs.forEach((ref) => {
+      if (!ref) return
+      if (typeof ref === "function") {
+        ref(element)
+      } else {
+        ref.current = element
+      }
+    })
+  }, refs)
+}
 
-const AlertDialogContent = React.forwardRef(({ className, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-    <AlertDialogPrimitive.Content
-      ref={ref}
+const AlertDialogOverlay = React.forwardRef(({ className, ...props }, ref) => {
+  const overlayRef = React.useRef(null)
+  const combinedRef = useCombinedRefs(ref, overlayRef)
+
+  React.useEffect(() => {
+    const el = overlayRef.current
+    if (!el) return
+
+    gsap.fromTo(
+      el,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.08, ease: "power1.out" }
+    )
+  }, [])
+
+  return (
+    <AlertDialogPrimitive.Overlay
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm",
+        "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-75",
         className
       )}
       {...props}
+      ref={combinedRef}
     />
-  </AlertDialogPortal>
-))
+  )
+})
+AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
+
+const AlertDialogContent = React.forwardRef(({ className, ...props }, ref) => {
+  const contentRef = React.useRef(null)
+  const combinedRef = useCombinedRefs(ref, contentRef)
+
+  React.useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+
+    gsap.fromTo(
+      el,
+      {
+        opacity: 0,
+        scale: 0.96,
+      },
+      {
+        opacity: 1,
+        scale: 1,
+        duration: 0.1,
+        ease: "power2.out",
+      }
+    )
+  }, [])
+
+  return (
+    <AlertDialogPortal>
+      <AlertDialogOverlay />
+      <AlertDialogPrimitive.Content
+        ref={combinedRef}
+        className={cn(
+          // Positioning
+          "fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%]",
+          // Layout
+          "grid w-full max-w-lg gap-4",
+          // Appearance
+          "border bg-background p-6 shadow-xl sm:rounded-lg",
+          // Animación de salida CSS ultra rápida
+          "data-[state=closed]:animate-out",
+          "data-[state=closed]:fade-out-0",
+          "data-[state=closed]:zoom-out-[0.98]",
+          "data-[state=closed]:duration-75",
+          // Focus
+          "focus:outline-none",
+          // Reduced motion
+          "motion-reduce:transform-none",
+          className
+        )}
+        {...props}
+      />
+    </AlertDialogPortal>
+  )
+})
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName
 
 const AlertDialogHeader = ({
@@ -59,7 +129,7 @@ const AlertDialogFooter = ({
 }) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-2",
       className
     )}
     {...props}
@@ -100,7 +170,6 @@ const AlertDialogCancel = React.forwardRef(({ className, ...props }, ref) => (
     ref={ref}
     className={cn(
       buttonVariants({ variant: "outline" }),
-      "mt-2 sm:mt-0",
       className
     )}
     {...props}

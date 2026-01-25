@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { items as sidebarItems, configItems } from "@/lib/sidebarData";
-import { User, Settings, BrickWall } from "lucide-react";
+import { User, Settings, ShieldUser } from "lucide-react";
 
 const PrivatePagesLayout = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
@@ -44,10 +44,7 @@ const PrivatePagesLayout = ({ children }) => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      console.log("No user found, redirecting to login");
       router.push("/");
-    } else if (!authLoading && user) {
-      console.log("User authenticated:", user.email);
     }
   }, [authLoading, user, router]);
 
@@ -56,12 +53,12 @@ const PrivatePagesLayout = ({ children }) => {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full">
-        <Skeleton className="h-full w-72" />
-        <div className="flex flex-col flex-1 gap-4">
-          <Skeleton className="h-14 w-full" />
-          <div className="container mx-auto py-6 space-y-4">
-            <Skeleton className="h-10 w-64" />
+      <div className="flex h-screen w-full" role="status" aria-label="Cargando aplicación">
+        <Skeleton className="h-full w-64 hidden md:block" />
+        <div className="flex flex-col flex-1 gap-4 p-4">
+          <Skeleton className="h-12 w-full" />
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-48" />
             <Skeleton className="h-[400px] w-full" />
           </div>
         </div>
@@ -74,7 +71,7 @@ const PrivatePagesLayout = ({ children }) => {
     if (pathname.startsWith("/perfil")) {
       return { title: "Perfil", icon: User };
     } else if (pathname.startsWith("/configuracion/roles")) {
-      return { title: "Gestión de Roles", icon: BrickWall };
+      return { title: "Gestión de Roles", icon: ShieldUser };
     } else {
       const currentPage = allItems.find(
         (item) => pathname === item.url || pathname.startsWith(item.url + "/")
@@ -116,60 +113,104 @@ const PrivatePagesLayout = ({ children }) => {
   const breadcrumbs = getBreadcrumbs();
 
   return (
-    <div>
+    <div className="min-h-screen">
+      {/* Skip link for accessibility */}
+      <a 
+        href="#main-content" 
+        className="skip-link"
+      >
+        Saltar al contenido principal
+      </a>
+      
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center gap-2 px-4">
+          <header 
+            className="flex h-14 sm:h-16 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40 transition-[height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
+            role="banner"
+          >
+            <div className="flex items-center gap-2 px-3 sm:px-4">
               {/* Trigger visible solo en móvil */}
-              <SidebarTrigger className="-ml-1 md:hidden" />
+              <SidebarTrigger 
+                className="-ml-1 md:hidden touch-target" 
+                aria-label="Abrir menú de navegación"
+              />
               <Separator
                 orientation="vertical"
                 className="mr-2 data-[orientation=vertical]:h-4 md:hidden"
               />
               <Breadcrumb>
-                <BreadcrumbList>
+                <BreadcrumbList className="flex-wrap">
                   {showDashboardLink && (
                     <>
-                      <BreadcrumbItem>
+                      <BreadcrumbItem className="hidden sm:flex">
                         <BreadcrumbLink asChild>
-                          <Link href="/dashboard" className="flex items-center gap-1.5">
-                            {DashboardIcon && <DashboardIcon className="size-4" aria-hidden="true" />}
+                          <Link 
+                            href="/dashboard" 
+                            className="flex items-center gap-1.5 text-xs sm:text-sm"
+                          >
+                            {DashboardIcon && (
+                              <DashboardIcon 
+                                className="size-3.5 sm:size-4" 
+                                aria-hidden="true" 
+                              />
+                            )}
                             <span>Dashboard</span>
                           </Link>
                         </BreadcrumbLink>
                       </BreadcrumbItem>
-                      <BreadcrumbSeparator />
+                      <BreadcrumbSeparator className="hidden sm:flex" />
                     </>
                   )}
                   {breadcrumbs.map((crumb, index) => {
                     const CrumbIcon = crumb.icon;
                     return (
                       <React.Fragment key={index}>
-                        <BreadcrumbItem>
+                        <BreadcrumbItem className="hidden sm:flex">
                           {crumb.href ? (
                             <BreadcrumbLink asChild>
-                              <Link href={crumb.href} className="flex items-center gap-1.5">
-                                {CrumbIcon && <CrumbIcon className="size-4" aria-hidden="true" />}
+                              <Link 
+                                href={crumb.href} 
+                                className="flex items-center gap-1.5 text-xs sm:text-sm"
+                              >
+                                {CrumbIcon && (
+                                  <CrumbIcon 
+                                    className="size-3.5 sm:size-4" 
+                                    aria-hidden="true" 
+                                  />
+                                )}
                                 <span>{crumb.label}</span>
                               </Link>
                             </BreadcrumbLink>
                           ) : (
-                            <span className="text-muted-foreground flex items-center gap-1.5">
-                              {CrumbIcon && <CrumbIcon className="size-4" aria-hidden="true" />}
+                            <span className="text-muted-foreground flex items-center gap-1.5 text-xs sm:text-sm">
+                              {CrumbIcon && (
+                                <CrumbIcon 
+                                  className="size-3.5 sm:size-4" 
+                                  aria-hidden="true" 
+                                />
+                              )}
                               <span>{crumb.label}</span>
                             </span>
                           )}
                         </BreadcrumbItem>
-                        {index < breadcrumbs.length - 1 && <BreadcrumbSeparator />}
+                        {index < breadcrumbs.length - 1 && (
+                          <BreadcrumbSeparator className="hidden sm:flex" />
+                        )}
                       </React.Fragment>
                     );
                   })}
-                  {breadcrumbs.length > 0 && <BreadcrumbSeparator />}
+                  {breadcrumbs.length > 0 && (
+                    <BreadcrumbSeparator className="hidden sm:flex" />
+                  )}
                   <BreadcrumbItem>
-                    <BreadcrumbPage className="flex items-center gap-1.5">
-                      {PageIcon && <PageIcon className="size-4" aria-hidden="true" />}
+                    <BreadcrumbPage className="flex items-center gap-1.5 text-xs sm:text-sm font-medium">
+                      {PageIcon && (
+                        <PageIcon 
+                          className="size-3.5 sm:size-4" 
+                          aria-hidden="true" 
+                        />
+                      )}
                       <span>{currentPageInfo.title}</span>
                     </BreadcrumbPage>
                   </BreadcrumbItem>
@@ -177,24 +218,29 @@ const PrivatePagesLayout = ({ children }) => {
               </Breadcrumb>
             </div>
           </header>
-          <div className="flex flex-1 flex-col justify-start items-start gap-4 p-4 pt-4">
+          
+          <main 
+            id="main-content"
+            className="flex flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6"
+            role="main"
+          >
             {/* Verificar acceso a la ruta */}
             {!hasRouteAccess ? (
-              <div className="w-full">
-                <AccessDeniedMessage
-                  title="Acceso Restringido"
-                  message="No tienes los permisos necesarios para acceder a esta sección. Contacta con un administrador si crees que deberías tener acceso."
-                />
-              </div>
+              <AccessDeniedMessage
+                title="Acceso Restringido"
+                message="No tienes los permisos necesarios para acceder a esta sección. Contacta con un administrador si crees que deberías tener acceso."
+              />
             ) : permissionsLoading ? (
-              <div className="w-full space-y-4">
-                <Skeleton className="h-8 w-64" />
-                <Skeleton className="h-[400px] w-full" />
+              <div className="w-full space-y-4" role="status" aria-label="Cargando contenido">
+                <Skeleton className="h-8 w-48 sm:w-64" />
+                <Skeleton className="h-[300px] sm:h-[400px] w-full" />
               </div>
             ) : (
-              children
+              <div className="animate-fade-in">
+                {children}
+              </div>
             )}
-          </div>
+          </main>
         </SidebarInset>
       </SidebarProvider>
     </div>

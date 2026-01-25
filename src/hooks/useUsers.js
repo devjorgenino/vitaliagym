@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import client from "../api/client";
 import { fetchWithOffline } from "../lib/offline-read";
-import { executeWithSync } from "../lib/data-sync";
+import { authDelete } from "../lib/auth-fetch";
 
 export function useUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -81,39 +81,44 @@ export function useUsers() {
       setUsers(data || []);
     } catch (err) {
       console.error("Error fetching users:", err);
-      // Nice handling for offline fallback empty state
-      if (err.message && err.message.includes('Sin conexión')) {
-           // Maybe don't set error if we want to show empty list
-      }
       setError(err.message || 'Error al cargar usuarios');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const deleteUser = async (userId) => {
     try {
-      // Intentar eliminar de la tabla profiles primero
-      const { error } = await executeWithSync({
-         table: 'profiles',
-         type: 'DELETE',
-         match: { id: userId }
-      });
+      // Usar API Route para eliminar usuario (usa Admin API)
+      // Envía userId en el body junto con el token para evitar error 431
+      const { ok, data: result, error: apiError, status } = await authDelete(
+        `/api/admin/users`,
+        { userId }
+      );
 
-      // Si la tabla no existe, mostrar mensaje
-      if (error && error.code === 'PGRST116') {
-        return { 
-          success: false, 
-          error: 'Para eliminar usuarios, primero crea la tabla profiles ejecutando los scripts SQL proporcionados' 
-        };
+      console.log("Delete API response:", { ok, result, apiError, status });
+
+      if (ok && result?.success) {
+        // Actualizar estado local inmediatamente
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        return { success: true };
       }
-
-      if (error) {
-        throw error;
+      
+      // Error de permisos o autenticación
+      if (status === 401) {
+        return { success: false, error: "No hay sesión activa. Por favor, inicie sesión nuevamente." };
       }
-
-      await fetchUsers();
-      return { success: true };
+      
+      if (status === 403) {
+        return { success: false, error: "No tiene permisos para eliminar usuarios." };
+      }
+      
+      // Error de configuración del servidor
+      if (status === 503) {
+        return { success: false, error: "El servidor no está configurado para eliminar usuarios. Contacte al administrador." };
+      }
+      
+      return { success: false, error: apiError || "Error al eliminar usuario" };
     } catch (err) {
       console.error("Error deleting user:", err);
       return { success: false, error: err.message };
@@ -126,7 +131,7 @@ export function useUsers() {
     const handleOnline = () => fetchUsers();
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, []);
+  }, [fetchUsers]);
 
   return {
     users,

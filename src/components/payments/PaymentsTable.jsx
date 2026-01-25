@@ -10,7 +10,7 @@ import {
   parsePhone,
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2, Building2, Phone } from "lucide-react";
+import { Loader2, Building2, Phone, CreditCard } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -41,6 +41,15 @@ import {
   TableRow,
 } from "../ui/table";
 import { Pagination, usePagination } from "../ui/pagination";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { ConfirmDialog } from "../ui/confirm-dialog";
 
 // Improved debounce function with cancellation support
 function debounce(func, delay) {
@@ -96,9 +105,10 @@ export function PaymentsTable({
     loading: rateLoading,
   } = useExchangeRate();
 
-  const [showCreateForm, setShowCreateForm] = useState(
-    preselectedClient ? true : false,
-  );
+  // Estados del modal unificado para crear/editar
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
   const [paymentMode, setPaymentMode] = useState("full"); // "full" o "partial"
 
   const [formData, setFormData] = useState({
@@ -114,33 +124,16 @@ export function PaymentsTable({
     phone_operator: "0414",
     phone_payment: "",
   });
-  const [isCreating, setIsCreating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [partialValidationError, setPartialValidationError] = useState("");
 
   // Estados para modo de pago restante
   const [isPayingRemaining, setIsPayingRemaining] = useState(false);
   const [remainingPaymentData, setRemainingPaymentData] = useState(null);
 
-  const [editingPayment, setEditingPayment] = useState(null);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [editPaymentMode, setEditPaymentMode] = useState("full");
-  const [editFormData, setEditFormData] = useState({
-    client_id: "",
-    plan_id: "",
-    amount_usd: "",
-    amount_bs: "",
-    exchange_rate: "",
-    payment_date: "",
-    reference: "",
-    bank: "",
-    payment_type: "",
-    phone_operator: "0414",
-    phone_payment: "",
-  });
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [editPartialValidationError, setEditPartialValidationError] =
-    useState("");
+  // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, payment: null });
 
   // Estados para búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -184,6 +177,7 @@ export function PaymentsTable({
           reference: "",
           bank: "",
           payment_type: "pago_movil",
+          phone_operator: "0414",
           phone_payment: "",
         });
 
@@ -198,6 +192,9 @@ export function PaymentsTable({
           total_paid:
             parseFloat(clientPlan.price) - parseFloat(remainingAmount),
         });
+
+        // Abrir el modal
+        setIsDialogOpen(true);
       }
     }
   }, [
@@ -220,7 +217,7 @@ export function PaymentsTable({
 
   // Memo para calcular el restante y precio del plan actual de forma segura
   const currentPaymentInfo = useMemo(() => {
-    if (showCreateForm && formData.plan_id) {
+    if (isDialogOpen && formData.plan_id) {
       const planPrice = getPlanPrice(formData.plan_id);
 
       // Si hay un cliente seleccionado, podemos verificar pagos anteriores.
@@ -268,7 +265,7 @@ export function PaymentsTable({
     }
     return { planPrice: 0, totalPaid: 0, remainingAmount: 0 };
   }, [
-    showCreateForm,
+    isDialogOpen,
     formData.client_id,
     formData.plan_id,
     payments,
@@ -437,22 +434,9 @@ export function PaymentsTable({
     }
   }, [formData.amount_usd, rate]);
 
-  // Similar para el formulario de edición
-  useEffect(() => {
-    if (editFormData.amount_usd && editFormData.exchange_rate) {
-      setEditFormData((prev) => ({
-        ...prev,
-        amount_bs: (
-          parseFloat(editFormData.amount_usd) *
-          parseFloat(editFormData.exchange_rate)
-        ).toFixed(2),
-      }));
-    }
-  }, [editFormData.amount_usd, editFormData.exchange_rate]);
-
   // Efecto unificado para auto-cargar el monto al cambiar cliente, plan o modo de pago
   useEffect(() => {
-    if (showCreateForm && formData.plan_id && paymentMode === "full") {
+    if (isDialogOpen && !isEditing && formData.plan_id && paymentMode === "full") {
       const amountToPay = currentPaymentInfo.remainingAmount;
       setFormData((prev) => ({
         ...prev,
@@ -462,7 +446,8 @@ export function PaymentsTable({
       }));
     }
   }, [
-    showCreateForm,
+    isDialogOpen,
+    isEditing,
     formData.client_id,
     formData.plan_id,
     paymentMode,
@@ -491,32 +476,6 @@ export function PaymentsTable({
       setPartialValidationError("");
     }
   }, [formData.amount_usd, formData.plan_id, paymentMode]);
-
-  // Validar monto parcial en edición
-  useEffect(() => {
-    if (
-      editPaymentMode === "partial" &&
-      editFormData.plan_id &&
-      editFormData.amount_usd
-    ) {
-      const planPrice = getPlanPrice(editFormData.plan_id);
-      const amount = parseFloat(editFormData.amount_usd);
-
-      if (amount > planPrice) {
-        setEditPartialValidationError(
-          `El monto no puede ser mayor al precio del plan ($${planPrice.toFixed(
-            2,
-          )})`,
-        );
-      } else if (amount <= 0) {
-        setEditPartialValidationError("El monto debe ser mayor a 0");
-      } else {
-        setEditPartialValidationError("");
-      }
-    } else {
-      setEditPartialValidationError("");
-    }
-  }, [editFormData.amount_usd, editFormData.plan_id, editPaymentMode]);
 
   // Lógica de filtrado local memorizada para evitar ciclo infinito
   const filteredPayments = useMemo(() => {
@@ -586,7 +545,7 @@ export function PaymentsTable({
 
   // Actualizar remainingPaymentData cuando cambia el cliente o plan en modo de creación
   useEffect(() => {
-    if (showCreateForm && formData.client_id && formData.plan_id) {
+    if (isDialogOpen && !isEditing && formData.client_id && formData.plan_id) {
       // Calcular el restante actual
       const allClientPayments = payments.filter(
         (p) =>
@@ -601,7 +560,7 @@ export function PaymentsTable({
 
       // Encontrar cliente y plan de forma segura para evitar re-renders
       const selectedClient = clients.find((c) => c.id === formData.client_id);
-      const selectedPlan = plans.find((p) => p.id === formData.plan_id);
+      const selectedPlanData = plans.find((p) => p.id === formData.plan_id);
 
       setRemainingPaymentData({
         client_id: formData.client_id,
@@ -609,7 +568,7 @@ export function PaymentsTable({
           ? `${selectedClient.first_name} ${selectedClient.last_name}`
           : "",
         plan_id: formData.plan_id,
-        plan_name: selectedPlan ? selectedPlan.name : "",
+        plan_name: selectedPlanData ? selectedPlanData.name : "",
         remaining_amount: remainingAmount,
         plan_price: planPrice,
         total_paid: totalPaid,
@@ -624,17 +583,78 @@ export function PaymentsTable({
           amount_bs: (currentPaymentInfo.planPrice * (rate || 1)).toFixed(2),
         }));
       }
-    } else {
+    } else if (!isDialogOpen) {
       setRemainingPaymentData(null);
     }
   }, [
-    showCreateForm,
+    isDialogOpen,
+    isEditing,
     formData.client_id,
     formData.plan_id,
     paymentMode,
     payments,
     rate,
   ]);
+
+  // Resetear formulario
+  const resetForm = useCallback(() => {
+    setFormData({
+      client_id: preselectedClient?.id || "",
+      plan_id: "",
+      amount_usd: "",
+      amount_bs: "",
+      exchange_rate: rate || 1,
+      payment_date: new Date().toISOString().split("T")[0],
+      reference: "",
+      bank: "",
+      payment_type: "pago_movil",
+      phone_operator: "0414",
+      phone_payment: "",
+    });
+    setSelectedPayment(null);
+    setIsEditing(false);
+    setPaymentMode("full");
+    setPartialValidationError("");
+    setIsPayingRemaining(false);
+    setRemainingPaymentData(null);
+  }, [preselectedClient, rate]);
+
+  // Abrir modal para crear
+  const handleOpenCreateDialog = useCallback(() => {
+    resetForm();
+    setIsDialogOpen(true);
+  }, [resetForm]);
+
+  // Abrir modal para editar
+  const handleOpenEditDialog = useCallback((payment) => {
+    setSelectedPayment(payment);
+    const isFullPayment =
+      payment.amount_usd === parseFloat(payment.plans?.price || 0);
+    setPaymentMode(isFullPayment ? "full" : "partial");
+    // Parse phone to separate operator and number
+    const { operator, number } = parsePhone(payment.phone_payment || "");
+    setFormData({
+      client_id: payment.client_id,
+      plan_id: payment.plan_id,
+      amount_usd: payment.amount_usd.toString(),
+      amount_bs: payment.amount_bs.toString(),
+      exchange_rate: payment.exchange_rate.toString(),
+      payment_date: payment.payment_date,
+      reference: payment.reference || "",
+      bank: payment.bank || "",
+      payment_type: payment.payment_type,
+      phone_operator: operator,
+      phone_payment: number,
+    });
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  }, []);
+
+  // Cerrar modal
+  const handleCloseDialog = useCallback(() => {
+    setIsDialogOpen(false);
+    setTimeout(resetForm, 150);
+  }, [resetForm]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -673,7 +693,8 @@ export function PaymentsTable({
     }
   };
 
-  const handleCreatePayment = async () => {
+  // Enviar formulario (crear o editar)
+  const handleSubmit = async () => {
     if (
       !formData.client_id ||
       !formData.plan_id ||
@@ -692,7 +713,7 @@ export function PaymentsTable({
       return;
     }
 
-    setIsCreating(true);
+    setIsSubmitting(true);
     try {
       const paymentData = {
         ...formData,
@@ -706,29 +727,15 @@ export function PaymentsTable({
       // Remove phone_operator from payload as it's only for UI
       delete paymentData.phone_operator;
 
-      const result = await createPayment(paymentData);
+      let result;
+      if (isEditing && selectedPayment) {
+        result = await updatePayment(selectedPayment.id, paymentData);
+      } else {
+        result = await createPayment(paymentData);
+      }
 
       if (result.success) {
-        setFormData({
-          client_id: preselectedClient?.id || "",
-          plan_id: "",
-          amount_usd: "",
-          amount_bs: "",
-          exchange_rate: rate || 1,
-          payment_date: new Date().toISOString().split("T")[0],
-          reference: "",
-          bank: "",
-          payment_type: "pago_movil",
-          phone_operator: "0414",
-          phone_payment: "",
-        });
-
-        // Resetear estados
-        setPaymentMode("full");
-        setPartialValidationError("");
-        setShowCreateForm(false);
-        setIsPayingRemaining(false);
-        setRemainingPaymentData(null);
+        handleCloseDialog();
 
         // Mensaje de éxito personalizado si era pago restante
         if (isPayingRemaining && remainingPaymentData) {
@@ -738,187 +745,26 @@ export function PaymentsTable({
             )} registrado exitosamente para ${remainingPaymentData.client_name}`,
           );
         } else {
-          toast.success("Pago registrado exitosamente");
+          toast.success(
+            isEditing
+              ? "Pago actualizado exitosamente"
+              : "Pago registrado exitosamente",
+          );
         }
       } else {
-        toast.error("Error al registrar pago: " + result.error);
+        toast.error(
+          `Error al ${isEditing ? "actualizar" : "registrar"} pago: ` +
+            result.error,
+        );
       }
     } catch (err) {
-      console.error("Error al registrar pago:", err);
-      toast.error("Error al registrar pago: " + err.message);
+      console.error(`Error al ${isEditing ? "actualizar" : "registrar"} pago:`, err);
+      toast.error(
+        `Error al ${isEditing ? "actualizar" : "registrar"} pago: ` + err.message,
+      );
     } finally {
-      setIsCreating(false);
+      setIsSubmitting(false);
     }
-  };
-
-  const handleEditPayment = (payment) => {
-    setEditingPayment(payment);
-    const isFullPayment =
-      payment.amount_usd === parseFloat(payment.plans?.price || 0);
-    setEditPaymentMode(isFullPayment ? "full" : "partial");
-    // Parse phone to separate operator and number
-    const { operator, number } = parsePhone(payment.phone_payment || "");
-    setEditFormData({
-      client_id: payment.client_id,
-      plan_id: payment.plan_id,
-      amount_usd: payment.amount_usd.toString(),
-      amount_bs: payment.amount_bs.toString(),
-      exchange_rate: payment.exchange_rate.toString(),
-      payment_date: payment.payment_date,
-      reference: payment.reference || "",
-      bank: payment.bank || "",
-      payment_type: payment.payment_type,
-      phone_operator: operator,
-      phone_payment: number,
-    });
-    setShowEditForm(true);
-    setShowCreateForm(false);
-  };
-
-  const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-
-    // Máscara para teléfono de pago
-    if (name === "phone_payment") {
-      const cleanValue = value.replace(/\D/g, "").slice(0, 7);
-      setEditFormData((prev) => ({
-        ...prev,
-        [name]: cleanValue,
-      }));
-      return;
-    }
-
-    setEditFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleEditPaymentModeChange = (mode) => {
-    setEditPaymentMode(mode);
-    setEditPartialValidationError("");
-    if (mode === "full" && editFormData.plan_id) {
-      const planPrice = getPlanPrice(editFormData.plan_id);
-      if (planPrice > 0) {
-        setEditFormData((prev) => ({
-          ...prev,
-          amount_usd: planPrice.toString(),
-          amount_bs: (planPrice * parseFloat(prev.exchange_rate || 1)).toFixed(
-            2,
-          ),
-        }));
-      }
-    } else if (mode === "partial") {
-      // En modo parcial, calcular el restante actual
-      if (editFormData.plan_id) {
-        // Obtener todos los pagos del cliente para este plan
-        const allClientPayments = payments.filter(
-          (p) =>
-            p.client_id === editFormData.client_id &&
-            p.plan_id === editFormData.plan_id &&
-            p.id !== editingPayment.id, // Excluir el pago que se está editando
-        );
-
-        // Calcular total pagado hasta ahora (excluyendo el pago actual)
-        const totalPaid = allClientPayments.reduce(
-          (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-          0,
-        );
-        const planPrice = getPlanPrice(editFormData.plan_id);
-        const remainingAmount = Math.max(0, planPrice - totalPaid);
-
-        // Cargar el monto restante como sugerencia pero permitir edición
-        setEditFormData((prev) => ({
-          ...prev,
-          amount_usd: remainingAmount.toString(),
-          amount_bs: (
-            remainingAmount * parseFloat(prev.exchange_rate || 1)
-          ).toFixed(2),
-        }));
-      } else {
-        // Si no hay plan, limpiar montos
-        setEditFormData((prev) => ({
-          ...prev,
-          amount_usd: "",
-          amount_bs: "",
-        }));
-      }
-    }
-  };
-
-  const handleUpdatePayment = async () => {
-    if (!editingPayment) return;
-
-    // Validación adicional para pagos parciales
-    if (editPaymentMode === "partial" && editPartialValidationError) {
-      toast.error(editPartialValidationError);
-      return;
-    }
-
-    setIsUpdating(true);
-    try {
-      const paymentData = {
-        ...editFormData,
-        amount_usd: parseFloat(editFormData.amount_usd),
-        amount_bs: parseFloat(editFormData.amount_bs),
-        exchange_rate: parseFloat(editFormData.exchange_rate),
-        phone_payment: editFormData.phone_payment
-          ? formatPhone(editFormData.phone_operator, editFormData.phone_payment)
-          : "",
-      };
-      // Remove phone_operator from payload as it's only for UI
-      delete paymentData.phone_operator;
-
-      const result = await updatePayment(editingPayment.id, paymentData);
-
-      if (result.success) {
-        setEditingPayment(null);
-        setShowEditForm(false);
-        setEditFormData({
-          client_id: "",
-          plan_id: "",
-          amount_usd: "",
-          amount_bs: "",
-          exchange_rate: "",
-          payment_date: "",
-          reference: "",
-          bank: "",
-          payment_type: "pago_movil",
-          phone_operator: "0414",
-          phone_payment: "",
-        });
-        setEditPaymentMode("full");
-        setEditPartialValidationError("");
-        toast.success("Pago actualizado exitosamente");
-      } else {
-        toast.error("Error al actualizar pago: " + result.error);
-      }
-    } catch (err) {
-      console.error("Error al actualizar pago:", err);
-      toast.error("Error al actualizar pago: " + err.message);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingPayment(null);
-    setShowEditForm(false);
-    setEditFormData({
-      client_id: "",
-      plan_id: "",
-      amount_usd: "",
-      amount_bs: "",
-      exchange_rate: "",
-      payment_date: "",
-      reference: "",
-      bank: "",
-      payment_type: "",
-      phone_operator: "0414",
-      phone_payment: "",
-    });
-    setEditPaymentMode("full");
-    setEditPartialValidationError("");
   };
 
   const handlePayRemaining = (payment) => {
@@ -969,9 +815,8 @@ export function PaymentsTable({
     // Establecer modo "full" (pagar restante completo) por defecto
     setPaymentMode("full");
     setPartialValidationError("");
-    setShowCreateForm(true);
-    setShowEditForm(false);
     setIsPayingRemaining(true);
+    setIsDialogOpen(true);
 
     // Establecer el formData DESPUÉS de que el modo esté establecido
     setTimeout(() => {
@@ -985,12 +830,19 @@ export function PaymentsTable({
     );
   };
 
-  const handleDeletePayment = async (paymentId) => {
-    setDeletingId(paymentId);
+  const openDeleteDialog = (payment) => {
+    setDeleteDialog({ open: true, payment });
+  };
+
+  const handleDeletePayment = async () => {
+    if (!deleteDialog.payment) return;
+    
+    setDeletingId(deleteDialog.payment.id);
     try {
-      const result = await deletePayment(paymentId);
+      const result = await deletePayment(deleteDialog.payment.id);
       if (result.success) {
         toast.success("Pago eliminado exitosamente");
+        setDeleteDialog({ open: false, payment: null });
       } else {
         toast.error("Error al eliminar pago: " + result.error);
       }
@@ -1104,14 +956,11 @@ export function PaymentsTable({
         </CardTitle>
         <div className="flex space-x-2">
           <Button
-            onClick={() => {
-              setShowCreateForm(!showCreateForm);
-              setShowEditForm(false);
-            }}
+            onClick={handleOpenCreateDialog}
             variant="default"
             size="sm"
           >
-            {showCreateForm ? "Cancelar" : "+ Nuevo Pago"}
+            + Nuevo Pago
           </Button>
           <Button
             onClick={refetch}
@@ -1256,657 +1105,6 @@ export function PaymentsTable({
           )}
         </div>
 
-        {/* Formulario de creación */}
-        {showCreateForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-            <h3 className="text-lg font-semibold mb-4">
-              {isPayingRemaining
-                ? `Pagar Restante - ${remainingPaymentData?.client_name}`
-                : preselectedClient
-                  ? `Nuevo Pago - ${preselectedClient.first_name} ${preselectedClient.last_name}`
-                  : "Registrar Nuevo Pago"}
-            </h3>
-            {isPayingRemaining && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-800">
-                  <strong>Resumen de Pagos:</strong>
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  Plan: {remainingPaymentData?.plan_name} - $
-                  {remainingPaymentData?.plan_price?.toFixed(2)}
-                </p>
-                <p className="text-xs text-blue-700">
-                  Ya pagado: ${remainingPaymentData?.total_paid?.toFixed(2)}
-                </p>
-                <p className="text-xs text-blue-700">
-                  Restante: $
-                  {remainingPaymentData?.remaining_amount?.toFixed(2)}
-                </p>
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Cliente
-                  {isPayingRemaining && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Bloqueado en modo pago restante)
-                    </span>
-                  )}
-                </label>
-                <select
-                  name="client_id"
-                  value={formData.client_id}
-                  onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isPayingRemaining ? "bg-gray-100 text-gray-600" : ""
-                  }`}
-                  disabled={!!preselectedClient || isPayingRemaining}
-                  required
-                >
-                  <option value="">Seleccionar cliente</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.first_name} {client.last_name} - {client.cedula}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Plan
-                  {isPayingRemaining && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Bloqueado en modo pago restante)
-                    </span>
-                  )}
-                </label>
-                <select
-                  name="plan_id"
-                  value={formData.plan_id}
-                  onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isPayingRemaining ? "bg-gray-100 text-gray-600" : ""
-                  }`}
-                  disabled={isPayingRemaining}
-                  required
-                >
-                  <option value="">Seleccionar plan</option>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name} - ${plan.price}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Selector de modo de pago */}
-              {formData.plan_id && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Modo de Pago
-                  </label>
-                  <div className="flex space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="payment_mode"
-                        value="full"
-                        checked={paymentMode === "full"}
-                        onChange={() => handlePaymentModeChange("full")}
-                        disabled={false}
-                        className="mr-2"
-                      />
-                      Pagar Completo ($
-                      {currentPaymentInfo.remainingAmount > 0
-                        ? currentPaymentInfo.remainingAmount.toFixed(2)
-                        : "0.00"}
-                      )
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="payment_mode"
-                        value="partial"
-                        checked={paymentMode === "partial"}
-                        onChange={() => handlePaymentModeChange("partial")}
-                        className="mr-2"
-                      />
-                      Pago Parcial (restante: $
-                      {currentPaymentInfo.remainingAmount > 0
-                        ? currentPaymentInfo.remainingAmount.toFixed(2)
-                        : "0.00"}
-                      )
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {/* Campos de monto USD y Bs */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Monto en USD
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="amount_usd"
-                  value={formData.amount_usd}
-                  onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    partialValidationError ? "border-red-500" : ""
-                  }`}
-                  placeholder="10.00"
-                  disabled={paymentMode === "full" && formData.plan_id}
-                  required
-                />
-                {partialValidationError && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {partialValidationError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Monto en Bs
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="amount_bs"
-                  value={formData.amount_bs}
-                  readOnly
-                  className="w-full px-3 py-2 border rounded-md bg-gray-100 text-gray-600"
-                  placeholder="Calculado automáticamente"
-                />
-              </div>
-
-              {/* Pago restante para pagos parciales */}
-              {paymentMode === "partial" &&
-                formData.plan_id &&
-                formData.amount_usd &&
-                !partialValidationError && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Pago Restante
-                    </label>
-                    <div className="w-full px-3 py-2 border rounded-md bg-yellow-50 text-yellow-800 font-medium">
-                      $
-                      {
-                        calculateRemainingAfterCurrentAmount(
-                          formData.plan_id,
-                          formData.amount_usd,
-                        ).formattedAmount
-                      }
-                    </div>
-                  </div>
-                )}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Tasa de Cambio
-                </label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  name="exchange_rate"
-                  value={formData.exchange_rate}
-                  readOnly
-                  className="w-full px-3 py-2 border rounded-md bg-gray-100 text-gray-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Tipo de Pago
-                </label>
-                <select
-                  name="payment_type"
-                  value={formData.payment_type}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="pago_movil">Pago Móvil</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="punto_de_venta">Punto de Venta</option>
-                  <option value="efectivo_dolares">Efectivo $</option>
-                </select>
-              </div>
-
-              {/* Campos de referencia y banco - solo para pago móvil y transferencia */}
-              {(formData.payment_type === "pago_movil" ||
-                formData.payment_type === "transferencia") && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Referencia
-                    </label>
-                    <input
-                      type="text"
-                      name="reference"
-                      value={formData.reference}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Número de referencia"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="create-bank">Banco</Label>
-                    <Select
-                      value={formData.bank}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, bank: value }))
-                      }
-                    >
-                      <SelectTrigger id="create-bank" className="w-full">
-                        <SelectValue placeholder="Seleccionar banco" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {VENEZUELAN_BANKS.map((bank) => (
-                          <SelectItem key={bank.code} value={bank.name}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-3 w-3 text-muted-foreground" />
-                              <span>{bank.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-
-              {/* Campo de teléfono - solo para pago móvil */}
-              {formData.payment_type === "pago_movil" && (
-                <div>
-                  <Label
-                    htmlFor="phone_payment"
-                    className="block text-sm font-medium mb-2"
-                  >
-                    Teléfono Pago Móvil
-                  </Label>
-                  <div className="flex gap-1">
-                    <Select
-                      value={formData.phone_operator}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          phone_operator: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        className="w-[90px] flex-shrink-0"
-                        aria-label="Operador telefónico"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PHONE_OPERATORS.map((op) => (
-                          <SelectItem key={op.code} value={op.code}>
-                            <span className="font-medium">{op.code}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      id="phone_payment"
-                      type="tel"
-                      name="phone_payment"
-                      value={formData.phone_payment}
-                      onChange={handleInputChange}
-                      placeholder="1234567"
-                      maxLength={7}
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Fecha de Pago
-                </label>
-                <input
-                  type="date"
-                  name="payment_date"
-                  value={formData.payment_date}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex space-x-2">
-              <Button
-                onClick={handleCreatePayment}
-                disabled={
-                  isCreating ||
-                  clientsLoading ||
-                  plansLoading ||
-                  partialValidationError
-                }
-                variant="default"
-                size="sm"
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  "Registrar Pago"
-                )}
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowCreateForm(false);
-                  setPaymentMode("full");
-                  setPartialValidationError("");
-                  setIsPayingRemaining(false);
-                  setRemainingPaymentData(null);
-                }}
-                variant="outline"
-                size="sm"
-              >
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Formulario de edición */}
-        {showEditForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-blue-50">
-            <h3 className="text-lg font-semibold mb-4">Editar Pago</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Cliente
-                </label>
-                <select
-                  name="client_id"
-                  value={editFormData.client_id}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Seleccionar cliente</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.first_name} {client.last_name} - {client.cedula}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Plan</label>
-                <select
-                  name="plan_id"
-                  value={editFormData.plan_id}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Seleccionar plan</option>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name} - ${plan.price}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Selector de modo de pago en edición */}
-              {editFormData.plan_id && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Modo de Pago
-                  </label>
-                  <div className="flex space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="edit_payment_mode"
-                        value="full"
-                        checked={editPaymentMode === "full"}
-                        onChange={() => handleEditPaymentModeChange("full")}
-                        className="mr-2"
-                      />
-                      Pago Completo ($
-                      {getPlanPrice(editFormData.plan_id).toFixed(2)})
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="edit_payment_mode"
-                        value="partial"
-                        checked={editPaymentMode === "partial"}
-                        onChange={() => handleEditPaymentModeChange("partial")}
-                        className="mr-2"
-                      />
-                      Pago Parcial
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Monto en USD
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="amount_usd"
-                  value={editFormData.amount_usd}
-                  onChange={handleEditInputChange}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    editPartialValidationError ? "border-red-500" : ""
-                  }`}
-                  disabled={editPaymentMode === "full" && editFormData.plan_id}
-                  required
-                />
-                {editPartialValidationError && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {editPartialValidationError}
-                  </p>
-                )}
-              </div>
-
-              {/* Pago restante para pagos parciales en edición */}
-              {editPaymentMode === "partial" &&
-                editFormData.plan_id &&
-                editFormData.amount_usd &&
-                !editPartialValidationError && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Pago Restante
-                    </label>
-                    <div className="w-full px-3 py-2 border rounded-md bg-yellow-50 text-yellow-800 font-medium">
-                      $
-                      {
-                        calculateRemainingAmount(
-                          editFormData.plan_id,
-                          editFormData.amount_usd,
-                        ).formattedAmount
-                      }
-                    </div>
-                  </div>
-                )}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Monto en Bs
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="amount_bs"
-                  value={editFormData.amount_bs}
-                  readOnly
-                  className="w-full px-3 py-2 border rounded-md bg-gray-100 text-gray-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Tasa de Cambio
-                </label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  name="exchange_rate"
-                  value={editFormData.exchange_rate}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Tipo de Pago
-                </label>
-                <select
-                  name="payment_type"
-                  value={editFormData.payment_type}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="pago_movil">Pago Móvil</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="punto_de_venta">Punto de Venta</option>
-                  <option value="efectivo_dolares">Efectivo $</option>
-                </select>
-              </div>
-
-              {/* Campos de referencia y banco - solo para pago móvil y transferencia */}
-              {(editFormData.payment_type === "pago_movil" ||
-                editFormData.payment_type === "transferencia") && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Referencia
-                    </label>
-                    <input
-                      type="text"
-                      name="reference"
-                      value={editFormData.reference}
-                      onChange={handleEditInputChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Número de referencia"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-bank">Banco</Label>
-                    <Select
-                      value={editFormData.bank}
-                      onValueChange={(value) =>
-                        setEditFormData((prev) => ({ ...prev, bank: value }))
-                      }
-                    >
-                      <SelectTrigger id="edit-bank" className="w-full">
-                        <SelectValue placeholder="Seleccionar banco" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {VENEZUELAN_BANKS.map((bank) => (
-                          <SelectItem key={bank.code} value={bank.name}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-3 w-3 text-muted-foreground" />
-                              <span>{bank.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-
-              {/* Campo de teléfono - solo para pago móvil */}
-              {editFormData.payment_type === "pago_movil" && (
-                <div>
-                  <Label
-                    htmlFor="edit_phone_payment"
-                    className="block text-sm font-medium mb-2"
-                  >
-                    Teléfono Pago Móvil
-                  </Label>
-                  <div className="flex gap-1">
-                    <Select
-                      value={editFormData.phone_operator}
-                      onValueChange={(value) =>
-                        setEditFormData((prev) => ({
-                          ...prev,
-                          phone_operator: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        className="w-[90px] flex-shrink-0"
-                        aria-label="Operador telefónico"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PHONE_OPERATORS.map((op) => (
-                          <SelectItem key={op.code} value={op.code}>
-                            <span className="font-medium">{op.code}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      id="edit_phone_payment"
-                      type="tel"
-                      name="phone_payment"
-                      value={editFormData.phone_payment}
-                      onChange={handleEditInputChange}
-                      placeholder="1234567"
-                      maxLength={7}
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Fecha de Pago
-                </label>
-                <input
-                  type="date"
-                  name="payment_date"
-                  value={editFormData.payment_date}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex space-x-2">
-              <Button
-                onClick={handleUpdatePayment}
-                disabled={isUpdating || editPartialValidationError}
-                variant="default"
-                size="sm"
-              >
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Actualizando...
-                  </>
-                ) : (
-                  "Actualizar Pago"
-                )}
-              </Button>
-              <Button onClick={cancelEdit} variant="outline" size="sm">
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Tabla de pagos */}
         {displayPayments.length === 0 && activeFiltersCount > 0 ? (
           <div className="text-center py-8">
@@ -2036,7 +1234,7 @@ export function PaymentsTable({
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  onClick={() => handleEditPayment(payment)}
+                                  onClick={() => handleOpenEditDialog(payment)}
                                   variant="outline"
                                   size="icon-sm"
                                 >
@@ -2073,18 +1271,12 @@ export function PaymentsTable({
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  onClick={() =>
-                                    handleDeletePayment(payment.id)
-                                  }
+                                  onClick={() => openDeleteDialog(payment)}
                                   variant="destructive"
                                   size="icon-sm"
-                                  disabled={deletingId === payment.id}
+                                  aria-label={`Eliminar pago de ${payment.clients?.first_name} ${payment.clients?.last_name}`}
                                 >
-                                  {deletingId === payment.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <TrashIcon />
-                                  )}
+                                  <TrashIcon />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>
@@ -2111,6 +1303,371 @@ export function PaymentsTable({
           </>
         )}
       </CardContent>
+
+      {/* Modal para crear/editar pago */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" aria-hidden="true" />
+              {isPayingRemaining
+                ? `Pagar Restante - ${remainingPaymentData?.client_name}`
+                : isEditing
+                  ? "Editar Pago"
+                  : preselectedClient
+                    ? `Nuevo Pago - ${preselectedClient.first_name} ${preselectedClient.last_name}`
+                    : "Nuevo Pago"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "Modifica los datos del pago."
+                : "Completa el formulario para registrar un nuevo pago."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Resumen de pago restante */}
+          {isPayingRemaining && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>Resumen de Pagos:</strong>
+              </p>
+              <p className="text-xs text-blue-700 mt-1">
+                Plan: {remainingPaymentData?.plan_name} - $
+                {remainingPaymentData?.plan_price?.toFixed(2)}
+              </p>
+              <p className="text-xs text-blue-700">
+                Ya pagado: ${remainingPaymentData?.total_paid?.toFixed(2)}
+              </p>
+              <p className="text-xs text-blue-700">
+                Restante: ${remainingPaymentData?.remaining_amount?.toFixed(2)}
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
+            {/* Cliente */}
+            <div className="space-y-2">
+              <Label htmlFor="client_id">
+                Cliente <span className="text-destructive">*</span>
+                {isPayingRemaining && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    (Bloqueado)
+                  </span>
+                )}
+              </Label>
+              <Select
+                value={formData.client_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, client_id: value }))
+                }
+                disabled={!!preselectedClient || isPayingRemaining || isEditing}
+              >
+                <SelectTrigger id="client_id">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.first_name} {client.last_name} - {client.cedula}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Plan */}
+            <div className="space-y-2">
+              <Label htmlFor="plan_id">
+                Plan <span className="text-destructive">*</span>
+                {isPayingRemaining && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    (Bloqueado)
+                  </span>
+                )}
+              </Label>
+              <Select
+                value={formData.plan_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, plan_id: value }))
+                }
+                disabled={isPayingRemaining || isEditing}
+              >
+                <SelectTrigger id="plan_id">
+                  <SelectValue placeholder="Seleccionar plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} - ${plan.price}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Selector de modo de pago */}
+            {formData.plan_id && (
+              <div className="space-y-2">
+                <Label>Modo de Pago</Label>
+                <div className="flex space-x-4 pt-2">
+                  <label className="flex items-center text-sm">
+                    <input
+                      type="radio"
+                      name="payment_mode"
+                      value="full"
+                      checked={paymentMode === "full"}
+                      onChange={() => handlePaymentModeChange("full")}
+                      className="mr-2"
+                    />
+                    Completo ($
+                    {currentPaymentInfo.remainingAmount > 0
+                      ? currentPaymentInfo.remainingAmount.toFixed(2)
+                      : "0.00"}
+                    )
+                  </label>
+                  <label className="flex items-center text-sm">
+                    <input
+                      type="radio"
+                      name="payment_mode"
+                      value="partial"
+                      checked={paymentMode === "partial"}
+                      onChange={() => handlePaymentModeChange("partial")}
+                      className="mr-2"
+                    />
+                    Parcial
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Monto USD */}
+            <div className="space-y-2">
+              <Label htmlFor="amount_usd">
+                Monto en USD <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="amount_usd"
+                type="number"
+                step="0.01"
+                name="amount_usd"
+                value={formData.amount_usd}
+                onChange={handleInputChange}
+                placeholder="10.00"
+                disabled={paymentMode === "full" && formData.plan_id && !isEditing}
+                className={partialValidationError ? "border-red-500" : ""}
+              />
+              {partialValidationError && (
+                <p className="text-red-500 text-xs">{partialValidationError}</p>
+              )}
+            </div>
+
+            {/* Monto Bs */}
+            <div className="space-y-2">
+              <Label htmlFor="amount_bs">Monto en Bs</Label>
+              <Input
+                id="amount_bs"
+                type="number"
+                value={formData.amount_bs}
+                readOnly
+                disabled
+                placeholder="Calculado automáticamente"
+              />
+            </div>
+
+            {/* Pago restante */}
+            {paymentMode === "partial" &&
+              formData.plan_id &&
+              formData.amount_usd &&
+              !partialValidationError && (
+                <div className="space-y-2">
+                  <Label>Restante después de este pago</Label>
+                  <div className="w-full px-3 py-2 border rounded-md bg-yellow-50 text-yellow-800 font-medium">
+                    $
+                    {
+                      calculateRemainingAfterCurrentAmount(
+                        formData.plan_id,
+                        formData.amount_usd,
+                      ).formattedAmount
+                    }
+                  </div>
+                </div>
+              )}
+
+            {/* Tasa de cambio */}
+            <div className="space-y-2">
+              <Label htmlFor="exchange_rate">Tasa de Cambio</Label>
+              <Input
+                id="exchange_rate"
+                type="number"
+                step="0.0001"
+                name="exchange_rate"
+                value={formData.exchange_rate}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+              />
+            </div>
+
+            {/* Tipo de pago */}
+            <div className="space-y-2">
+              <Label htmlFor="payment_type">
+                Tipo de Pago <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={formData.payment_type}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, payment_type: value }))
+                }
+              >
+                <SelectTrigger id="payment_type">
+                  <SelectValue placeholder="Seleccionar tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="punto_de_venta">Punto de Venta</SelectItem>
+                  <SelectItem value="efectivo_dolares">Efectivo $</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Fecha de pago */}
+            <div className="space-y-2">
+              <Label htmlFor="payment_date">
+                Fecha de Pago <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="payment_date"
+                type="date"
+                name="payment_date"
+                value={formData.payment_date}
+                onChange={handleInputChange}
+              />
+            </div>
+
+            {/* Referencia - solo para pago móvil y transferencia */}
+            {(formData.payment_type === "pago_movil" ||
+              formData.payment_type === "transferencia") && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="reference">Referencia</Label>
+                  <Input
+                    id="reference"
+                    type="text"
+                    name="reference"
+                    value={formData.reference}
+                    onChange={handleInputChange}
+                    placeholder="Número de referencia"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bank">Banco</Label>
+                  <Select
+                    value={formData.bank}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, bank: value }))
+                    }
+                  >
+                    <SelectTrigger id="bank">
+                      <SelectValue placeholder="Seleccionar banco" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VENEZUELAN_BANKS.map((bank) => (
+                        <SelectItem key={bank.code} value={bank.name}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-3 w-3 text-muted-foreground" />
+                            <span>{bank.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {/* Teléfono - solo para pago móvil */}
+            {formData.payment_type === "pago_movil" && (
+              <div className="space-y-2">
+                <Label htmlFor="phone_payment">Teléfono Pago Móvil</Label>
+                <div className="flex gap-1">
+                  <Select
+                    value={formData.phone_operator}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        phone_operator: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger
+                      className="w-[90px] flex-shrink-0"
+                      aria-label="Operador telefónico"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PHONE_OPERATORS.map((op) => (
+                        <SelectItem key={op.code} value={op.code}>
+                          <span className="font-medium">{op.code}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="phone_payment"
+                    type="tel"
+                    name="phone_payment"
+                    value={formData.phone_payment}
+                    onChange={handleInputChange}
+                    placeholder="1234567"
+                    maxLength={7}
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseDialog}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting || clientsLoading || plansLoading || !!partialValidationError}
+              loading={isSubmitting}
+            >
+              {isEditing ? "Actualizar Pago" : "Registrar Pago"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de confirmación para eliminar */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) =>
+          setDeleteDialog({ open, payment: open ? deleteDialog.payment : null })
+        }
+        title="Eliminar Pago"
+        description={
+          deleteDialog.payment
+            ? `¿Estás seguro de que deseas eliminar el pago de "${deleteDialog.payment.clients?.first_name} ${deleteDialog.payment.clients?.last_name}" por $${parseFloat(deleteDialog.payment.amount_usd || 0).toFixed(2)}? Esta acción no se puede deshacer.`
+            : ""
+        }
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={deletingId !== null}
+        onConfirm={handleDeletePayment}
+      />
     </Card>
   );
 }

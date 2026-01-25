@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useUsers } from "@/hooks/useUsers";
 import usePermissions from "@/hooks/usePermissions";
 import useRolesList from "@/hooks/useRolesList";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { PERMISSIONS } from "@/components/context/PermissionsProvider";
 import client from "@/api/client";
+import { authPost } from "@/lib/auth-fetch";
 import { toast } from "sonner";
-import { Loader2, Shield, UserPlus, RefreshCw, Phone } from "lucide-react";
+import { Shield, UserPlus, RefreshCw, Phone, User, Copy, CheckCircle, X } from "lucide-react";
 import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,18 +49,22 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { UserSecuritySection } from "./UserSecuritySection";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function UsersTable() {
   const { users, loading, error, refetch, deleteUser } = useUsers();
   const { hasPermission } = usePermissions();
   const { roles: availableRoles, loading: rolesLoading } = useRolesList();
 
-  // Estados para formulario de creación
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  // Estados del modal unificado para crear/editar
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
     email: "",
     full_name: "",
@@ -67,20 +72,11 @@ export function UsersTable() {
     phone: "",
     roleId: "",
   });
-  const [isCreating, setIsCreating] = useState(false);
-
-  // Estados para edición
-  const [editingUser, setEditingUser] = useState(null);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [editFormData, setEditFormData] = useState({
-    email: "",
-    full_name: "",
-    phone_operator: "0414",
-    phone: "",
-  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, user: null });
 
   // Estado para el modal de seguridad
   const [securityModalUser, setSecurityModalUser] = useState(null);
@@ -102,6 +98,47 @@ export function UsersTable() {
   // Estado para los roles de cada usuario (cargados dinámicamente)
   const [userRolesMap, setUserRolesMap] = useState({});
   const [loadingUserRoles, setLoadingUserRoles] = useState(false);
+
+  // Resetear formulario
+  const resetForm = useCallback(() => {
+    setFormData({
+      email: "",
+      full_name: "",
+      phone_operator: "0414",
+      phone: "",
+      roleId: availableRoles[0]?.id || "",
+    });
+    setSelectedUser(null);
+    setIsEditing(false);
+  }, [availableRoles]);
+
+  // Abrir modal para crear
+  const handleOpenCreateDialog = useCallback(() => {
+    resetForm();
+    setIsDialogOpen(true);
+  }, [resetForm]);
+
+  // Abrir modal para editar
+  const handleOpenEditDialog = useCallback((user) => {
+    setSelectedUser(user);
+    const phoneValue = user.phone || user.user_metadata?.phone || "";
+    const { operator, number } = parsePhone(phoneValue);
+    setFormData({
+      email: user.email || "",
+      full_name: user.full_name || user.user_metadata?.full_name || "",
+      phone_operator: operator,
+      phone: number,
+      roleId: "", // No se edita el rol desde aquí
+    });
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  }, []);
+
+  // Cerrar modal
+  const handleCloseDialog = useCallback(() => {
+    setIsDialogOpen(false);
+    setTimeout(resetForm, 150);
+  }, [resetForm]);
 
   // Cargar roles de usuarios cuando cambian los usuarios
   useEffect(() => {
@@ -159,32 +196,8 @@ export function UsersTable() {
     }
   }, [availableRoles, formData.roleId]);
 
-  // Generar contraseña segura
-  const generateSecurePassword = () => {
-    const lowercase = "abcdefghijklmnopqrstuvwxyz";
-    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const numbers = "0123456789";
-    const symbols = "!@#$%^&*()_+-=";
-
-    let password = "";
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += symbols[Math.floor(Math.random() * symbols.length)];
-
-    const allChars = lowercase + uppercase + numbers + symbols;
-    for (let i = 4; i < 12; i++) {
-      password += allChars[Math.floor(Math.random() * allChars.length)];
-    }
-
-    return password
-      .split("")
-      .sort(() => Math.random() - 0.5)
-      .join("");
-  };
-
   // Handlers
-  const handleInputChange = (e) => {
+  const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
 
     // Máscara para teléfono: solo números, max 7 dígitos
@@ -195,165 +208,135 @@ export function UsersTable() {
     }
 
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
-  const handleRoleChange = (value) => {
+  const handleRoleChange = useCallback((value) => {
     setFormData((prev) => ({ ...prev, roleId: value }));
-  };
+  }, []);
 
-  const handleCreateUser = async () => {
-    if (!formData.email) {
+  const handlePhoneOperatorChange = useCallback((value) => {
+    setFormData((prev) => ({ ...prev, phone_operator: value }));
+  }, []);
+
+  // Submit del formulario (crear o actualizar)
+  const handleSubmit = async () => {
+    if (!isEditing && !formData.email) {
       toast.error("El email es obligatorio");
       return;
     }
 
-    if (!formData.roleId) {
+    if (!isEditing && !formData.roleId) {
       toast.error("Selecciona un rol para el usuario");
       return;
     }
 
-    setIsCreating(true);
+    setIsSubmitting(true);
     try {
-      const tempPassword = generateSecurePassword();
+      if (isEditing && selectedUser) {
+        // Actualizar usuario - usar cliente directamente
+        const { error: profileError } = await client
+          .from("profiles")
+          .update({
+            full_name: formData.full_name,
+            phone: formData.phone
+              ? formatPhone(formData.phone_operator, formData.phone)
+              : "",
+          })
+          .eq("id", selectedUser.id);
 
-      // 1. Crear usuario en Supabase Auth
-      const { data: authData, error: authError } = await client.auth.signUp({
-        email: formData.email,
-        password: tempPassword,
-        options: {
+        if (profileError && profileError.code !== "PGRST116") {
+          console.warn("Error al actualizar perfil:", profileError);
+        }
+
+        // También actualizar metadata en auth
+        const { error: authError } = await client.auth.updateUser({
           data: {
             full_name: formData.full_name,
             phone: formData.phone
               ? formatPhone(formData.phone_operator, formData.phone)
               : "",
           },
-        },
-      });
+        });
 
-      if (authError) throw authError;
+        if (authError) {
+          console.warn("Error al actualizar auth metadata:", authError);
+        }
 
-      if (authData.user) {
-        // 2. Crear perfil en tabla profiles
-        const { error: profileError } = await client.from("profiles").insert({
-          id: authData.user.id,
+        await refetch();
+        toast.success("Usuario actualizado exitosamente");
+        handleCloseDialog();
+      } else {
+        // Crear usuario usando API Route (no desloguea al admin)
+        const { ok, data: result, error: apiError } = await authPost("/api/admin/users", {
           email: formData.email,
           full_name: formData.full_name,
           phone: formData.phone
             ? formatPhone(formData.phone_operator, formData.phone)
             : "",
+          roleId: formData.roleId,
         });
 
-        if (profileError && profileError.code !== "PGRST116") {
-          console.warn("Error al crear perfil:", profileError);
+        if (!ok) {
+          throw new Error(apiError || "Error al crear usuario");
         }
 
-        // 3. Asignar rol al usuario en user_roles
-        const { error: roleError } = await client.from("user_roles").insert({
-          user_id: authData.user.id,
-          role_id: formData.roleId,
-        });
-
-        if (roleError) {
-          console.warn("Error al asignar rol:", roleError);
-          toast.warning("Usuario creado pero hubo un error al asignar el rol");
-        }
+        await refetch();
+        handleCloseDialog();
+        
+        const tempPassword = result.tempPassword;
+        toast.custom((t) => (
+          <div className="flex items-center gap-3 bg-background border border-border rounded-lg px-4 py-3 shadow-lg">
+            <CheckCircle className="h-5 w-5 text-foreground shrink-0" />
+            <div className="flex-1 text-sm">
+              <p className="font-medium">Usuario creado exitosamente</p>
+              <p className="text-muted-foreground">
+                Contraseña temporal: <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono">{tempPassword}</code>
+              </p>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(tempPassword);
+                    toast.success("Copiado", { duration: 1500 });
+                  }}
+                  className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                >
+                  <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="z-[99999]">Copiar</TooltipContent>
+            </Tooltip>
+            <button
+              onClick={() => toast.dismiss(t)}
+              className="p-1 hover:bg-muted rounded-md transition-colors"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        ), { duration: 20000 });
       }
-
-      // Limpiar formulario
-      setFormData({
-        email: "",
-        full_name: "",
-        phone_operator: "0414",
-        phone: "",
-        roleId: availableRoles[0]?.id || "",
-      });
-      setShowCreateForm(false);
-      await refetch();
-
-      toast.success(
-        `Usuario creado exitosamente. Contraseña temporal: ${tempPassword}`,
-        { duration: 15000 },
-      );
     } catch (err) {
-      console.error("Error al crear usuario:", err);
-      toast.error("Error al crear usuario: " + err.message);
+      console.error("Error:", err);
+      toast.error(`Error al ${isEditing ? "actualizar" : "crear"} usuario: ` + err.message);
     } finally {
-      setIsCreating(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleEditUser = (user) => {
-    setEditingUser(user);
-    const phoneValue = user.phone || user.user_metadata?.phone || "";
-    const { operator, number } = parsePhone(phoneValue);
-    setEditFormData({
-      email: user.email || "",
-      full_name: user.full_name || user.user_metadata?.full_name || "",
-      phone_operator: operator,
-      phone: number,
-    });
-    setShowEditForm(true);
-    setShowCreateForm(false);
+const openDeleteDialog = (user) => {
+    setDeleteDialog({ open: true, user });
   };
 
-  const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-
-    // Máscara para teléfono: solo números, max 7 dígitos
-    if (name === "phone") {
-      const cleanValue = value.replace(/\D/g, "").slice(0, 7);
-      setEditFormData((prev) => ({ ...prev, [name]: cleanValue }));
-      return;
-    }
-
-    setEditFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleUpdateUser = async () => {
-    if (!editingUser) return;
-
-    setIsCreating(true);
+  const handleDeleteUser = async () => {
+    if (!deleteDialog.user) return;
+    
+    setDeletingId(deleteDialog.user.id);
     try {
-      const { error: profileError } = await client
-        .from("profiles")
-        .update({
-          email: editFormData.email,
-          full_name: editFormData.full_name,
-          phone: editFormData.phone
-            ? formatPhone(editFormData.phone_operator, editFormData.phone)
-            : "",
-        })
-        .eq("id", editingUser.id);
-
-      if (profileError && profileError.code !== "PGRST116") {
-        console.warn("Error al actualizar perfil:", profileError);
-      }
-
-      setEditingUser(null);
-      setShowEditForm(false);
-      setEditFormData({
-        email: "",
-        full_name: "",
-        phone_operator: "0414",
-        phone: "",
-      });
-      await refetch();
-
-      toast.success("Usuario actualizado exitosamente");
-    } catch (err) {
-      console.error("Error al actualizar usuario:", err);
-      toast.error("Error al actualizar usuario: " + err.message);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    setDeletingId(userId);
-    try {
-      const result = await deleteUser(userId);
+      const result = await deleteUser(deleteDialog.user.id);
       if (result.success) {
         toast.success("Usuario eliminado exitosamente");
+        setDeleteDialog({ open: false, user: null });
       } else {
         toast.error("Error al eliminar usuario: " + result.error);
       }
@@ -363,12 +346,6 @@ export function UsersTable() {
     } finally {
       setDeletingId(null);
     }
-  };
-
-  const cancelEdit = () => {
-    setEditingUser(null);
-    setShowEditForm(false);
-    setEditFormData({ email: "", full_name: "", phone: "" });
   };
 
   const formatDate = (dateString) => {
@@ -485,15 +462,12 @@ export function UsersTable() {
           <div className="flex space-x-2">
             <PermissionGate permission={PERMISSIONS.USERS_CREATE} hide>
               <Button
-                onClick={() => {
-                  setShowCreateForm(!showCreateForm);
-                  setShowEditForm(false);
-                }}
+                onClick={handleOpenCreateDialog}
                 variant="default"
                 size="sm"
               >
-                <UserPlus className="h-4 w-4" />
-                {showCreateForm ? "Cancelar" : "Nuevo Usuario"}
+                <UserPlus className="h-4 w-4 mr-1" />
+                Nuevo Usuario
               </Button>
             </PermissionGate>
             <Button onClick={refetch} variant="outline" size="sm">
@@ -553,225 +527,6 @@ export function UsersTable() {
               )}
             </div>
           </div>
-
-          {/* Formulario de Edición */}
-          {showEditForm && (
-            <div className="mb-6 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
-              <h3 className="text-lg font-semibold mb-4">Editar Usuario</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label className="mb-2 block">Email</Label>
-                  <Input
-                    type="email"
-                    name="email"
-                    value={editFormData.email}
-                    onChange={handleEditInputChange}
-                    placeholder="usuario@ejemplo.com"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Nombre Completo</Label>
-                  <Input
-                    type="text"
-                    name="full_name"
-                    value={editFormData.full_name}
-                    onChange={handleEditInputChange}
-                    placeholder="Juan Pérez"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Teléfono</Label>
-                  <div className="flex gap-1">
-                    <Select
-                      value={editFormData.phone_operator}
-                      onValueChange={(value) =>
-                        setEditFormData((prev) => ({
-                          ...prev,
-                          phone_operator: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        className="w-[90px] flex-shrink-0"
-                        aria-label="Operador telefónico"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PHONE_OPERATORS.map((op) => (
-                          <SelectItem key={op.code} value={op.code}>
-                            <span className="font-medium">{op.code}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="tel"
-                      name="phone"
-                      value={editFormData.phone}
-                      onChange={handleEditInputChange}
-                      placeholder="1234567"
-                      maxLength={7}
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground mt-3">
-                Para modificar el rol del usuario, usa el botón de seguridad
-                (escudo) en la tabla.
-              </p>
-              <div className="mt-4 flex space-x-2">
-                <Button
-                  onClick={handleUpdateUser}
-                  disabled={isCreating}
-                  size="sm"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Actualizando...
-                    </>
-                  ) : (
-                    "Actualizar Usuario"
-                  )}
-                </Button>
-                <Button onClick={cancelEdit} variant="outline" size="sm">
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Formulario de Creación */}
-          {showCreateForm && (
-            <div className="mb-6 p-4 border rounded-lg bg-green-50 dark:bg-green-950">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <UserPlus className="h-5 w-5" />
-                Crear Nuevo Usuario
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="mb-2 block">Email *</Label>
-                  <Input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="usuario@ejemplo.com"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Nombre Completo</Label>
-                  <Input
-                    type="text"
-                    name="full_name"
-                    value={formData.full_name}
-                    onChange={handleInputChange}
-                    placeholder="Juan Pérez"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Teléfono</Label>
-                  <div className="flex gap-1">
-                    <Select
-                      value={formData.phone_operator}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          phone_operator: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        className="w-[90px] flex-shrink-0"
-                        aria-label="Operador telefónico"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PHONE_OPERATORS.map((op) => (
-                          <SelectItem key={op.code} value={op.code}>
-                            <span className="font-medium">{op.code}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      placeholder="1234567"
-                      maxLength={7}
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label className="mb-2 block flex items-center gap-1">
-                    <Shield className="h-3 w-3" />
-                    Rol *
-                  </Label>
-                  <Select
-                    value={formData.roleId}
-                    onValueChange={handleRoleChange}
-                    disabled={rolesLoading}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue
-                        placeholder={
-                          rolesLoading ? "Cargando..." : "Selecciona un rol"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableRoles.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>
-                          <div className="flex items-center gap-2">
-                            <span>{role.name}</span>
-                            {role.description && (
-                              <span className="text-xs text-muted-foreground">
-                                - {role.description}
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground mt-3">
-                Se generará una contraseña temporal que se mostrará después de
-                crear el usuario.
-              </p>
-              <div className="mt-4 flex space-x-2">
-                <Button
-                  onClick={handleCreateUser}
-                  disabled={isCreating || rolesLoading}
-                  size="sm"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creando...
-                    </>
-                  ) : (
-                    "Crear Usuario"
-                  )}
-                </Button>
-                <Button
-                  onClick={() => setShowCreateForm(false)}
-                  variant="outline"
-                  size="sm"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
 
           {/* Tabla de usuarios */}
           {filteredUsers.length === 0 ? (
@@ -898,9 +653,10 @@ export function UsersTable() {
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
-                                      onClick={() => handleEditUser(user)}
+                                      onClick={() => handleOpenEditDialog(user)}
                                       variant="outline"
                                       size="icon-sm"
+                                      aria-label={`Editar usuario ${user.full_name || user.email}`}
                                     >
                                       <EditIcon />
                                     </Button>
@@ -919,16 +675,12 @@ export function UsersTable() {
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
-                                      onClick={() => handleDeleteUser(user.id)}
+                                      onClick={() => openDeleteDialog(user)}
                                       variant="destructive"
                                       size="icon-sm"
-                                      disabled={deletingId === user.id}
+                                      aria-label={`Eliminar usuario ${user.full_name || user.email}`}
                                     >
-                                      {deletingId === user.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <TrashIcon />
-                                      )}
+                                      <TrashIcon />
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>
@@ -987,6 +739,186 @@ export function UsersTable() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal para Crear/Editar Usuario */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                <User className="h-5 w-5 text-primary" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle>
+                  {isEditing ? "Editar Usuario" : "Crear Nuevo Usuario"}
+                </DialogTitle>
+                <DialogDescription className="truncate">
+                  {isEditing
+                    ? `Modifica los datos de "${selectedUser?.full_name || selectedUser?.email}"`
+                    : "Crea un nuevo usuario del sistema"}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="user-email">
+                Email {!isEditing && <span className="text-destructive">*</span>}
+              </Label>
+              <Input
+                id="user-email"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="usuario@ejemplo.com"
+                autoFocus={!isEditing}
+                disabled={isEditing}
+                aria-required={!isEditing}
+                className="w-full"
+              />
+              {isEditing && (
+                <p className="text-xs text-muted-foreground">
+                  El email no puede ser modificado
+                </p>
+              )}
+            </div>
+
+            {/* Nombre Completo */}
+            <div className="space-y-2">
+              <Label htmlFor="user-fullname">Nombre Completo</Label>
+              <Input
+                id="user-fullname"
+                type="text"
+                name="full_name"
+                value={formData.full_name}
+                onChange={handleInputChange}
+                placeholder="Juan Perez"
+                autoFocus={isEditing}
+                className="w-full"
+              />
+            </div>
+
+            {/* Telefono */}
+            <div className="space-y-2">
+              <Label htmlFor="user-phone">Telefono</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={formData.phone_operator}
+                  onValueChange={handlePhoneOperatorChange}
+                >
+                  <SelectTrigger
+                    className="w-24 shrink-0"
+                    aria-label="Operador telefonico"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PHONE_OPERATORS.map((op) => (
+                      <SelectItem key={op.code} value={op.code}>
+                        <span className="font-medium">{op.code}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="user-phone"
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  placeholder="1234567"
+                  maxLength={7}
+                  className="flex-1 min-w-0"
+                />
+              </div>
+            </div>
+
+            {/* Rol - Solo al crear */}
+            {!isEditing && (
+              <div className="space-y-2">
+                <Label htmlFor="user-role" className="flex items-center gap-1">
+                  <Shield className="h-3 w-3" aria-hidden="true" />
+                  Rol <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.roleId}
+                  onValueChange={handleRoleChange}
+                  disabled={rolesLoading}
+                >
+                  <SelectTrigger className="w-full" id="user-role">
+                    <SelectValue
+                      placeholder={
+                        rolesLoading ? "Cargando roles..." : "Selecciona un rol"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableRoles.map((role) => (
+                      <SelectItem key={role.id} value={role.id}>
+                        <span>{role.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Notas informativas */}
+            {!isEditing && (
+              <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                Se generara una contrasena temporal que se mostrara despues de crear el usuario.
+              </p>
+            )}
+
+            {isEditing && (
+              <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                Para modificar el rol del usuario, usa el botón de seguridad (escudo) en la tabla.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseDialog}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting || (!isEditing && rolesLoading)}
+              loading={isSubmitting}
+            >
+              {isEditing ? "Guardar Cambios" : "Crear Usuario"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de confirmación para eliminar */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) =>
+          setDeleteDialog({ open, user: open ? deleteDialog.user : null })
+        }
+        title="Eliminar Usuario"
+        description={
+          deleteDialog.user
+            ? `¿Estás seguro de que deseas eliminar al usuario "${deleteDialog.user.full_name || deleteDialog.user.email}"? Esta acción no se puede deshacer.`
+            : ""
+        }
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={deletingId !== null}
+        onConfirm={handleDeleteUser}
+      />
     </>
   );
 }

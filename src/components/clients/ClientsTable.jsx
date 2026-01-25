@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Loader2, IdCard, Phone, Settings2, CalendarClock } from "lucide-react";
+import { Loader2, IdCard, Phone, Settings2, CalendarClock, Users } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -31,6 +31,14 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { ConfirmDialog } from "../ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import {
   EmptyState,
   SearchEmptyState,
@@ -79,7 +87,10 @@ export function ClientsTable() {
   const { payments, loading: paymentsLoading } = usePayments();
   const { formatMultiCurrency, loading: rateLoading } = useExchangeRate();
 
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  // Estados del modal unificado para crear/editar
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -94,28 +105,12 @@ export function ClientsTable() {
     plan_id: "",
     join_date: new Date().toISOString().split("T")[0],
   });
-  const [isCreating, setIsCreating] = useState(false);
-  const [isUpdatingClient, setIsUpdatingClient] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
-
-  const [editingClient, setEditingClient] = useState(null);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [editFormData, setEditFormData] = useState({
-    first_name: "",
-    last_name: "",
-    cedula_type: "V",
-    cedula: "",
-    birth_date: "",
-    email: "",
-    phone_operator: "0414",
-    phone: "",
-    address: "",
-    observations: "",
-    plan_id: "",
-    join_date: "",
-  });
 
   // Estados para búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -222,6 +217,63 @@ export function ClientsTable() {
     }
   };
 
+  // Resetear formulario
+  const resetForm = useCallback(() => {
+    setFormData({
+      first_name: "",
+      last_name: "",
+      cedula_type: "V",
+      cedula: "",
+      birth_date: "",
+      email: "",
+      phone_operator: "0414",
+      phone: "",
+      address: "",
+      observations: "",
+      plan_id: "",
+      join_date: new Date().toISOString().split("T")[0],
+    });
+    setSelectedClient(null);
+    setIsEditing(false);
+  }, []);
+
+  // Abrir modal para crear
+  const handleOpenCreateDialog = useCallback(() => {
+    resetForm();
+    setIsDialogOpen(true);
+  }, [resetForm]);
+
+  // Abrir modal para editar
+  const handleOpenEditDialog = useCallback((client) => {
+    setSelectedClient(client);
+    // Parse cedula to separate type and number
+    const { type, number } = parseCedula(client.cedula || "");
+    // Parse phone to separate operator and number
+    const { operator, number: phoneNumber } = parsePhone(client.phone || "");
+    setFormData({
+      first_name: client.first_name || "",
+      last_name: client.last_name || "",
+      cedula_type: type,
+      cedula: number,
+      birth_date: client.birth_date || "",
+      email: client.email || "",
+      phone_operator: operator,
+      phone: phoneNumber,
+      address: client.address || "",
+      observations: client.observations || "",
+      plan_id: client.plan_id || "",
+      join_date: client.join_date || "",
+    });
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  }, []);
+
+  // Cerrar modal
+  const handleCloseDialog = useCallback(() => {
+    setIsDialogOpen(false);
+    setTimeout(resetForm, 150);
+  }, [resetForm]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
@@ -241,7 +293,8 @@ export function ClientsTable() {
     }));
   };
 
-  const handleCreateClient = async () => {
+  // Enviar formulario (crear o editar)
+  const handleSubmit = async () => {
     if (
       !formData.first_name.trim() ||
       !formData.last_name.trim() ||
@@ -254,7 +307,7 @@ export function ClientsTable() {
       return;
     }
 
-    setIsCreating(true);
+    setIsSubmitting(true);
     try {
       // Format cedula with type prefix before saving
       // Format phone with operator prefix before saving
@@ -273,149 +326,34 @@ export function ClientsTable() {
         join_date: formData.join_date,
       };
 
-      const result = await createClient(dataToSave);
+      let result;
+      if (isEditing && selectedClient) {
+        result = await updateClient(selectedClient.id, dataToSave);
+      } else {
+        result = await createClient(dataToSave);
+      }
 
       if (result.success) {
-        setFormData({
-          first_name: "",
-          last_name: "",
-          cedula_type: "V",
-          cedula: "",
-          birth_date: "",
-          email: "",
-          phone_operator: "0414",
-          phone: "",
-          address: "",
-          observations: "",
-          plan_id: "",
-          join_date: new Date().toISOString().split("T")[0],
-        });
-        setShowCreateForm(false);
-        toast.success("Cliente creado exitosamente");
+        handleCloseDialog();
+        toast.success(
+          isEditing
+            ? "Cliente actualizado exitosamente"
+            : "Cliente creado exitosamente",
+        );
       } else {
-        toast.error("Error al crear cliente: " + result.error);
+        toast.error(
+          `Error al ${isEditing ? "actualizar" : "crear"} cliente: ` +
+            result.error,
+        );
       }
     } catch (err) {
-      console.error("Error al crear cliente:", err);
-      toast.error("Error al crear cliente: " + err.message);
+      console.error(`Error al ${isEditing ? "actualizar" : "crear"} cliente:`, err);
+      toast.error(
+        `Error al ${isEditing ? "actualizar" : "crear"} cliente: ` + err.message,
+      );
     } finally {
-      setIsCreating(false);
+      setIsSubmitting(false);
     }
-  };
-
-  const handleEditClient = (client) => {
-    setEditingClient(client);
-    // Parse cedula to separate type and number
-    const { type, number } = parseCedula(client.cedula || "");
-    // Parse phone to separate operator and number
-    const { operator, number: phoneNumber } = parsePhone(client.phone || "");
-    setEditFormData({
-      first_name: client.first_name || "",
-      last_name: client.last_name || "",
-      cedula_type: type,
-      cedula: number,
-      birth_date: client.birth_date || "",
-      email: client.email || "",
-      phone_operator: operator,
-      phone: phoneNumber,
-      address: client.address || "",
-      observations: client.observations || "",
-      plan_id: client.plan_id || "",
-      join_date: client.join_date || "",
-    });
-    setShowEditForm(true);
-    setShowCreateForm(false);
-  };
-
-  const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-
-    // Máscara para teléfono: solo números, max 7 dígitos
-    if (name === "phone") {
-      const cleanValue = value.replace(/\D/g, "").slice(0, 7);
-      setEditFormData((prev) => ({
-        ...prev,
-        [name]: cleanValue,
-      }));
-      return;
-    }
-
-    setEditFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleUpdateClient = async () => {
-    if (!editingClient) return;
-
-    setIsUpdatingClient(true);
-    try {
-      // Format cedula with type prefix before saving
-      // Format phone with operator prefix before saving
-      const dataToSave = {
-        first_name: editFormData.first_name,
-        last_name: editFormData.last_name,
-        cedula: formatCedula(editFormData.cedula_type, editFormData.cedula),
-        birth_date: editFormData.birth_date,
-        email: editFormData.email,
-        phone: editFormData.phone
-          ? formatPhone(editFormData.phone_operator, editFormData.phone)
-          : "",
-        address: editFormData.address,
-        observations: editFormData.observations,
-        plan_id: editFormData.plan_id,
-        join_date: editFormData.join_date,
-      };
-
-      const result = await updateClient(editingClient.id, dataToSave);
-
-      if (result.success) {
-        setEditingClient(null);
-        setShowEditForm(false);
-        setEditFormData({
-          first_name: "",
-          last_name: "",
-          cedula_type: "V",
-          cedula: "",
-          birth_date: "",
-          email: "",
-          phone_operator: "0414",
-          phone: "",
-          address: "",
-          observations: "",
-          plan_id: "",
-          join_date: "",
-        });
-        toast.success("Cliente actualizado exitosamente");
-      } else {
-        toast.error("Error al actualizar cliente: " + result.error);
-      }
-    } catch (err) {
-      console.error("Error al actualizar cliente:", err);
-      toast.error("Error al actualizar cliente: " + err.message);
-    } finally {
-      setIsUpdatingClient(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingClient(null);
-    setShowEditForm(false);
-    setEditFormData({
-      first_name: "",
-      last_name: "",
-      cedula_type: "V",
-      cedula: "",
-      birth_date: "",
-      email: "",
-      phone_operator: "0414",
-      phone: "",
-      address: "",
-      observations: "",
-      plan_id: "",
-      join_date: "",
-    });
   };
 
   const handleDeleteClick = (client) => {
@@ -557,11 +495,11 @@ export function ClientsTable() {
         </CardTitle>
         <div className="flex space-x-2">
           <Button
-            onClick={() => setShowCreateForm(!showCreateForm)}
+            onClick={handleOpenCreateDialog}
             variant="default"
             size="sm"
           >
-            {showCreateForm ? "Cancelar" : "+ Nuevo Cliente"}
+            + Nuevo Cliente
           </Button>
           <Button onClick={refetch} variant="outline" size="sm">
             Actualizar
@@ -689,432 +627,6 @@ export function ClientsTable() {
           )}
         </div>
 
-        {showEditForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-muted/50">
-            <h3 className="text-lg font-semibold mb-4">Editar Cliente</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit_first_name">Nombre</Label>
-                <Input
-                  id="edit_first_name"
-                  type="text"
-                  name="first_name"
-                  value={editFormData.first_name}
-                  onChange={handleEditInputChange}
-                  placeholder="Juan"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_last_name">Apellido</Label>
-                <Input
-                  id="edit_last_name"
-                  type="text"
-                  name="last_name"
-                  value={editFormData.last_name}
-                  onChange={handleEditInputChange}
-                  placeholder="Pérez"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_cedula">
-                  Cédula <span className="text-destructive">*</span>
-                </Label>
-                <div className="flex gap-1">
-                  <Select
-                    value={editFormData.cedula_type}
-                    onValueChange={(value) =>
-                      setEditFormData((prev) => ({
-                        ...prev,
-                        cedula_type: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger
-                      className="w-[70px] flex-shrink-0"
-                      aria-label="Tipo de documento"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DOCUMENT_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          <div className="flex items-center gap-1">
-                            <span className="font-medium">{type.label}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    id="edit_cedula"
-                    type="text"
-                    name="cedula"
-                    value={editFormData.cedula}
-                    onChange={handleEditInputChange}
-                    placeholder="12345678"
-                    required
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_birth_date">Fecha de Nacimiento</Label>
-                <Input
-                  id="edit_birth_date"
-                  type="date"
-                  name="birth_date"
-                  value={editFormData.birth_date}
-                  onChange={handleEditInputChange}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_email">Email</Label>
-                <Input
-                  id="edit_email"
-                  type="email"
-                  name="email"
-                  value={editFormData.email}
-                  onChange={handleEditInputChange}
-                  placeholder="cliente@ejemplo.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_phone">Teléfono</Label>
-                <div className="flex gap-1">
-                  <Select
-                    value={editFormData.phone_operator}
-                    onValueChange={(value) =>
-                      setEditFormData((prev) => ({
-                        ...prev,
-                        phone_operator: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger
-                      className="w-[90px] flex-shrink-0"
-                      aria-label="Operador telefónico"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PHONE_OPERATORS.map((op) => (
-                        <SelectItem key={op.code} value={op.code}>
-                          <span className="font-medium">{op.code}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    id="edit_phone"
-                    type="tel"
-                    name="phone"
-                    value={editFormData.phone}
-                    onChange={handleEditInputChange}
-                    placeholder="1234567"
-                    maxLength={7}
-                    className="flex-1"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Movistar: 0414/0424, Movilnet: 0416/0426, Digitel: 0412
-                </p>
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="edit_address">Dirección</Label>
-                <Input
-                  id="edit_address"
-                  type="text"
-                  name="address"
-                  value={editFormData.address}
-                  onChange={handleEditInputChange}
-                  placeholder="Calle Principal #123"
-                />
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="edit_observations">Observaciones</Label>
-                <Textarea
-                  id="edit_observations"
-                  name="observations"
-                  value={editFormData.observations}
-                  onChange={handleEditInputChange}
-                  rows={3}
-                  placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_plan_id">Plan</Label>
-                <Select
-                  value={editFormData.plan_id}
-                  onValueChange={(value) =>
-                    setEditFormData((prev) => ({ ...prev, plan_id: value }))
-                  }
-                >
-                  <SelectTrigger id="edit_plan_id">
-                    <SelectValue placeholder="Seleccionar plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_join_date">Fecha de Ingreso</Label>
-                <Input
-                  id="edit_join_date"
-                  type="date"
-                  name="join_date"
-                  value={editFormData.join_date}
-                  onChange={handleEditInputChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex space-x-2">
-              <Button
-                onClick={handleUpdateClient}
-                disabled={isUpdatingClient}
-                variant="default"
-                size="sm"
-              >
-                {isUpdatingClient ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Actualizando...
-                  </>
-                ) : (
-                  "Actualizar Cliente"
-                )}
-              </Button>
-              <Button onClick={cancelEdit} variant="outline" size="sm">
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {showCreateForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-muted/50">
-            <h3 className="text-lg font-semibold mb-4">Crear Nuevo Cliente</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="create_first_name">Nombre</Label>
-                <Input
-                  id="create_first_name"
-                  type="text"
-                  name="first_name"
-                  value={formData.first_name}
-                  onChange={handleInputChange}
-                  placeholder="Juan"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create_last_name">Apellido</Label>
-                <Input
-                  id="create_last_name"
-                  type="text"
-                  name="last_name"
-                  value={formData.last_name}
-                  onChange={handleInputChange}
-                  placeholder="Pérez"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create_cedula">
-                  Cédula <span className="text-destructive">*</span>
-                </Label>
-                <div className="flex gap-1">
-                  <Select
-                    value={formData.cedula_type}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, cedula_type: value }))
-                    }
-                  >
-                    <SelectTrigger
-                      className="w-[70px] flex-shrink-0"
-                      aria-label="Tipo de documento"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DOCUMENT_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          <div className="flex items-center gap-1">
-                            <span className="font-medium">{type.label}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    id="create_cedula"
-                    type="text"
-                    name="cedula"
-                    value={formData.cedula}
-                    onChange={handleInputChange}
-                    placeholder="12345678"
-                    required
-                    className="flex-1"
-                    aria-describedby="cedula-hint"
-                  />
-                </div>
-                <p id="cedula-hint" className="text-xs text-muted-foreground">
-                  V: Venezolano, E: Extranjero, J: Jurídico, P: Pasaporte
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create_birth_date">Fecha de Nacimiento</Label>
-                <Input
-                  id="create_birth_date"
-                  type="date"
-                  name="birth_date"
-                  value={formData.birth_date}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create_email">Email</Label>
-                <Input
-                  id="create_email"
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="cliente@ejemplo.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create_phone">Teléfono</Label>
-                <div className="flex gap-1">
-                  <Select
-                    value={formData.phone_operator}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        phone_operator: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger
-                      className="w-[90px] flex-shrink-0"
-                      aria-label="Operador telefónico"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PHONE_OPERATORS.map((op) => (
-                        <SelectItem key={op.code} value={op.code}>
-                          <span className="font-medium">{op.code}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    id="create_phone"
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    placeholder="1234567"
-                    maxLength={7}
-                    className="flex-1"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Movistar: 0414/0424, Movilnet: 0416/0426, Digitel: 0412
-                </p>
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="create_address">Dirección</Label>
-                <Input
-                  id="create_address"
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  placeholder="Calle Principal #123"
-                />
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="create_observations">Observaciones</Label>
-                <Textarea
-                  id="create_observations"
-                  name="observations"
-                  value={formData.observations}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create_plan_id">Plan</Label>
-                <Select
-                  value={formData.plan_id}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, plan_id: value }))
-                  }
-                  disabled={plansLoading}
-                >
-                  <SelectTrigger id="create_plan_id">
-                    <SelectValue placeholder="Seleccionar plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create_join_date">Fecha de Ingreso</Label>
-                <Input
-                  id="create_join_date"
-                  type="date"
-                  name="join_date"
-                  value={formData.join_date}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex space-x-2">
-              <Button
-                onClick={handleCreateClient}
-                disabled={isCreating || plansLoading}
-                variant="default"
-                size="sm"
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  "Guardar Cliente"
-                )}
-              </Button>
-              <Button
-                onClick={() => setShowCreateForm(false)}
-                variant="outline"
-                size="sm"
-              >
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-
         {clients.length === 0 ? (
           <GettingStartedState
             title="No hay clientes registrados"
@@ -1125,7 +637,7 @@ export function ClientsTable() {
             ]}
             action={{
               label: "Nuevo Cliente",
-              onClick: () => setShowCreateForm(true),
+              onClick: handleOpenCreateDialog,
             }}
           />
         ) : filteredClients.length === 0 ? (
@@ -1281,7 +793,7 @@ export function ClientsTable() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  onClick={() => handleEditClient(client)}
+                                  onClick={() => handleOpenEditDialog(client)}
                                   variant="outline"
                                   size="icon-sm"
                                   aria-label={`Editar cliente ${client.first_name} ${client.last_name}`}
@@ -1350,6 +862,234 @@ export function ClientsTable() {
         onConfirm={handleDeleteClient}
         onCancel={() => setClientToDelete(null)}
       />
+
+      {/* Modal para crear/editar cliente */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" aria-hidden="true" />
+              {isEditing ? "Editar Cliente" : "Nuevo Cliente"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? "Modifica los datos del cliente."
+                : "Completa el formulario para registrar un nuevo cliente."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="first_name">
+                Nombre <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="first_name"
+                type="text"
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleInputChange}
+                placeholder="Juan"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="last_name">
+                Apellido <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="last_name"
+                type="text"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleInputChange}
+                placeholder="Pérez"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cedula">
+                Cédula <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex gap-1">
+                <Select
+                  value={formData.cedula_type}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, cedula_type: value }))
+                  }
+                >
+                  <SelectTrigger
+                    className="w-[70px] flex-shrink-0"
+                    aria-label="Tipo de documento"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOCUMENT_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        <span className="font-medium">{type.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="cedula"
+                  type="text"
+                  name="cedula"
+                  value={formData.cedula}
+                  onChange={handleInputChange}
+                  placeholder="12345678"
+                  required
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                V: Venezolano, E: Extranjero, J: Jurídico, P: Pasaporte
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="birth_date">
+                Fecha de Nacimiento <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="birth_date"
+                type="date"
+                name="birth_date"
+                value={formData.birth_date}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="cliente@ejemplo.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Teléfono</Label>
+              <div className="flex gap-1">
+                <Select
+                  value={formData.phone_operator}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      phone_operator: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger
+                    className="w-[90px] flex-shrink-0"
+                    aria-label="Operador telefónico"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PHONE_OPERATORS.map((op) => (
+                      <SelectItem key={op.code} value={op.code}>
+                        <span className="font-medium">{op.code}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="phone"
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  placeholder="1234567"
+                  maxLength={7}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Movistar: 0414/0424, Movilnet: 0416/0426, Digitel: 0412
+              </p>
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label htmlFor="address">Dirección</Label>
+              <Input
+                id="address"
+                type="text"
+                name="address"
+                value={formData.address}
+                onChange={handleInputChange}
+                placeholder="Calle Principal #123"
+              />
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label htmlFor="observations">Observaciones</Label>
+              <Textarea
+                id="observations"
+                name="observations"
+                value={formData.observations}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="plan_id">Plan</Label>
+              <Select
+                value={formData.plan_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, plan_id: value }))
+                }
+                disabled={plansLoading}
+              >
+                <SelectTrigger id="plan_id">
+                  <SelectValue placeholder="Seleccionar plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="join_date">
+                Fecha de Ingreso <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="join_date"
+                type="date"
+                name="join_date"
+                value={formData.join_date}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseDialog}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting || plansLoading}
+              loading={isSubmitting}
+            >
+              {isEditing ? "Actualizar Cliente" : "Guardar Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

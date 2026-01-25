@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, X } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Dumbbell } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -20,6 +20,14 @@ import { ConfirmDialog } from "../ui/confirm-dialog";
 import { EmptyState } from "../ui/empty-state";
 import { EditIcon, TrashIcon } from "../ui/icons";
 import { TruncatedCell } from "../ui/truncated-cell";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import {
   Table,
   TableBody,
@@ -45,108 +53,97 @@ export function PlansTable() {
     return paginateData(plans);
   }, [plans, paginateData]);
 
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  // Estados del modal unificado para crear/editar
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     price: "",
   });
-  const [isCreating, setIsCreating] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, plan: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [editingPlan, setEditingPlan] = useState(null);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [editFormData, setEditFormData] = useState({
-    name: "",
-    description: "",
-    price: "",
-  });
+  // Resetear formulario
+  const resetForm = useCallback(() => {
+    setFormData({
+      name: "",
+      description: "",
+      price: "",
+    });
+    setSelectedPlan(null);
+    setIsEditing(false);
+  }, []);
 
-  const handleInputChange = (e) => {
+  // Abrir modal para crear
+  const handleOpenCreateDialog = useCallback(() => {
+    resetForm();
+    setIsDialogOpen(true);
+  }, [resetForm]);
+
+  // Abrir modal para editar
+  const handleOpenEditDialog = useCallback((plan) => {
+    setSelectedPlan(plan);
+    setFormData({
+      name: plan.name || "",
+      description: plan.description || "",
+      price: plan.price?.toString() || "",
+    });
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  }, []);
+
+  // Cerrar modal
+  const handleCloseDialog = useCallback(() => {
+    setIsDialogOpen(false);
+    // Pequeño delay para que la animación de cierre termine antes de resetear
+    setTimeout(resetForm, 150);
+  }, [resetForm]);
+
+  const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
-  };
+  }, []);
 
-  const handleCreatePlan = async () => {
-    if (
-      !formData.name.trim() ||
-      !formData.price ||
-      parseFloat(formData.price) <= 0
-    ) {
+  // Submit del formulario (crear o actualizar)
+  const handleSubmit = async () => {
+    if (!formData.name.trim() || !formData.price || parseFloat(formData.price) <= 0) {
       toast.error("El nombre y el precio del plan son obligatorios");
       return;
     }
 
-    setIsCreating(true);
+    setIsSubmitting(true);
     try {
-      const result = await createPlan(formData);
-
-      if (result.success) {
-        setFormData({ name: "", description: "", price: "" });
-        setShowCreateForm(false);
-        toast.success("Plan creado exitosamente");
+      let result;
+      
+      if (isEditing && selectedPlan) {
+        result = await updatePlan(selectedPlan.id, formData);
+        if (result.success) {
+          toast.success("Plan actualizado exitosamente");
+          handleCloseDialog();
+        } else {
+          toast.error("Error al actualizar plan: " + result.error);
+        }
       } else {
-        toast.error("Error al crear plan: " + result.error);
+        result = await createPlan(formData);
+        if (result.success) {
+          toast.success("Plan creado exitosamente");
+          handleCloseDialog();
+        } else {
+          toast.error("Error al crear plan: " + result.error);
+        }
       }
     } catch (err) {
-      console.error("Error al crear plan:", err);
-      toast.error("Error al crear plan: " + err.message);
+      console.error("Error:", err);
+      toast.error(`Error al ${isEditing ? "actualizar" : "crear"} plan: ` + err.message);
     } finally {
-      setIsCreating(false);
+      setIsSubmitting(false);
     }
-  };
-
-  const handleEditPlan = (plan) => {
-    setEditingPlan(plan);
-    setEditFormData({
-      name: plan.name || "",
-      description: plan.description || "",
-      price: plan.price || "",
-    });
-    setShowEditForm(true);
-    setShowCreateForm(false);
-  };
-
-  const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleUpdatePlan = async () => {
-    if (!editingPlan) return;
-
-    setIsUpdating(true);
-    try {
-      const result = await updatePlan(editingPlan.id, editFormData);
-
-      if (result.success) {
-        setEditingPlan(null);
-        setShowEditForm(false);
-        setEditFormData({ name: "", description: "", price: "" });
-        toast.success("Plan actualizado exitosamente");
-      } else {
-        toast.error("Error al actualizar plan: " + result.error);
-      }
-    } catch (err) {
-      console.error("Error al actualizar plan:", err);
-      toast.error("Error al actualizar plan: " + err.message);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingPlan(null);
-    setShowEditForm(false);
-    setEditFormData({ name: "", description: "", price: "" });
   };
 
   const openDeleteDialog = (plan) => {
@@ -175,8 +172,6 @@ export function PlansTable() {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    // Si es solo fecha (YYYY-MM-DD), parsear manualmente para evitar desfase de zona horaria
-    // Si incluye hora (ISO timestamp), usar new Date() normalmente
     let date;
     if (dateString.length === 10 && dateString.includes("-")) {
       const parts = dateString.split("-");
@@ -248,25 +243,12 @@ export function PlansTable() {
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={() => {
-                setShowCreateForm(!showCreateForm);
-                if (showEditForm) cancelEdit();
-              }}
-              variant={showCreateForm ? "outline" : "default"}
+              onClick={handleOpenCreateDialog}
               size="sm"
               className="gap-2"
             >
-              {showCreateForm ? (
-                <>
-                  <X className="h-4 w-4" />
-                  Cancelar
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  Nuevo Plan
-                </>
-              )}
+              <Plus className="h-4 w-4" />
+              Nuevo Plan
             </Button>
             <Button
               onClick={refetch}
@@ -281,181 +263,6 @@ export function PlansTable() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Formulario de Edición */}
-          {showEditForm && (
-            <div
-              className="mb-6 p-4 border rounded-lg bg-muted/50"
-              role="form"
-              aria-labelledby="edit-form-title"
-            >
-              <h3 id="edit-form-title" className="text-lg font-semibold mb-4">
-                Editar Plan: {editingPlan?.name}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="edit-name">
-                    Nombre del Plan <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="edit-name"
-                    type="text"
-                    name="name"
-                    value={editFormData.name}
-                    onChange={handleEditInputChange}
-                    placeholder="Ej: Plan Mensual"
-                    required
-                    aria-required="true"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-price">
-                    Precio (USD) <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    name="price"
-                    value={editFormData.price}
-                    onChange={handleEditInputChange}
-                    placeholder="0.00"
-                    required
-                    aria-required="true"
-                  />
-                </div>
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="edit-description">
-                    Descripción{" "}
-                    <span className="text-muted-foreground text-xs">
-                      (opcional)
-                    </span>
-                  </Label>
-                  <Textarea
-                    id="edit-description"
-                    name="description"
-                    value={editFormData.description}
-                    onChange={handleEditInputChange}
-                    rows={3}
-                    placeholder="Detalles del plan, beneficios, duración, etc."
-                  />
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <Button
-                  onClick={handleUpdatePlan}
-                  disabled={isUpdating}
-                  size="sm"
-                >
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Actualizando...
-                    </>
-                  ) : (
-                    "Guardar Cambios"
-                  )}
-                </Button>
-                <Button onClick={cancelEdit} variant="outline" size="sm">
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Formulario de Creación */}
-          {showCreateForm && (
-            <div
-              className="mb-6 p-4 border rounded-lg bg-muted/50"
-              role="form"
-              aria-labelledby="create-form-title"
-            >
-              <h3 id="create-form-title" className="text-lg font-semibold mb-4">
-                Crear Nuevo Plan
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Define un nuevo plan de membresía con su nombre, precio y
-                descripción.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="create-name">
-                    Nombre del Plan <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="create-name"
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Plan Mensual, Plan Trimestral, Plan Anual"
-                    required
-                    aria-required="true"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="create-price">
-                    Precio (USD) <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="create-price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    placeholder="0.00"
-                    required
-                    aria-required="true"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    El precio se mostrará en USD y Bs automáticamente
-                  </p>
-                </div>
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="create-description">
-                    Descripción{" "}
-                    <span className="text-muted-foreground text-xs">
-                      (opcional)
-                    </span>
-                  </Label>
-                  <Textarea
-                    id="create-description"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    rows={3}
-                    placeholder="Describe los beneficios del plan, duración, acceso a instalaciones, etc."
-                  />
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <Button
-                  onClick={handleCreatePlan}
-                  disabled={isCreating}
-                  size="sm"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    "Crear Plan"
-                  )}
-                </Button>
-                <Button
-                  onClick={() => setShowCreateForm(false)}
-                  variant="outline"
-                  size="sm"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Estado vacío o tabla */}
           {plans.length === 0 ? (
             <EmptyState
@@ -464,7 +271,7 @@ export function PlansTable() {
               description="Los planes definen las opciones de membresía que ofreces a tus clientes. Crea tu primer plan para comenzar a registrar pagos."
               action={{
                 label: "Crear Primer Plan",
-                onClick: () => setShowCreateForm(true),
+                onClick: handleOpenCreateDialog,
               }}
             />
           ) : (
@@ -543,7 +350,7 @@ export function PlansTable() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
-                                    onClick={() => handleEditPlan(plan)}
+                                    onClick={() => handleOpenEditDialog(plan)}
                                     variant="outline"
                                     size="icon-sm"
                                     aria-label={`Editar plan ${plan.name}`}
@@ -591,6 +398,103 @@ export function PlansTable() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal para Crear/Editar Plan */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Dumbbell className="h-5 w-5 text-primary" aria-hidden="true" />
+              </div>
+              <div>
+                <DialogTitle>
+                  {isEditing ? "Editar Plan" : "Crear Nuevo Plan"}
+                </DialogTitle>
+                <DialogDescription>
+                  {isEditing
+                    ? `Modifica los datos del plan "${selectedPlan?.name}"`
+                    : "Define un nuevo plan de membresía para tus clientes"}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            {/* Nombre del Plan */}
+            <div className="space-y-2">
+              <Label htmlFor="plan-name">
+                Nombre del Plan <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="plan-name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="Ej: Plan Mensual, Plan Trimestral"
+                autoFocus
+                aria-required="true"
+              />
+            </div>
+
+            {/* Precio */}
+            <div className="space-y-2">
+              <Label htmlFor="plan-price">
+                Precio (USD) <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="plan-price"
+                type="number"
+                step="0.01"
+                min="0"
+                name="price"
+                value={formData.price}
+                onChange={handleInputChange}
+                placeholder="0.00"
+                aria-required="true"
+              />
+              <p className="text-xs text-muted-foreground">
+                El precio se mostrará en USD y Bs automáticamente
+              </p>
+            </div>
+
+            {/* Descripción */}
+            <div className="space-y-2">
+              <Label htmlFor="plan-description">
+                Descripción{" "}
+                <span className="text-muted-foreground text-xs">(opcional)</span>
+              </Label>
+              <Textarea
+                id="plan-description"
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="Describe los beneficios del plan, duración, acceso a instalaciones, etc."
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseDialog}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              loading={isSubmitting}
+            >
+              {isEditing ? "Guardar Cambios" : "Crear Plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo de confirmación para eliminar */}
       <ConfirmDialog

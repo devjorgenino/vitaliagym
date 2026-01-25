@@ -268,4 +268,68 @@ function usePagination(initialPageSize = 10) {
   };
 }
 
-export { Pagination, usePagination, PAGE_SIZE_OPTIONS };
+/**
+ * Hook para paginación del lado del servidor
+ * @param {number} initialPageSize - Tamaño inicial de página
+ * @returns {Object} - Estado y funciones de paginación para consultas al servidor
+ */
+function useServerPagination(initialPageSize = 10) {
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(initialPageSize);
+  const [totalCount, setTotalCount] = React.useState(0);
+
+  const totalPages = React.useMemo(
+    () => Math.ceil(totalCount / pageSize) || 1,
+    [totalCount, pageSize]
+  );
+
+  // Calcular rango para Supabase .range(from, to)
+  const getRange = React.useCallback(() => {
+    const from = (currentPage - 1) * pageSize;
+    const to = from + pageSize - 1;
+    return { from, to };
+  }, [currentPage, pageSize]);
+
+  const resetPage = React.useCallback(() => {
+    setCurrentPage(1);
+  }, []);
+
+  // Ir a una página específica con validación
+  const goToPage = React.useCallback((page) => {
+    const validPage = Math.max(1, Math.min(page, totalPages));
+    setCurrentPage(validPage);
+  }, [totalPages]);
+
+  // Cambiar tamaño de página y resetear a página 1
+  const changePageSize = React.useCallback((newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  }, []);
+
+  return {
+    // Estado
+    currentPage,
+    pageSize,
+    totalCount,
+    totalPages,
+    
+    // Setters
+    setCurrentPage,
+    setPageSize,
+    setTotalCount,
+    
+    // Helpers
+    getRange,
+    resetPage,
+    goToPage,
+    changePageSize,
+    
+    // Info
+    hasNextPage: currentPage < totalPages,
+    hasPrevPage: currentPage > 1,
+    startItem: totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1,
+    endItem: Math.min(currentPage * pageSize, totalCount),
+  };
+}
+
+export { Pagination, usePagination, useServerPagination, PAGE_SIZE_OPTIONS };
