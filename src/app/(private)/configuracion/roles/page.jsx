@@ -106,11 +106,11 @@ export default function RolesConfigPage() {
       permission={PERMISSIONS.SETTINGS_MANAGE_ROLES} 
       showAccessDenied
     >
-      <div className="container mx-auto py-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Gestión de Roles</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold">Gestión de Roles</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Configura los roles del sistema y sus permisos asociados
             </p>
           </div>
@@ -211,14 +211,15 @@ function RolesManagement() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Botón para crear nuevo rol */}
       <div className="flex justify-end">
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4" />
-              Nuevo Rol
+            <Button className="text-xs sm:text-sm">
+              <Plus className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Nuevo Rol</span>
+              <span className="sm:hidden">Nuevo</span>
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -283,21 +284,22 @@ function RolesManagement() {
 
       {/* Matriz de permisos (vista compacta) */}
       <Card>
-        <CardHeader>
-          <CardTitle>Matriz de Permisos</CardTitle>
-          <CardDescription>
+        <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-4">
+          <CardTitle className="text-base sm:text-lg">Matriz de Permisos</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             Vista compacta de todos los permisos por rol
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+        <CardContent className="p-2 sm:p-6 pt-0">
+          <div className="overflow-x-auto -mx-2 sm:mx-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[200px]">Permiso</TableHead>
+                  <TableHead className="w-[150px] sm:w-[200px] text-xs sm:text-sm">Permiso</TableHead>
                   {roles.map((role) => (
-                    <TableHead key={role.id} className="text-center min-w-[100px]">
-                      {role.name}
+                    <TableHead key={role.id} className="text-center min-w-[70px] sm:min-w-[100px] text-xs sm:text-sm">
+                      <span className="hidden sm:inline">{role.name}</span>
+                      <span className="sm:hidden">{role.name.slice(0, 5)}</span>
                     </TableHead>
                   ))}
                 </TableRow>
@@ -306,16 +308,17 @@ function RolesManagement() {
                 {Object.entries(permissionsByModule).map(([moduleName, modulePermissions]) => (
                   <React.Fragment key={moduleName}>
                     <TableRow className="bg-muted/50">
-                      <TableCell colSpan={roles.length + 1} className="font-semibold">
+                      <TableCell colSpan={roles.length + 1} className="font-semibold text-xs sm:text-sm py-2">
                         {MODULE_NAMES[moduleName] || moduleName}
                       </TableCell>
                     </TableRow>
                     {modulePermissions.map((permission) => (
                       <TableRow key={permission.id}>
-                        <TableCell className="text-sm">
+                        <TableCell className="text-xs sm:text-sm py-2">
                           <Tooltip>
-                            <TooltipTrigger className="cursor-help">
-                              {permission.name}
+                            <TooltipTrigger className="cursor-help text-left">
+                              <span className="hidden sm:inline">{permission.name}</span>
+                              <span className="sm:hidden">{permission.name.slice(0, 15)}...</span>
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>{permission.description}</p>
@@ -330,11 +333,11 @@ function RolesManagement() {
                             p => p.id === permission.id
                           );
                           return (
-                            <TableCell key={role.id} className="text-center">
+                            <TableCell key={role.id} className="text-center py-2">
                               {hasPermission ? (
-                                <Check className="h-4 w-4 text-green-600 mx-auto" />
+                                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 mx-auto" />
                               ) : (
-                                <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
+                                <X className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground/40 mx-auto" />
                               )}
                             </TableCell>
                           );
@@ -369,45 +372,46 @@ function RoleCard({
         <CollapsibleTrigger asChild>
           <CardHeader 
             className={cn(
-              "cursor-pointer select-none transition-colors hover:bg-muted/50",
+              "cursor-pointer select-none transition-colors hover:bg-muted/50 p-3 sm:p-6",
               "group"
             )}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Shield className="h-5 w-5 text-primary" />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 flex-shrink-0">
+                  <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div className="flex-1">
-                  <CardTitle className="flex items-center gap-2">
-                    {role.name}
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="flex flex-wrap items-center gap-1 sm:gap-2 text-sm sm:text-base">
+                    <span className="truncate">{role.name}</span>
                     {role.isSystemRole && (
-                      <Badge variant="secondary" className="text-xs">
-                        <Lock className="h-3 w-3 mr-1" />
-                        Sistema
+                      <Badge variant="secondary" className="text-[10px] sm:text-xs flex-shrink-0">
+                        <Lock className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                        <span className="hidden sm:inline">Sistema</span>
                       </Badge>
                     )}
-                    <Badge variant="outline" className="text-xs ml-2">
-                      {activePermissions}/{totalPermissions} permisos
+                    <Badge variant="outline" className="text-[10px] sm:text-xs flex-shrink-0">
+                      {activePermissions}/{totalPermissions}
                     </Badge>
                   </CardTitle>
-                  <CardDescription>{role.description}</CardDescription>
+                  <CardDescription className="text-xs sm:text-sm line-clamp-1">{role.description}</CardDescription>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                 {!role.isSystemRole && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 sm:h-9 sm:w-9"
                         onClick={(e) => {
                           e.stopPropagation();
                           onDeleteRole(role.id);
                         }}
                         aria-label={`Eliminar rol ${role.name}`}
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-destructive" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Eliminar rol</TooltipContent>
@@ -415,19 +419,19 @@ function RoleCard({
                 )}
                 <div
                   className={cn(
-                    "p-1.5 rounded-md transition-transform duration-200",
+                    "p-1 sm:p-1.5 rounded-md transition-transform duration-200",
                     isOpen && "rotate-180"
                   )}
                   aria-hidden="true"
                 >
-                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                 </div>
               </div>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 p-3 sm:p-6 sm:pt-0">
             <Accordion type="multiple" className="w-full">
               {Object.entries(permissionsByModule).map(([moduleName, modulePermissions]) => {
                 const ModuleIcon = MODULE_ICONS[moduleName] || Settings;
@@ -438,34 +442,34 @@ function RoleCard({
 
                 return (
                   <AccordionItem key={moduleName} value={moduleName}>
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <ModuleIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <span className="font-medium">
+                    <AccordionTrigger className="hover:no-underline py-2 sm:py-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <ModuleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" aria-hidden="true" />
+                        <span className="font-medium text-xs sm:text-sm">
                           {MODULE_NAMES[moduleName] || moduleName}
                         </span>
-                        <Badge variant="outline" className="ml-2">
+                        <Badge variant="outline" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">
                           {activeCount}/{modulePermissions.length}
                         </Badge>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 pt-2">
                         {modulePermissions.map((permission) => {
                           const isActive = rolePermissionIds.includes(permission.id);
                           
                           return (
                             <div
                               key={permission.id}
-                              className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                              className="flex items-center justify-between p-2 sm:p-3 rounded-lg border bg-card gap-2"
                             >
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-sm">
+                              <div className="space-y-0.5 min-w-0 flex-1">
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  <span className="font-medium text-xs sm:text-sm truncate">
                                     {ACTION_NAMES[permission.action] || permission.action}
                                   </span>
                                 </div>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
                                   {permission.description}
                                 </p>
                               </div>
@@ -475,6 +479,7 @@ function RoleCard({
                                   onTogglePermission(role.id, permission.id)
                                 }
                                 aria-label={`${isActive ? 'Desactivar' : 'Activar'} permiso ${permission.action} para ${role.name}`}
+                                className="flex-shrink-0"
                               />
                             </div>
                           );

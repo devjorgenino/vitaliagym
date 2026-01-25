@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 /**
- * Tarjeta de estadística mejorada
+ * Tarjeta de estadistica mejorada con responsive
  * 
  * @example
  * <StatCard
@@ -67,14 +67,14 @@ export function StatCard({
   if (loading) {
     return (
       <Card className={cn("overflow-hidden", className)}>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-3 w-20" />
+        <CardContent className="p-3 sm:p-4 md:p-6">
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1.5 sm:space-y-2 flex-1 min-w-0">
+              <Skeleton className="h-3 sm:h-4 w-16 sm:w-24" />
+              <Skeleton className="h-6 sm:h-8 w-12 sm:w-16" />
+              <Skeleton className="h-2.5 sm:h-3 w-14 sm:w-20" />
             </div>
-            <Skeleton className="h-12 w-12 rounded-xl" />
+            <Skeleton className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-lg sm:rounded-xl flex-shrink-0" />
           </div>
         </CardContent>
       </Card>
@@ -89,31 +89,34 @@ export function StatCard({
       className={cn(
         "overflow-hidden transition-all duration-200 border",
         colorClasses.border,
-        onClick && "cursor-pointer hover:shadow-md hover:scale-[1.02]",
+        onClick && "cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-[0.98]",
         className
       )}
       onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
     >
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">
+      <CardContent className="p-3 sm:p-4 md:p-6">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
+          <div className="space-y-0.5 sm:space-y-1 flex-1 min-w-0">
+            <p className="text-[11px] sm:text-xs md:text-sm font-medium text-muted-foreground truncate">
               {title}
             </p>
-            <p className="text-3xl font-bold tracking-tight">
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">
               {typeof value === "number" ? value.toLocaleString() : value}
             </p>
             {subtitle && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
                 {subtitle}
               </p>
             )}
             {typeof change === "number" && (
-              <div className={cn("flex items-center gap-1 text-xs font-medium", trendColor)}>
-                <TrendIcon className="h-3 w-3" />
+              <div className={cn("flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs font-medium", trendColor)}>
+                <TrendIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" aria-hidden="true" />
                 <span>{change > 0 ? "+" : ""}{change}%</span>
                 {changeLabel && (
-                  <span className="text-muted-foreground font-normal ml-1">
+                  <span className="text-muted-foreground font-normal ml-0.5 sm:ml-1 truncate">
                     {changeLabel}
                   </span>
                 )}
@@ -121,8 +124,8 @@ export function StatCard({
             )}
           </div>
           {Icon && (
-            <div className={cn("p-3 rounded-xl", colorClasses.bg)}>
-              <Icon className={cn("h-6 w-6", colorClasses.icon)} />
+            <div className={cn("p-1.5 sm:p-2 md:p-3 rounded-lg sm:rounded-xl flex-shrink-0", colorClasses.bg)}>
+              <Icon className={cn("h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6", colorClasses.icon)} aria-hidden="true" />
             </div>
           )}
         </div>
@@ -132,12 +135,13 @@ export function StatCard({
 }
 
 /**
- * Grid de estadísticas
+ * Grid de estadisticas responsive
  */
 export function StatsGrid({ children, className }) {
   return (
     <div className={cn(
-      "grid gap-4 sm:grid-cols-2 lg:grid-cols-4",
+      "grid gap-3 sm:gap-4 md:gap-6",
+      "grid-cols-2 lg:grid-cols-4",
       className
     )}>
       {children}

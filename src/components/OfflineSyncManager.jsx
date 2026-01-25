@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { syncPendingData } from '../lib/data-sync';
 import { WifiOff, RefreshCw, CheckCircle2, Wifi, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -13,45 +13,80 @@ export function OfflineSyncManager() {
   const [dismissedOffline, setDismissedOffline] = useState(false);
   const [pwaOffset, setPwaOffset] = useState(false);
   const [isRestored, setIsRestored] = useState(false);
+  
+  // Track if user experienced offline state during this session
+  const hasBeenOfflineRef = useRef(false);
+  // Track if this is initial mount (to avoid showing toast on page load)
+  const isInitialMountRef = useRef(true);
 
   useEffect(() => {
     // Check initial status
-    setIsOffline(typeof navigator !== 'undefined' && !navigator.onLine);
+    const initialOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    setIsOffline(initialOffline);
+    
+    // If starting offline, mark it
+    if (initialOffline) {
+      hasBeenOfflineRef.current = true;
+    }
+    
+    // Mark initial mount as complete after a short delay
+    setTimeout(() => {
+      isInitialMountRef.current = false;
+    }, 1000);
 
     const handleOnline = async () => {
-      // Show restored state immediately
-      setIsRestored(true);
-      setIsOffline(false); // Stop showing offline state
+      // Check if user was actually offline (not just page load)
+      const wasReallyOffline = hasBeenOfflineRef.current && !isInitialMountRef.current;
+      
+      // Always update offline state
+      setIsOffline(false);
+      
+      if (wasReallyOffline) {
+        // Show restored state immediately
+        setIsRestored(true);
 
-      // Attempt sync
-      try {
-        await syncPendingData();
-      } catch (err) {
-        console.error("Auto-sync failed:", err);
+        // Attempt sync
+        try {
+          await syncPendingData();
+        } catch (err) {
+          console.error("Auto-sync failed:", err);
+        }
+
+        // Wait a bit to show the restored icon, then show success toast
+        setTimeout(() => {
+          setIsRestored(false);
+          setShowSuccess(true);
+          setTimeout(() => setShowSuccess(false), 6000); // 6 seconds to read
+        }, 3000); // Show restored icon for 3 seconds
+        
+        // Reset the offline tracking after showing toast
+        hasBeenOfflineRef.current = false;
+      } else {
+        // Just sync silently without showing success toast (page load scenario)
+        try {
+          await syncPendingData();
+        } catch (err) {
+          console.error("Auto-sync failed:", err);
+        }
       }
-
-      // Wait a bit to show the icon, then hide it (optional) or let user dismiss
-      setTimeout(() => {
-         setIsRestored(false); // Optionally hide the restored icon after some time
-         setShowSuccess(true); // Switch to success state
-         setTimeout(() => setShowSuccess(false), 3000); // Hide success after 3s
-      }, 5000);
     };
 
     const handleOffline = () => {
       setIsOffline(true);
       setDismissedOffline(false);
       setIsRestored(false);
+      setShowSuccess(false);
+      // Mark that user went offline during this session
+      hasBeenOfflineRef.current = true;
     };
 
-    const attemptSync = async () => {
+    const attemptSyncSilently = async () => {
+      // Silent sync on page load - NO success toast
       if (isSyncing) return;
       try {
         setIsSyncing(true);
         await syncPendingData();
-        // Show success message briefly
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 3000);
+        // DON'T show success on initial load
       } catch (err) {
         console.error("Auto-sync failed:", err);
       } finally {
@@ -67,9 +102,9 @@ export function OfflineSyncManager() {
     window.addEventListener('offline', handleOffline);
     window.addEventListener('pwa-toast-visibility-change', handlePwaVisibility);
 
-    // Initial sync attempt if online
+    // Initial sync attempt if online (silent, no toast)
     if (typeof navigator !== 'undefined' && navigator.onLine) {
-       attemptSync();
+       attemptSyncSilently();
     }
 
     return () => {

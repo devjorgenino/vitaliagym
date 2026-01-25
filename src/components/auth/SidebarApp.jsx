@@ -37,11 +37,11 @@ import { items, configItems, filterItemsByPermission } from "@/lib/sidebarData";
 import { logoBlurDataURL, logoSmallBlurDataURL } from "@/lib/imagePlaceholders";
 import "@/styles/image-optimization.css";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useInstallPWA } from "@/hooks/useInstallPWA";
 
 export const AppSidebar = () => {
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const { user } = useAuth();
   const {
     hasPermission,
@@ -52,6 +52,13 @@ export const AppSidebar = () => {
   const { canShow: canShowInstall, install, dismiss } = useInstallPWA();
 
   const username = user?.user_metadata?.full_name || "Usuario";
+
+  // Función para cerrar el sidebar en móvil al hacer clic en un link
+  const handleMobileNavClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
 
   // Filtrar items por permisos
   const filteredMainItems = useMemo(() => {
@@ -94,6 +101,7 @@ export const AppSidebar = () => {
           {state === "collapsed" ? (
             <Link
               href="/dashboard"
+              onClick={handleMobileNavClick}
               className="logo-container flex items-center justify-center w-9 h-9"
             >
               <Image
@@ -111,6 +119,7 @@ export const AppSidebar = () => {
           ) : (
             <Link
               href="/dashboard"
+              onClick={handleMobileNavClick}
               className="logo-container flex items-center justify-center"
             >
               <Image
@@ -143,65 +152,18 @@ export const AppSidebar = () => {
                   ))}
                 </>
               ) : (
-                filteredMainItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton asChild>
-                          <Link
-                            href={item.url}
-                            className={cn(
-                              "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
-                              "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
-                              // Active state con colores del tema
-                              pathname === item.url ||
-                                pathname.startsWith(item.url + "/")
-                                ? "bg-primary text-primary-foreground hover:bg-primary"
-                                : "",
-                            )}
-                          >
-                            <item.icon className="!size-5 transition-colors" />
-                            <span className="group-data-[collapsible=icon]:hidden transition-colors">
-                              {item.title}
-                            </span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      {state === "collapsed" && (
-                        <TooltipContent side="right" sideOffset={5}>
-                          <p>{item.title}</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </SidebarMenuItem>
-                ))
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Separador y menú de configuración (solo si hay items) */}
-        {filteredConfigItems.length > 0 && (
-          <>
-            <SidebarSeparator className="mx-3" />
-            <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-2">
-              {state !== "collapsed" && (
-                <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">
-                  Configuración
-                </SidebarGroupLabel>
-              )}
-              <SidebarGroupContent>
-                <SidebarMenu className="group-data-[collapsible=icon]:items-center">
-                  {filteredConfigItems.map((item) => (
+filteredMainItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton asChild>
                             <Link
                               href={item.url}
+                              onClick={handleMobileNavClick}
                               className={cn(
                                 "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
                                 "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
+                                // Active state con colores del tema
                                 pathname === item.url ||
                                   pathname.startsWith(item.url + "/")
                                   ? "bg-primary text-primary-foreground hover:bg-primary"
@@ -222,7 +184,56 @@ export const AppSidebar = () => {
                         )}
                       </Tooltip>
                     </SidebarMenuItem>
-                  ))}
+                  ))
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Separador y menú de configuración (solo si hay items) */}
+        {filteredConfigItems.length > 0 && (
+          <>
+            <SidebarSeparator className="mx-3" />
+            <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-2">
+              {state !== "collapsed" && (
+                <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">
+                  Configuración
+                </SidebarGroupLabel>
+              )}
+              <SidebarGroupContent>
+                <SidebarMenu className="group-data-[collapsible=icon]:items-center">
+{filteredConfigItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <SidebarMenuButton asChild>
+                              <Link
+                                href={item.url}
+                                onClick={handleMobileNavClick}
+                                className={cn(
+                                  "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
+                                  "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
+                                  pathname === item.url ||
+                                    pathname.startsWith(item.url + "/")
+                                    ? "bg-primary text-primary-foreground hover:bg-primary"
+                                    : "",
+                                )}
+                              >
+                                <item.icon className="!size-5 transition-colors" />
+                                <span className="group-data-[collapsible=icon]:hidden transition-colors">
+                                  {item.title}
+                                </span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </TooltipTrigger>
+                          {state === "collapsed" && (
+                            <TooltipContent side="right" sideOffset={5}>
+                              <p>{item.title}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </SidebarMenuItem>
+                    ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -297,6 +308,7 @@ export const AppSidebar = () => {
                 <TooltipTrigger asChild>
                   <Link
                     href="/perfil"
+                    onClick={handleMobileNavClick}
                     className="hover:opacity-80 transition-opacity"
                   >
                     <div className="flex items-center justify-center gap-2">

@@ -102,29 +102,33 @@ function Pagination({
       role="navigation"
       aria-label="Paginación"
       className={cn(
-        "flex flex-col sm:flex-row items-center justify-between gap-4 py-4",
+        "flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 py-3 sm:py-4",
         className,
       )}
     >
       {/* Información de rango */}
       {showInfo && (
-        <div className="text-sm text-muted-foreground order-2 sm:order-1">
-          Mostrando{" "}
-          <span className="font-medium text-foreground">{startItem}</span> -{" "}
-          <span className="font-medium text-foreground">{endItem}</span> de{" "}
-          <span className="font-medium text-foreground">{totalItems}</span>{" "}
-          resultados
+        <div className="text-xs sm:text-sm text-muted-foreground order-2 sm:order-1 text-center sm:text-left">
+          <span className="hidden sm:inline">Mostrando </span>
+          <span className="font-medium text-foreground">{startItem}</span>
+          <span className="hidden sm:inline"> - </span>
+          <span className="sm:hidden">-</span>
+          <span className="font-medium text-foreground">{endItem}</span>
+          <span className="hidden sm:inline"> de </span>
+          <span className="sm:hidden">/</span>
+          <span className="font-medium text-foreground">{totalItems}</span>
+          <span className="hidden sm:inline"> resultados</span>
         </div>
       )}
 
       {/* Controles de paginación */}
-      <div className="flex items-center gap-2 order-1 sm:order-2">
+      <div className="flex items-center gap-1 sm:gap-2 order-1 sm:order-2">
         {/* Selector de tamaño de página */}
         {showPageSizeSelector && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <label
               htmlFor="page-size"
-              className="text-sm text-muted-foreground hidden sm:inline"
+              className="text-xs sm:text-sm text-muted-foreground hidden sm:inline"
             >
               Por página:
             </label>
@@ -134,7 +138,7 @@ function Pagination({
             >
               <SelectTrigger
                 id="page-size"
-                className="w-[70px] h-8"
+                className="w-[60px] sm:w-[70px] h-7 sm:h-8 text-xs sm:text-sm"
                 aria-label="Elementos por página"
               >
                 <SelectValue />
@@ -151,7 +155,7 @@ function Pagination({
         )}
 
         {/* Botones de navegación */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           {/* Ir a primera página */}
           <Button
             variant="outline"
@@ -160,8 +164,9 @@ function Pagination({
             disabled={currentPage === 1}
             aria-label="Ir a la primera página"
             title="Primera página"
+            className="h-7 w-7 sm:h-8 sm:w-8"
           >
-            <ChevronsLeft className="h-4 w-4" />
+            <ChevronsLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
 
           {/* Página anterior */}
@@ -172,8 +177,9 @@ function Pagination({
             disabled={currentPage === 1}
             aria-label="Ir a la página anterior"
             title="Página anterior"
+            className="h-7 w-7 sm:h-8 sm:w-8"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
 
           {/* Números de página */}
@@ -182,7 +188,7 @@ function Pagination({
               page === "..." ? (
                 <span
                   key={`ellipsis-${index}`}
-                  className="px-2 text-muted-foreground"
+                  className="px-1 sm:px-2 text-muted-foreground text-sm"
                   aria-hidden="true"
                 >
                   ...
@@ -195,6 +201,7 @@ function Pagination({
                   onClick={() => goToPage(page)}
                   aria-label={`Ir a la página ${page}`}
                   aria-current={currentPage === page ? "page" : undefined}
+                  className="h-7 w-7 sm:h-8 sm:w-8 text-xs sm:text-sm"
                 >
                   {page}
                 </Button>
@@ -203,8 +210,8 @@ function Pagination({
           </div>
 
           {/* Indicador de página actual en móvil */}
-          <span className="sm:hidden px-2 text-sm text-muted-foreground">
-            {currentPage} / {totalPages}
+          <span className="sm:hidden px-1.5 sm:px-2 text-xs text-muted-foreground whitespace-nowrap">
+            {currentPage}/{totalPages}
           </span>
 
           {/* Página siguiente */}
@@ -215,8 +222,9 @@ function Pagination({
             disabled={currentPage === totalPages}
             aria-label="Ir a la página siguiente"
             title="Página siguiente"
+            className="h-7 w-7 sm:h-8 sm:w-8"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
 
           {/* Ir a última página */}
@@ -227,8 +235,9 @@ function Pagination({
             disabled={currentPage === totalPages}
             aria-label="Ir a la última página"
             title="Última página"
+            className="h-7 w-7 sm:h-8 sm:w-8"
           >
-            <ChevronsRight className="h-4 w-4" />
+            <ChevronsRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </div>
       </div>
