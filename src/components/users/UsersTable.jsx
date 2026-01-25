@@ -9,7 +9,7 @@ import { PERMISSIONS } from "@/components/context/PermissionsProvider";
 import client from "@/api/client";
 import { authPost } from "@/lib/auth-fetch";
 import { toast } from "sonner";
-import { Shield, UserPlus, RefreshCw, Phone, User, Copy, CheckCircle, X } from "lucide-react";
+import { Shield, UserPlus, RefreshCw, Phone, User, Copy, CheckCircle, X, PhoneForwarded } from "lucide-react";
 import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +98,86 @@ export function UsersTable() {
   // Estado para los roles de cada usuario (cargados dinámicamente)
   const [userRolesMap, setUserRolesMap] = useState({});
   const [loadingUserRoles, setLoadingUserRoles] = useState(false);
+
+  // Estado para normalización de teléfonos
+  const [isNormalizingPhones, setIsNormalizingPhones] = useState(false);
+
+  // Función para normalizar todos los teléfonos
+  const handleNormalizePhones = async () => {
+    setIsNormalizingPhones(true);
+    try {
+      let updated = 0;
+      let skipped = 0;
+      let errors = 0;
+
+      console.log("Usuarios a procesar:", users.length);
+
+      for (const user of users) {
+        const phone = user.phone || "";
+        console.log(`Usuario ${user.email}: teléfono actual = "${phone}"`);
+        
+        if (!phone || phone === "N/A") {
+          skipped++;
+          continue;
+        }
+
+        // Parsear y reformatear el teléfono
+        const { operator, number } = parsePhone(phone);
+        console.log(`  Parseado: operator="${operator}", number="${number}"`);
+        
+        // Si el número tiene dígitos, formatearlo
+        if (number && number.length > 0) {
+          const formattedPhone = formatPhone(operator, number);
+          console.log(`  Formateado: "${formattedPhone}"`);
+          
+          // Solo actualizar si el formato cambió
+          if (formattedPhone !== phone) {
+            console.log(`  Actualizando de "${phone}" a "${formattedPhone}"...`);
+            try {
+              // Usar API route para bypasear RLS
+              const response = await authPost("/api/admin/users", {
+                _action: "patch",
+                userId: user.id,
+                phone: formattedPhone,
+              });
+
+              console.log(`  Resultado API:`, response);
+
+              if (response.ok) {
+                updated++;
+                console.log(`  OK! Actualizado correctamente`);
+              } else {
+                console.log(`  Error API:`, response.error);
+                errors++;
+              }
+            } catch (updateErr) {
+              console.error(`  Excepción en update:`, updateErr);
+              errors++;
+            }
+          } else {
+            console.log(`  Sin cambios (ya tiene formato correcto)`);
+            skipped++;
+          }
+        } else {
+          skipped++;
+        }
+      }
+
+      await refetch();
+      if (updated > 0) {
+        toast.success(`Teléfonos corregidos: ${updated}${errors > 0 ? `, errores: ${errors}` : ""}`);
+      } else if (errors > 0) {
+        toast.error(`No se pudieron corregir los teléfonos (${errors} errores)`);
+      } else {
+        toast.info(`Todos los teléfonos ya tienen el formato correcto (${skipped})`);
+      }
+    } catch (err) {
+      console.error("Error normalizando teléfonos:", err);
+      toast.error("Error al corregir teléfonos: " + err.message);
+    } finally {
+      setIsNormalizingPhones(false);
+    }
+  };
 
   // Resetear formulario
   const resetForm = useCallback(() => {
@@ -474,6 +554,22 @@ const openDeleteDialog = (user) => {
               <RefreshCw className="h-4 w-4 mr-1" />
               Actualizar
             </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={handleNormalizePhones} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={isNormalizingPhones || users.length === 0}
+                >
+                  <PhoneForwarded className={`h-4 w-4 mr-1 ${isNormalizingPhones ? 'animate-pulse' : ''}`} />
+                  {isNormalizingPhones ? 'Corrigiendo...' : 'Corregir Teléfonos'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Corrige el formato de todos los teléfonos (0414-1234567)</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </CardHeader>
         <CardContent>
@@ -590,7 +686,14 @@ const openDeleteDialog = (user) => {
                             />
                           </TableCell>
                           <TableCell className="hidden lg:table-cell whitespace-nowrap">
-                            {user.phone || "N/A"}
+                            {user.phone ? (
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <span>{user.phone}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">N/A</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {loadingUserRoles ? (

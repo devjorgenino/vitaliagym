@@ -34,93 +34,38 @@ export function useExchangeRate() {
           let bcvRate = null;
           let fetchError = null;
 
-          // Opción 1: API oficial del BCV (scraping)
+          // Opción 1: Ve.dolarapi.com (API gratuita y estable)
           try {
-            const response = await fetch("https://www.bcv.org.ve/", {
-              method: "GET",
-              headers: {
-                "User-Agent":
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-              },
-            });
-
+            const response = await fetch(
+              "https://ve.dolarapi.com/v1/dolares/oficial"
+            );
             if (response.ok) {
-              const html = await response.text();
-              const rateMatch = html.match(
-                /dópar\s*([\d,]+)\s*\/\s*USD|USD\s*\/\s*dópar\s*([\d,]+)/i
-              );
-              if (rateMatch) {
-                bcvRate = parseFloat(
-                  rateMatch[1] || rateMatch[2].replace(",", ".")
-                );
+              const data = await response.json();
+              if (data && data.promedio) {
+                bcvRate = parseFloat(data.promedio);
+                console.log("Rate from DolarAPI:", bcvRate);
               }
             }
-          } catch (bcvErr) {
-            console.warn("BCV API failed:", bcvErr);
-            fetchError = bcvErr;
+          } catch (dolarApiErr) {
+            console.warn("DolarAPI failed:", dolarApiErr);
+            fetchError = dolarApiErr;
           }
 
-          // Opción 2: MonitorDolarVenezuela API
+          // Opción 2: DolarToday API
           if (!bcvRate) {
             try {
               const response = await fetch(
-                "https://api.monitordolarvenezuela.com/v1/rates/bcv"
+                "https://s3.amazonaws.com/dolartoday/data.json"
               );
-              const data = await response.json();
-
-              if (data && data.rate && data.rate.price) {
-                bcvRate = parseFloat(data.rate.price);
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.USD && data.USD.sicad2) {
+                  bcvRate = parseFloat(data.USD.sicad2);
+                  console.log("Rate from DolarToday:", bcvRate);
+                }
               }
-            } catch (monitorErr) {
-              console.warn("MonitorDolar API failed:", monitorErr);
-            }
-          }
-
-          // Opción 3: Dólar Venezuela API
-          if (!bcvRate) {
-            try {
-              const response = await fetch(
-                "https://api.dolarvenezuela.com/v1/dolar?currency=USD&page=bcv"
-              );
-              const data = await response.json();
-
-              if (data && data.price && data.price) {
-                bcvRate = parseFloat(data.price);
-              }
-            } catch (dolarVeErr) {
-              console.warn("DolarVenezuela API failed:", dolarVeErr);
-            }
-          }
-
-          // Opción 4: ExchangeRate-API (internacional)
-          if (!bcvRate) {
-            try {
-              const response = await fetch(
-                "https://v6.exchangerate-api.com/v6/latest/USD"
-              );
-              const data = await response.json();
-
-              if (data && data.conversion_rates && data.conversion_rates.VES) {
-                bcvRate = parseFloat(data.conversion_rates.VES);
-              }
-            } catch (exchangeErr) {
-              console.warn("ExchangeRate API failed:", exchangeErr);
-            }
-          }
-          
-           // Opción 5: Fixer.io API
-          if (!bcvRate) {
-            try {
-              const response = await fetch(
-                "https://api.fixer.io/latest?base=USD&symbols=VES"
-              );
-              const data = await response.json();
-
-              if (data && data.rates && data.rates.VES) {
-                bcvRate = parseFloat(data.rates.VES);
-              }
-            } catch (fixerErr) {
-              console.warn("Fixer.io API failed:", fixerErr);
+            } catch (dolarTodayErr) {
+              console.warn("DolarToday API failed:", dolarTodayErr);
             }
           }
 
