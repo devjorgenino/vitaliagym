@@ -3,14 +3,13 @@ import { useDashboardMetrics } from "../../hooks/useDashboardMetrics";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
-import { MetricCard } from "./DashboardCharts";
+import { StatCard, StatsGrid } from "../ui/stat-card";
+import { EmptyState } from "../ui/empty-state";
 import { ExchangeRateCard } from "./ExchangeRateCard";
+import { Clock, Cake, UserPlus, Activity, RefreshCw } from "lucide-react";
 
 export function DashboardView() {
   const { metrics, loading, error, refetch } = useDashboardMetrics();
-
-  // Debug temporal
-  console.log("Dashboard metrics:", metrics);
 
   if (loading) {
     return (
@@ -39,10 +38,16 @@ export function DashboardView() {
           <CardTitle>Dashboard</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <p className="text-red-500 mb-4">Error: {error}</p>
-            <Button onClick={refetch}>Reintentar</Button>
-          </div>
+          <EmptyState
+            icon="empty"
+            title="Error al cargar datos"
+            description={error}
+            action={{
+              label: "Reintentar",
+              onClick: refetch,
+              icon: <RefreshCw className="h-4 w-4" />,
+            }}
+          />
         </CardContent>
       </Card>
     );
@@ -51,75 +56,95 @@ export function DashboardView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Vista general del gimnasio</p>
         </div>
         <div className="flex items-center gap-2">
           <ExchangeRateCard compact={true} />
-          <Button onClick={refetch} variant="outline" size="sm">
+          <Button
+            onClick={refetch}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
             Actualizar
           </Button>
         </div>
       </div>
 
       {/* Métricas Principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
+      <StatsGrid>
+        <StatCard
           title="Clientes por Vencer"
           value={metrics.expiringSoon?.length || 0}
-          icon="⏰"
-          color="yellow"
-          trend="Próximos 5 días"
+          subtitle="Próximos 5 días"
+          icon={Clock}
+          color="amber"
         />
 
-        <MetricCard
+        <StatCard
           title="Cumpleaños Próximos"
           value={metrics.upcomingBirthdays?.length || 0}
-          icon="🎂"
+          subtitle="Próximos 7 días"
+          icon={Cake}
           color="purple"
-          trend="Próximos 7 días"
         />
 
-        <MetricCard
+        <StatCard
           title="Clientes Nuevos"
           value={metrics.newClients?.length || 0}
-          icon="👥"
+          subtitle="Este mes"
+          icon={UserPlus}
           color="green"
-          trend="Este mes"
         />
 
-        <MetricCard
+        <StatCard
           title="Asistencia Semanal"
-          value={`${metrics.weeklyAttendance || 0} registros`}
-          icon="📊"
-          color="blue"
-          trend={`${metrics.weeklyUniqueClients || 0} clientes únicos (${(
+          value={metrics.weeklyAttendance || 0}
+          subtitle={`${metrics.weeklyUniqueClients || 0} clientes únicos (${(
             metrics.weeklyPercentage || 0
           ).toFixed(1)}%)`}
+          icon={Activity}
+          color="blue"
         />
-      </div>
+      </StatsGrid>
 
       {/* Gráficos y Listas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Clientes próximos a vencer */}
         <Card>
           <CardHeader>
-            <CardTitle>⏰ Clientes Próximos a Vencer</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600" />
+              Clientes Próximos a Vencer
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {metrics.expiringSoon?.length > 0 ? (
               <div className="space-y-3">
                 {metrics.expiringSoon.map((client, index) => {
-                  const daysUntil = Math.ceil(
-                    (new Date(client.next_payment_date) - new Date()) /
-                      (1000 * 60 * 60 * 24)
+                  // Parsear la fecha correctamente evitando problemas de zona horaria
+                  const paymentDateParts = client.next_payment_date.split("-");
+                  const paymentDate = new Date(
+                    parseInt(paymentDateParts[0], 10),
+                    parseInt(paymentDateParts[1], 10) - 1,
+                    parseInt(paymentDateParts[2], 10),
+                  );
+                  paymentDate.setHours(0, 0, 0, 0);
+
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+
+                  const daysUntil = Math.round(
+                    (paymentDate - today) / (1000 * 60 * 60 * 24),
                   );
                   return (
                     <div
                       key={client.id}
-                      className="flex items-center justify-between p-3 bg-red-50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800"
                     >
                       <div>
                         <p className="font-medium">
@@ -130,15 +155,13 @@ export function DashboardView() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-medium text-red-600">
+                        <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
                           {daysUntil <= 0
                             ? `${Math.abs(daysUntil)} días vencido`
                             : `${daysUntil} días`}
                         </span>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(
-                            client.next_payment_date
-                          ).toLocaleDateString("es-ES")}
+                          {paymentDate.toLocaleDateString("es-ES")}
                         </p>
                       </div>
                     </div>
@@ -146,11 +169,11 @@ export function DashboardView() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">
-                  No hay clientes próximos a vencer
-                </p>
-              </div>
+              <EmptyState
+                icon={Clock}
+                title="Sin clientes por vencer"
+                description="No hay clientes con pagos próximos a vencer en los próximos 5 días"
+              />
             )}
           </CardContent>
         </Card>
@@ -158,7 +181,10 @@ export function DashboardView() {
         {/* Próximos cumpleaños */}
         <Card>
           <CardHeader>
-            <CardTitle>🎂 Cumpleaños del Mes</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Cake className="h-5 w-5 text-purple-600" />
+              Cumpleaños del Mes
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {metrics.upcomingBirthdays?.length > 0 ? (
@@ -169,19 +195,19 @@ export function DashboardView() {
                   const nextBirthday = new Date(
                     today.getFullYear(),
                     birthDate.getMonth(),
-                    birthDate.getDate()
+                    birthDate.getDate(),
                   );
                   if (nextBirthday < today) {
                     nextBirthday.setFullYear(today.getFullYear());
                   }
                   const daysUntil = Math.ceil(
-                    (nextBirthday - today) / (1000 * 60 * 60 * 24)
+                    (nextBirthday - today) / (1000 * 60 * 60 * 24),
                   );
 
                   return (
                     <div
                       key={client.id}
-                      className="flex items-center justify-between p-3 bg-purple-50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800"
                     >
                       <div>
                         <p className="font-medium">
@@ -195,8 +221,8 @@ export function DashboardView() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-medium text-purple-600">
-                          {daysUntil === 0 ? "¡Hoy!" : `En ${daysUntil} días`}
+                        <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                          {daysUntil === 0 ? "Hoy!" : `En ${daysUntil} días`}
                         </span>
                         <p className="text-xs text-muted-foreground">
                           {nextBirthday.toLocaleDateString("es-ES")}
@@ -207,11 +233,11 @@ export function DashboardView() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">
-                  No hay cumpleaños próximos
-                </p>
-              </div>
+              <EmptyState
+                icon={Cake}
+                title="Sin cumpleaños próximos"
+                description="No hay clientes con cumpleaños en los próximos 7 días"
+              />
             )}
           </CardContent>
         </Card>

@@ -2,6 +2,7 @@
 
 import { createContext, useState, useEffect, use, useCallback, useMemo } from "react";
 import client from "@/api/client";
+import { executeWithSync } from "@/lib/data-sync";
 
 const AuthContext = createContext(null);
 
@@ -38,6 +39,8 @@ const AuthProvider = ({ children }) => {
         // Si el usuario inicia sesión, el layout manejará la redirección
         // Si cierra sesión, redirigir al login
         if (event === 'SIGNED_OUT') {
+          // Clear offline data for security
+          import('@/lib/offline-db').then(mod => mod.clearAllMutations()).catch(console.error);
           window.location.href = '/';
         }
       }
@@ -50,21 +53,27 @@ const AuthProvider = ({ children }) => {
 
   const updateUserProfile = useCallback(async (profileData) => {
     try {
-      // Verificar si hay una sesión activa y refrescar si es necesario
-      const { data: sessionData, error: sessionError } = await client.auth.refreshSession();
-      
-      if (sessionError) {
-        console.error('Session refresh error:', sessionError);
-        throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+      // Only verify session if online
+      if (isOnline) {
+          const { data: sessionData, error: sessionError } = await client.auth.refreshSession();
+          
+          if (sessionError) {
+             console.error('Session refresh error:', sessionError);
+             throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
+          }
+
+          if (!sessionData?.session?.user) {
+             throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
+          }
       }
 
-      if (!sessionData?.session?.user) {
-        throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
-      }
-
-      // Usar la sesión actualizada para actualizar el perfil
-      const { data, error } = await client.auth.updateUser({
-        data: profileData
+      // Usar executeWithSync para soportar offline
+      const { data, error } = await executeWithSync({
+         table: 'auth.users', // Dummy table name for clarity in logs, ignored by AUTH_UPDATE type
+         type: 'AUTH_UPDATE',
+         data: { data: profileData } // Wrapper to match structure expected in data-sync
       });
 
       if (error) {
@@ -72,23 +81,23 @@ const AuthProvider = ({ children }) => {
         throw error;
       }
 
-      // Actualizar el estado del usuario con los nuevos datos
+      // Actualizar el estado del usuario con los nuevos datos (Optimistic Update)
       setUser(prev => ({
         ...prev,
         user_metadata: {
-          ...prev.user_metadata,
+          ...prev?.user_metadata,
           ...profileData
         }
       }));
 
+      // In offline mode, data might be mocked or null, but success is true.
       return { success: true, data };
     } catch (error) {
       console.error('Error updating profile:', error);
       
-      // Si el error es de sesión, limpiar el estado del usuario
-      if (error.message?.includes('session') || error.message?.includes('auth')) {
+      // Si el error es de sesión y estamos Online, limpiar el estado del usuario
+      if (typeof navigator !== 'undefined' && navigator.onLine && (error.message?.includes('session') || error.message?.includes('auth'))) {
         setUser(null);
-        // Opcionalmente redirigir al login
         window.location.href = '/auth/login';
       }
       

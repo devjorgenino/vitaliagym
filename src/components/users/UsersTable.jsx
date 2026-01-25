@@ -1,14 +1,41 @@
-import React, { useState } from "react";
-import { useUsers } from "../../hooks/useUsers";
-import client from "../../api/client";
+"use client";
+
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useUsers } from "@/hooks/useUsers";
+import usePermissions from "@/hooks/usePermissions";
+import useRolesList from "@/hooks/useRolesList";
+import { PermissionGate } from "@/components/auth/PermissionGate";
+import { PERMISSIONS } from "@/components/context/PermissionsProvider";
+import client from "@/api/client";
+import { authPost } from "@/lib/auth-fetch";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Skeleton } from "../ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { Input } from "../ui/input";
-import { EditIcon, TrashIcon, SearchIcon, FilterXIcon } from "../ui/icons";
+import { Shield, UserPlus, RefreshCw, Phone, User, Copy, CheckCircle, X } from "lucide-react";
+import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  EditIcon,
+  TrashIcon,
+  SearchIcon,
+  FilterXIcon,
+} from "@/components/ui/icons";
+import { Badge } from "@/components/ui/badge";
+import { TruncatedCell } from "@/components/ui/truncated-cell";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -16,39 +43,300 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../ui/table";
+} from "@/components/ui/table";
+import { Pagination, usePagination } from "@/components/ui/pagination";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { UserSecuritySection } from "./UserSecuritySection";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function UsersTable() {
   const { users, loading, error, refetch, deleteUser } = useUsers();
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const { hasPermission } = usePermissions();
+  const { roles: availableRoles, loading: rolesLoading } = useRolesList();
+
+  // Estados del modal unificado para crear/editar
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
     email: "",
     full_name: "",
+    phone_operator: "0414",
     phone: "",
-    role: "user",
+    roleId: "",
   });
-  const [isCreating, setIsCreating] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
-  const [editingUser, setEditingUser] = useState(null);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [editFormData, setEditFormData] = useState({
-    email: "",
-    full_name: "",
-    phone: "",
-    role: "user",
-  });
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, user: null });
+
+  // Estado para el modal de seguridad
+  const [securityModalUser, setSecurityModalUser] = useState(null);
 
   // Estados para búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedRole, setSelectedRole] = useState("");
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState("");
 
-  const handleDeleteUser = async (userId) => {
-    setDeletingId(userId);
+  // Estados para paginación
+  const {
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+    resetPage,
+    paginateData,
+  } = usePagination(10);
+
+  // Estado para los roles de cada usuario (cargados dinámicamente)
+  const [userRolesMap, setUserRolesMap] = useState({});
+  const [loadingUserRoles, setLoadingUserRoles] = useState(false);
+
+  // Resetear formulario
+  const resetForm = useCallback(() => {
+    setFormData({
+      email: "",
+      full_name: "",
+      phone_operator: "0414",
+      phone: "",
+      roleId: availableRoles[0]?.id || "",
+    });
+    setSelectedUser(null);
+    setIsEditing(false);
+  }, [availableRoles]);
+
+  // Abrir modal para crear
+  const handleOpenCreateDialog = useCallback(() => {
+    resetForm();
+    setIsDialogOpen(true);
+  }, [resetForm]);
+
+  // Abrir modal para editar
+  const handleOpenEditDialog = useCallback((user) => {
+    setSelectedUser(user);
+    const phoneValue = user.phone || user.user_metadata?.phone || "";
+    const { operator, number } = parsePhone(phoneValue);
+    setFormData({
+      email: user.email || "",
+      full_name: user.full_name || user.user_metadata?.full_name || "",
+      phone_operator: operator,
+      phone: number,
+      roleId: "", // No se edita el rol desde aquí
+    });
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  }, []);
+
+  // Cerrar modal
+  const handleCloseDialog = useCallback(() => {
+    setIsDialogOpen(false);
+    setTimeout(resetForm, 150);
+  }, [resetForm]);
+
+  // Cargar roles de usuarios cuando cambian los usuarios
+  useEffect(() => {
+    const loadUserRoles = async () => {
+      if (users.length === 0) return;
+
+      setLoadingUserRoles(true);
+      try {
+        const userIds = users.map((u) => u.id);
+
+        const { data, error } = await client
+          .from("user_roles")
+          .select(
+            `
+            user_id,
+            roles (
+              id,
+              name
+            )
+          `,
+          )
+          .in("user_id", userIds);
+
+        if (error) throw error;
+
+        // Crear mapa de userId -> roles[]
+        const rolesMap = {};
+        data?.forEach((ur) => {
+          if (!rolesMap[ur.user_id]) {
+            rolesMap[ur.user_id] = [];
+          }
+          if (ur.roles) {
+            rolesMap[ur.user_id].push(ur.roles);
+          }
+        });
+
+        setUserRolesMap(rolesMap);
+      } catch (err) {
+        console.error("Error loading user roles:", err);
+      } finally {
+        setLoadingUserRoles(false);
+      }
+    };
+
+    loadUserRoles();
+  }, [users]);
+
+  // Establecer rol por defecto cuando cargan los roles
+  useEffect(() => {
+    if (availableRoles.length > 0 && !formData.roleId) {
+      const defaultRole =
+        availableRoles.find((r) => r.name === "Entrenador") ||
+        availableRoles[0];
+      setFormData((prev) => ({ ...prev, roleId: defaultRole.id }));
+    }
+  }, [availableRoles, formData.roleId]);
+
+  // Handlers
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+
+    // Máscara para teléfono: solo números, max 7 dígitos
+    if (name === "phone") {
+      const cleanValue = value.replace(/\D/g, "").slice(0, 7);
+      setFormData((prev) => ({ ...prev, [name]: cleanValue }));
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
+
+  const handleRoleChange = useCallback((value) => {
+    setFormData((prev) => ({ ...prev, roleId: value }));
+  }, []);
+
+  const handlePhoneOperatorChange = useCallback((value) => {
+    setFormData((prev) => ({ ...prev, phone_operator: value }));
+  }, []);
+
+  // Submit del formulario (crear o actualizar)
+  const handleSubmit = async () => {
+    if (!isEditing && !formData.email) {
+      toast.error("El email es obligatorio");
+      return;
+    }
+
+    if (!isEditing && !formData.roleId) {
+      toast.error("Selecciona un rol para el usuario");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const result = await deleteUser(userId);
+      if (isEditing && selectedUser) {
+        // Actualizar usuario - usar cliente directamente
+        const { error: profileError } = await client
+          .from("profiles")
+          .update({
+            full_name: formData.full_name,
+            phone: formData.phone
+              ? formatPhone(formData.phone_operator, formData.phone)
+              : "",
+          })
+          .eq("id", selectedUser.id);
+
+        if (profileError && profileError.code !== "PGRST116") {
+          console.warn("Error al actualizar perfil:", profileError);
+        }
+
+        // También actualizar metadata en auth
+        const { error: authError } = await client.auth.updateUser({
+          data: {
+            full_name: formData.full_name,
+            phone: formData.phone
+              ? formatPhone(formData.phone_operator, formData.phone)
+              : "",
+          },
+        });
+
+        if (authError) {
+          console.warn("Error al actualizar auth metadata:", authError);
+        }
+
+        await refetch();
+        toast.success("Usuario actualizado exitosamente");
+        handleCloseDialog();
+      } else {
+        // Crear usuario usando API Route (no desloguea al admin)
+        const { ok, data: result, error: apiError } = await authPost("/api/admin/users", {
+          email: formData.email,
+          full_name: formData.full_name,
+          phone: formData.phone
+            ? formatPhone(formData.phone_operator, formData.phone)
+            : "",
+          roleId: formData.roleId,
+        });
+
+        if (!ok) {
+          throw new Error(apiError || "Error al crear usuario");
+        }
+
+        await refetch();
+        handleCloseDialog();
+        
+        const tempPassword = result.tempPassword;
+        toast.custom((t) => (
+          <div className="flex items-center gap-3 bg-background border border-border rounded-lg px-4 py-3 shadow-lg">
+            <CheckCircle className="h-5 w-5 text-foreground shrink-0" />
+            <div className="flex-1 text-sm">
+              <p className="font-medium">Usuario creado exitosamente</p>
+              <p className="text-muted-foreground">
+                Contraseña temporal: <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono">{tempPassword}</code>
+              </p>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(tempPassword);
+                    toast.success("Copiado", { duration: 1500 });
+                  }}
+                  className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                >
+                  <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="z-[99999]">Copiar</TooltipContent>
+            </Tooltip>
+            <button
+              onClick={() => toast.dismiss(t)}
+              className="p-1 hover:bg-muted rounded-md transition-colors"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        ), { duration: 20000 });
+      }
+    } catch (err) {
+      console.error("Error:", err);
+      toast.error(`Error al ${isEditing ? "actualizar" : "crear"} usuario: ` + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+const openDeleteDialog = (user) => {
+    setDeleteDialog({ open: true, user });
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteDialog.user) return;
+    
+    setDeletingId(deleteDialog.user.id);
+    try {
+      const result = await deleteUser(deleteDialog.user.id);
       if (result.success) {
         toast.success("Usuario eliminado exitosamente");
+        setDeleteDialog({ open: false, user: null });
       } else {
         toast.error("Error al eliminar usuario: " + result.error);
       }
@@ -60,261 +348,74 @@ export function UsersTable() {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleCreateUser = async () => {
-    if (!formData.email) {
-      toast.error("El email es obligatorio");
-      return;
-    }
-
-    setIsCreating(true);
-    try {
-      // Generar contraseña temporal segura
-      const generateSecurePassword = () => {
-        const lowercase = "abcdefghijklmnopqrstuvwxyz";
-        const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const numbers = "0123456789";
-        const symbols = "!@#$%^&*()_+-=";
-
-        // Asegurar al menos un caracter de cada tipo
-        let password = "";
-        password += lowercase[Math.floor(Math.random() * lowercase.length)];
-        password += uppercase[Math.floor(Math.random() * uppercase.length)];
-        password += numbers[Math.floor(Math.random() * numbers.length)];
-        password += symbols[Math.floor(Math.random() * symbols.length)];
-
-        // Llenar el resto con caracteres aleatorios
-        const allChars = lowercase + uppercase + numbers + symbols;
-        for (let i = 4; i < 12; i++) {
-          password += allChars[Math.floor(Math.random() * allChars.length)];
-        }
-
-        // Mezclar los caracteres
-        return password
-          .split("")
-          .sort(() => Math.random() - 0.5)
-          .join("");
-      };
-
-      const tempPassword = generateSecurePassword();
-
-      // Crear usuario en Supabase Auth
-      const { data: authData, error: authError } = await client.auth.signUp({
-        email: formData.email,
-        password: tempPassword,
-        options: {
-          data: {
-            full_name: formData.full_name,
-            phone: formData.phone,
-            role: formData.role,
-          },
-        },
-      });
-
-      if (authError) {
-        throw authError;
-      }
-
-      // Si la tabla profiles existe, insertar directamente
-      if (authData.user) {
-        const { error: profileError } = await client.from("profiles").insert({
-          id: authData.user.id,
-          email: formData.email,
-          full_name: formData.full_name,
-          phone: formData.phone,
-          role: formData.role,
-        });
-
-        if (profileError && profileError.code !== "PGRST116") {
-          console.warn("Error al crear perfil:", profileError);
-        }
-      }
-
-      // Limpiar formulario y recargar lista
-      setFormData({
-        email: "",
-        full_name: "",
-        phone: "",
-        role: "user",
-      });
-      setShowCreateForm(false);
-      await refetch();
-
-      toast.success(
-        `Usuario creado exitosamente. Contraseña temporal: ${tempPassword}`,
-        { duration: 10000 }
-      );
-    } catch (err) {
-      console.error("Error al crear usuario:", err);
-      toast.error("Error al crear usuario: " + err.message);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const handleEditUser = (user) => {
-    setEditingUser(user);
-
-    // Extraer datos de diferentes fuentes posibles
-    const phone = user.phone || user.user_metadata?.phone || "";
-    const fullName = user.full_name || user.user_metadata?.full_name || "";
-    const role = user.role || user.user_metadata?.role || "user";
-
-    setEditFormData({
-      email: user.email || "",
-      full_name: fullName,
-      phone: phone,
-      role: role,
-    });
-    setShowEditForm(true);
-    setShowCreateForm(false);
-
-    // Debug para ver qué datos estamos recibiendo
-    console.log("Usuario a editar:", user);
-    console.log("Datos del formulario:", {
-      email: user.email,
-      full_name: fullName,
-      phone: phone,
-      role: role,
-    });
-  };
-
-  const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleUpdateUser = async () => {
-    if (!editingUser) return;
-
-    setIsCreating(true);
-    try {
-      let updateSuccess = false;
-
-      // Intentar actualizar en tabla profiles primero
-      const { error: profileError } = await client
-        .from("profiles")
-        .update({
-          email: editFormData.email,
-          full_name: editFormData.full_name,
-          phone: editFormData.phone,
-          role: editFormData.role,
-        })
-        .eq("id", editingUser.id);
-
-      if (profileError) {
-        if (profileError.code === "PGRST116") {
-          console.log(
-            "Tabla profiles no existe, intentando actualizar metadatos del usuario..."
-          );
-
-          // Si la tabla no existe, intentar actualizar los metadatos del usuario
-          const { error: updateError } = await client.auth.updateUser({
-            data: {
-              full_name: editFormData.full_name,
-              phone: editFormData.phone,
-              role: editFormData.role,
-            },
-          });
-
-          if (updateError) {
-            console.warn("Error al actualizar metadatos:", updateError);
-          } else {
-            updateSuccess = true;
-          }
-        } else {
-          console.warn("Error al actualizar perfil:", profileError);
-        }
-      } else {
-        updateSuccess = true;
-      }
-
-      // Limpiar formulario y recargar lista
-      setEditingUser(null);
-      setShowEditForm(false);
-      setEditFormData({
-        email: "",
-        full_name: "",
-        phone: "",
-        role: "user",
-      });
-      await refetch();
-
-      if (updateSuccess || !profileError) {
-        toast.success("Usuario actualizado exitosamente");
-      } else {
-        toast.warning(
-          "Usuario actualizado con advertencias. Revisa la consola para más detalles."
-        );
-      }
-    } catch (err) {
-      console.error("Error al actualizar usuario:", err);
-      toast.error("Error al actualizar usuario: " + err.message);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingUser(null);
-    setShowEditForm(false);
-    setEditFormData({
-      email: "",
-      full_name: "",
-      phone: "",
-      role: "user",
-    });
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES", {
+    // Si es solo fecha (YYYY-MM-DD), parsear manualmente para evitar desfase de zona horaria
+    // Si incluye hora (ISO timestamp), usar new Date() normalmente
+    let date;
+    if (dateString.length === 10 && dateString.includes("-")) {
+      const parts = dateString.split("-");
+      date = new Date(
+        parseInt(parts[0], 10),
+        parseInt(parts[1], 10) - 1,
+        parseInt(parts[2], 10),
+      );
+    } else {
+      date = new Date(dateString);
+    }
+    return date.toLocaleDateString("es-ES", {
       year: "numeric",
       month: "short",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
+  };
+
+  // Obtener rol(es) de un usuario
+  const getUserRoles = (userId) => {
+    return userRolesMap[userId] || [];
   };
 
   // Lógica de filtrado
   const filteredUsers = users.filter((user) => {
-    // Filtrar por término de búsqueda (email, nombre, teléfono)
-    const matchesSearch = 
+    const matchesSearch =
       searchTerm === "" ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.full_name && user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.phone && user.phone.toLowerCase().includes(searchTerm.toLowerCase()));
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.full_name &&
+        user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.phone &&
+        user.phone.toLowerCase().includes(searchTerm.toLowerCase()));
 
     // Filtrar por rol
-    const matchesRole = 
-      selectedRole === "" ||
-      user.role === selectedRole;
+    let matchesRole = true;
+    if (selectedRoleFilter) {
+      const userRoles = getUserRoles(user.id);
+      matchesRole = userRoles.some((r) => r.id === selectedRoleFilter);
+    }
 
     return matchesSearch && matchesRole;
   });
 
-  // Función para limpiar todos los filtros
   const clearFilters = () => {
     setSearchTerm("");
-    setSelectedRole("");
+    setSelectedRoleFilter("");
+    resetPage();
   };
 
-  // Contar filtros activos
-  const activeFiltersCount = [searchTerm, selectedRole].filter(
-    (filter) => filter !== ""
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    resetPage();
+  }, [searchTerm, selectedRoleFilter, resetPage]);
+
+  // Datos paginados
+  const paginatedUsers = useMemo(() => {
+    return paginateData(filteredUsers);
+  }, [filteredUsers, paginateData]);
+
+  const activeFiltersCount = [searchTerm, selectedRoleFilter].filter(
+    (f) => f !== "",
   ).length;
 
+  // Renderizado de loading
   if (loading) {
     return (
       <Card>
@@ -332,6 +433,7 @@ export function UsersTable() {
     );
   }
 
+  // Renderizado de error
   if (error) {
     return (
       <Card>
@@ -349,335 +451,474 @@ export function UsersTable() {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle>Usuarios ({filteredUsers.length}{filteredUsers.length !== users.length ? ` de ${users.length}` : ""})</CardTitle>
-        <div className="flex space-x-2">
-          <Button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            variant="default"
-            size="sm"
-          >
-            {showCreateForm ? "Cancelar" : "+ Nuevo Usuario"}
-          </Button>
-          <Button onClick={refetch} variant="outline" size="sm">
-            Actualizar
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Barra de búsqueda y filtros */}
-        <div className="mb-6 space-y-4">
-          {/* Barra de búsqueda */}
-          <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              type="text"
-              placeholder="Buscar por email, nombre o teléfono..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          {/* Filtros */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
-            
-            {/* Filtro por rol */}
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Todos los roles</option>
-              <option value="user">Usuario</option>
-              <option value="admin">Administrador</option>
-            </select>
-
-            {/* Botón para limpiar filtros */}
-            {activeFiltersCount > 0 && (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle>
+            Usuarios ({filteredUsers.length}
+            {filteredUsers.length !== users.length ? ` de ${users.length}` : ""}
+            )
+          </CardTitle>
+          <div className="flex space-x-2">
+            <PermissionGate permission={PERMISSIONS.USERS_CREATE} hide>
               <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <FilterXIcon className="h-4 w-4 mr-1" />
-                Limpiar ({activeFiltersCount})
-              </Button>
-            )}
-          </div>
-
-          {/* Indicador de resultados */}
-          {filteredUsers.length !== users.length && (
-            <div className="text-sm text-muted-foreground">
-              Mostrando {filteredUsers.length} de {users.length} usuarios
-            </div>
-          )}
-        </div>
-
-        {showEditForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-blue-50">
-            <h3 className="text-lg font-semibold mb-4">Editar Usuario</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={editFormData.email}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="usuario@ejemplo.com"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  name="full_name"
-                  value={editFormData.full_name}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Juan Pérez"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Teléfono
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={editFormData.phone}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="+1234567890"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Rol</label>
-                <select
-                  name="role"
-                  value={editFormData.role}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="user">Usuario</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
-            </div>
-            <div className="mt-4 flex space-x-2">
-              <Button
-                onClick={handleUpdateUser}
-                disabled={isCreating}
+                onClick={handleOpenCreateDialog}
                 variant="default"
                 size="sm"
               >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Actualizando...
-                  </>
-                ) : (
-                  "Actualizar Usuario"
-                )}
+                <UserPlus className="h-4 w-4 mr-1" />
+                Nuevo Usuario
               </Button>
-              <Button onClick={cancelEdit} variant="outline" size="sm">
-                Cancelar
-              </Button>
+            </PermissionGate>
+            <Button onClick={refetch} variant="outline" size="sm">
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Actualizar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Barra de búsqueda y filtros */}
+          <div className="mb-6 space-y-4">
+            <div className="relative">
+              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Buscar por email, nombre o teléfono..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm font-medium text-muted-foreground">
+                Filtros:
+              </span>
+
+              <Select
+                value={selectedRoleFilter || "all"}
+                onValueChange={(value) =>
+                  setSelectedRoleFilter(value === "all" ? "" : value)
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Todos los roles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los roles</SelectItem>
+                  {availableRoles.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {activeFiltersCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <FilterXIcon className="h-4 w-4 mr-1" />
+                  Limpiar ({activeFiltersCount})
+                </Button>
+              )}
             </div>
           </div>
-        )}
-        {showCreateForm && (
-          <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-            <h3 className="text-lg font-semibold mb-4">Crear Nuevo Usuario</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="usuario@ejemplo.com"
-                  required
-                />
+
+          {/* Tabla de usuarios */}
+          {filteredUsers.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">
+                {users.length === 0
+                  ? "No hay usuarios registrados"
+                  : "No se encontraron usuarios con los filtros aplicados"}
+              </p>
+              {users.length > 0 && (
+                <Button onClick={clearFilters} variant="outline">
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table aria-label="Lista de usuarios del sistema">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Nombre
+                      </TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Teléfono
+                      </TableHead>
+                      <TableHead>Rol(es)</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Creado
+                      </TableHead>
+                      <TableHead className="w-[100px]">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedUsers.map((user, index) => {
+                      const userRoles = getUserRoles(user.id);
+                      const realIndex =
+                        (currentPage - 1) * pageSize + index + 1;
+
+                      return (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium text-center">
+                            {realIndex}
+                          </TableCell>
+                          <TableCell>
+                            <TruncatedCell
+                              value={user.email}
+                              maxWidth="180px"
+                              className="font-medium"
+                              fallback="N/A"
+                            />
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <TruncatedCell
+                              value={user.full_name}
+                              maxWidth="150px"
+                              fallback="Sin nombre"
+                            />
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                            {user.phone || "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            {loadingUserRoles ? (
+                              <Skeleton className="h-5 w-20" />
+                            ) : userRoles.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {userRoles.map((role) => (
+                                  <Badge
+                                    key={role.id}
+                                    variant={
+                                      role.name === "Admin"
+                                        ? "default"
+                                        : role.name === "Secretaria"
+                                          ? "secondary"
+                                          : "outline"
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {role.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">
+                                Sin rol
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell whitespace-nowrap">
+                            {formatDate(user.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-1">
+                              {/* Botón de seguridad/roles */}
+                              <PermissionGate
+                                permission={PERMISSIONS.USERS_MANAGE_ROLES}
+                                hide
+                              >
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      onClick={() => setSecurityModalUser(user)}
+                                      variant="outline"
+                                      size="icon-sm"
+                                    >
+                                      <Shield className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Gestionar roles y permisos</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </PermissionGate>
+
+                              {/* Botón de editar */}
+                              <PermissionGate
+                                permission={PERMISSIONS.USERS_EDIT}
+                                hide
+                              >
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      onClick={() => handleOpenEditDialog(user)}
+                                      variant="outline"
+                                      size="icon-sm"
+                                      aria-label={`Editar usuario ${user.full_name || user.email}`}
+                                    >
+                                      <EditIcon />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Editar usuario</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </PermissionGate>
+
+                              {/* Botón de eliminar */}
+                              <PermissionGate
+                                permission={PERMISSIONS.USERS_DELETE}
+                                hide
+                              >
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      onClick={() => openDeleteDialog(user)}
+                                      variant="destructive"
+                                      size="icon-sm"
+                                      aria-label={`Eliminar usuario ${user.full_name || user.email}`}
+                                    >
+                                      <TrashIcon />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Eliminar usuario</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </PermissionGate>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Juan Pérez"
-                />
+
+              {/* Paginación */}
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredUsers.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal de seguridad */}
+      <Dialog
+        open={!!securityModalUser}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSecurityModalUser(null);
+            // Recargar roles de usuarios cuando se cierra el modal
+            refetch();
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Seguridad -{" "}
+              {securityModalUser?.full_name || securityModalUser?.email}
+            </DialogTitle>
+            <DialogDescription>
+              Gestiona los roles y permisos de este usuario
+            </DialogDescription>
+          </DialogHeader>
+          {securityModalUser && (
+            <UserSecuritySection
+              userId={securityModalUser.id}
+              userName={securityModalUser.full_name || securityModalUser.email}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para Crear/Editar Usuario */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                <User className="h-5 w-5 text-primary" aria-hidden="true" />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Teléfono
-                </label>
-                <input
+              <div className="min-w-0">
+                <DialogTitle>
+                  {isEditing ? "Editar Usuario" : "Crear Nuevo Usuario"}
+                </DialogTitle>
+                <DialogDescription className="truncate">
+                  {isEditing
+                    ? `Modifica los datos de "${selectedUser?.full_name || selectedUser?.email}"`
+                    : "Crea un nuevo usuario del sistema"}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="user-email">
+                Email {!isEditing && <span className="text-destructive">*</span>}
+              </Label>
+              <Input
+                id="user-email"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="usuario@ejemplo.com"
+                autoFocus={!isEditing}
+                disabled={isEditing}
+                aria-required={!isEditing}
+                className="w-full"
+              />
+              {isEditing && (
+                <p className="text-xs text-muted-foreground">
+                  El email no puede ser modificado
+                </p>
+              )}
+            </div>
+
+            {/* Nombre Completo */}
+            <div className="space-y-2">
+              <Label htmlFor="user-fullname">Nombre Completo</Label>
+              <Input
+                id="user-fullname"
+                type="text"
+                name="full_name"
+                value={formData.full_name}
+                onChange={handleInputChange}
+                placeholder="Juan Perez"
+                autoFocus={isEditing}
+                className="w-full"
+              />
+            </div>
+
+            {/* Telefono */}
+            <div className="space-y-2">
+              <Label htmlFor="user-phone">Telefono</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={formData.phone_operator}
+                  onValueChange={handlePhoneOperatorChange}
+                >
+                  <SelectTrigger
+                    className="w-24 shrink-0"
+                    aria-label="Operador telefonico"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PHONE_OPERATORS.map((op) => (
+                      <SelectItem key={op.code} value={op.code}>
+                        <span className="font-medium">{op.code}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="user-phone"
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="+1234567890"
+                  placeholder="1234567"
+                  maxLength={7}
+                  className="flex-1 min-w-0"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Rol</label>
-                <select
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            </div>
+
+            {/* Rol - Solo al crear */}
+            {!isEditing && (
+              <div className="space-y-2">
+                <Label htmlFor="user-role" className="flex items-center gap-1">
+                  <Shield className="h-3 w-3" aria-hidden="true" />
+                  Rol <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.roleId}
+                  onValueChange={handleRoleChange}
+                  disabled={rolesLoading}
                 >
-                  <option value="user">Usuario</option>
-                  <option value="admin">Administrador</option>
-                </select>
+                  <SelectTrigger className="w-full" id="user-role">
+                    <SelectValue
+                      placeholder={
+                        rolesLoading ? "Cargando roles..." : "Selecciona un rol"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableRoles.map((role) => (
+                      <SelectItem key={role.id} value={role.id}>
+                        <span>{role.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-            <div className="mt-4 flex space-x-2">
-              <Button
-                onClick={handleCreateUser}
-                disabled={isCreating}
-                variant="default"
-                size="sm"
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  "Guardar Usuario"
-                )}
-              </Button>
-              <Button
-                onClick={() => setShowCreateForm(false)}
-                variant="outline"
-                size="sm"
-              >
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-        {filteredUsers.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground mb-4">
-              {users.length === 0 
-                ? "No hay usuarios registrados" 
-                : "No se encontraron usuarios con los filtros aplicados"}
-            </p>
-            {users.length === 0 ? (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                <h4 className="font-semibold text-blue-900 mb-2">
-                  📋 Para empezar:
-                </h4>
-                <ol className="text-sm text-blue-800 text-left space-y-1">
-                  <li>Haz clic en &quot;+ Nuevo Usuario&quot;</li>
-                </ol>
-              </div>
-            ) : (
-              <Button onClick={clearFilters} variant="outline">
-                Limpiar filtros
-              </Button>
+            )}
+
+            {/* Notas informativas */}
+            {!isEditing && (
+              <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                Se generara una contrasena temporal que se mostrara despues de crear el usuario.
+              </p>
+            )}
+
+            {isEditing && (
+              <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                Para modificar el rol del usuario, usa el botón de seguridad (escudo) en la tabla.
+              </p>
             )}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">#</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Teléfono</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Creado</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.map((user, index) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium text-center">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {user.email || "N/A"}
-                  </TableCell>
-                  <TableCell>{user.full_name || "Sin nombre"}</TableCell>
-                  <TableCell>{user.phone || "N/A"}</TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        user.role === "admin"
-                          ? "bg-purple-100 text-purple-800"
-                          : "bg-blue-100 text-blue-800"
-                      }`}
-                    >
-                      {user.role || "user"}
-                    </span>
-                  </TableCell>
-                  <TableCell>{formatDate(user.created_at)}</TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            onClick={() => handleEditUser(user)}
-                            variant="outline"
-                            size="icon-sm"
-                          >
-                            <EditIcon />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Editar usuario</p>
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            onClick={() => handleDeleteUser(user.id)}
-                            variant="destructive"
-                            size="icon-sm"
-                            disabled={deletingId === user.id}
-                          >
-                            {deletingId === user.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <TrashIcon />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Eliminar usuario</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseDialog}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting || (!isEditing && rolesLoading)}
+              loading={isSubmitting}
+            >
+              {isEditing ? "Guardar Cambios" : "Crear Usuario"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de confirmación para eliminar */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) =>
+          setDeleteDialog({ open, user: open ? deleteDialog.user : null })
+        }
+        title="Eliminar Usuario"
+        description={
+          deleteDialog.user
+            ? `¿Estás seguro de que deseas eliminar al usuario "${deleteDialog.user.full_name || deleteDialog.user.email}"? Esta acción no se puede deshacer.`
+            : ""
+        }
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={deletingId !== null}
+        onConfirm={handleDeleteUser}
+      />
+    </>
   );
 }

@@ -1,4 +1,6 @@
 import { AuthProvider } from "@/components/context/AuthProvider.js";
+import { PermissionsProvider } from "@/components/context/PermissionsProvider.js";
+import { OfflineSyncManager } from "@/components/OfflineSyncManager.jsx";
 import { Toaster } from "sonner";
 import { Poppins } from "next/font/google";
 import "./globals.css";
@@ -17,16 +19,26 @@ export const metadata = {
   author: "Jorge Niño",
   creator: "Jorge Niño",
   publisher: "Jorge Niño",
-  icons: {
-    icon: "/favicon.png",
-  },
+  manifest: "/manifest.webmanifest",
+};
+
+export const viewport = {
+  themeColor: "#000000",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${poppinsFont.className} antialiased`}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <PermissionsProvider>
+            {children}
+            <OfflineSyncManager />
+          </PermissionsProvider>
+        </AuthProvider>
         <Toaster />
       </body>
     </html>

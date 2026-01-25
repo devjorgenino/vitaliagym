@@ -1,5 +1,81 @@
 import React from 'react';
 
+// Re-exportar iconos de lucide-react más usados
+// Esto centraliza los imports y facilita tree-shaking
+export {
+  // Navegación y UI
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronUp,
+  X,
+  Menu,
+  MoreHorizontal,
+  
+  // Acciones
+  Plus,
+  Pencil,
+  Trash2,
+  Save,
+  Download,
+  Upload,
+  RefreshCw,
+  Search,
+  Filter,
+  
+  // Estado
+  Check,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Loader2,
+  
+  // Usuarios y autenticación
+  User,
+  Users,
+  UserPlus,
+  UserCheck,
+  UserX,
+  Shield,
+  ShieldX,
+  Lock,
+  Unlock,
+  LogOut,
+  
+  // Negocio
+  Calendar,
+  CreditCard,
+  Banknote,
+  Receipt,
+  DollarSign,
+  Wallet,
+  Building2,
+  Briefcase,
+  
+  // Dashboard y reportes
+  LayoutDashboard,
+  TrendingUp,
+  TrendingDown,
+  FileText,
+  FileBarChart,
+  
+  // Otros
+  Phone,
+  Mail,
+  Camera,
+  Settings,
+  Dumbbell,
+  Home,
+  Smile,
+  ExternalLink,
+} from "lucide-react";
+
+// Iconos personalizados (SVG inline para mejor rendimiento)
 export function EditIcon({ className = "" }) {
   return (
     <svg 
