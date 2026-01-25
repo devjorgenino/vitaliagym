@@ -91,7 +91,7 @@ export function ExchangeRateCard({ compact = false }) {
               onChange={(e) => setTempRate(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Tasa..."
-              className="w-24 h-8 text-sm"
+              className="w-24 h-8 text-sm focus:bg-white"
               min="0"
               step="0.01"
             />
@@ -214,7 +214,7 @@ export function ExchangeRateCard({ compact = false }) {
                 onChange={(e) => setTempRate(e.target.value)}
                 onKeyDown={handleKeyPress}
                 placeholder="Ingrese tasa..."
-                className="flex-1"
+                className="flex-1 focus:bg-white"
                 min="0"
                 step="0.01"
               />

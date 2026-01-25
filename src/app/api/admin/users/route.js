@@ -10,6 +10,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PERMISSIONS = {
   USERS_CREATE: "users.create",
   USERS_DELETE: "users.delete",
+  USERS_EDIT: "users.edit",
 };
 
 // Generar contraseña segura
@@ -48,6 +49,11 @@ export async function POST(request) {
     // Check if this is a delete action (POST used to avoid 431 error with token in URL)
     if (body._action === "delete") {
       return handleDelete(request, body);
+    }
+    
+    // Check if this is a patch/update action
+    if (body._action === "patch") {
+      return handlePatch(request, body);
     }
     
     // Otherwise, handle as create user
@@ -245,6 +251,141 @@ async function handleDelete(request, body) {
 
   console.log("User deleted successfully:", userId);
   return NextResponse.json({ success: true });
+}
+
+async function handlePatch(request, body) {
+  const { userId, phone, full_name } = body;
+
+  // Verificar permisos del usuario
+  const authResult = await requirePermission(request, PERMISSIONS.USERS_EDIT);
+  
+  if (!authResult.authorized) {
+    return NextResponse.json(
+      { error: authResult.error },
+      { status: authResult.status }
+    );
+  }
+
+  const supabaseAdmin = getAdminClient();
+  
+  if (!supabaseAdmin) {
+    return NextResponse.json(
+      { 
+        error: "La actualización de usuarios requiere configurar SUPABASE_SERVICE_ROLE_KEY" 
+      },
+      { status: 503 }
+    );
+  }
+
+  if (!userId) {
+    return NextResponse.json(
+      { error: "userId es requerido" },
+      { status: 400 }
+    );
+  }
+
+  // Construir objeto de actualización
+  const updateData = {};
+  if (phone !== undefined) updateData.phone = phone;
+  if (full_name !== undefined) updateData.full_name = full_name;
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json(
+      { error: "No hay datos para actualizar" },
+      { status: 400 }
+    );
+  }
+
+  console.log("Updating profile:", userId, updateData);
+
+  // Actualizar perfil usando service role (bypasea RLS)
+  const { data, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .update(updateData)
+    .eq("id", userId)
+    .select();
+
+  if (profileError) {
+    console.error("Error updating profile:", profileError);
+    return NextResponse.json(
+      { error: profileError.message },
+      { status: 400 }
+    );
+  }
+
+  console.log("Profile updated:", data);
+  return NextResponse.json({ success: true, data });
+}
+
+// PATCH - Actualizar perfil de usuario (bypasea RLS)
+export async function PATCH(request) {
+  try {
+    const body = await request.json();
+    const { userId, phone, full_name } = body;
+
+    // Verificar permisos del usuario
+    const authResult = await requirePermission(request, PERMISSIONS.USERS_EDIT);
+    
+    if (!authResult.authorized) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
+    const supabaseAdmin = getAdminClient();
+    
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { 
+          error: "La actualización de usuarios requiere configurar SUPABASE_SERVICE_ROLE_KEY" 
+        },
+        { status: 503 }
+      );
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "userId es requerido" },
+        { status: 400 }
+      );
+    }
+
+    // Construir objeto de actualización
+    const updateData = {};
+    if (phone !== undefined) updateData.phone = phone;
+    if (full_name !== undefined) updateData.full_name = full_name;
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: "No hay datos para actualizar" },
+        { status: 400 }
+      );
+    }
+
+    // Actualizar perfil usando service role (bypasea RLS)
+    const { data, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .update(updateData)
+      .eq("id", userId)
+      .select();
+
+    if (profileError) {
+      console.error("Error updating profile:", profileError);
+      return NextResponse.json(
+        { error: profileError.message },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error("Server error:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor: " + error.message },
+      { status: 500 }
+    );
+  }
 }
 
 // Keep DELETE method as fallback (though it will have 431 issues with large tokens)
