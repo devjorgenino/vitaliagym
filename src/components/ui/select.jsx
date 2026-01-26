@@ -95,8 +95,8 @@ function SelectContent({
           // Base
           "bg-popover text-popover-foreground",
           "relative z-50 overflow-hidden rounded-md border shadow-lg",
-          // Sizing
-          "max-h-[--radix-select-content-available-height]",
+          // Sizing - altura máxima fija para garantizar scroll en modales
+          "max-h-[min(var(--radix-select-content-available-height,300px),300px)]",
           "min-w-[8rem]",
           // Origin
           "origin-[--radix-select-content-transform-origin]",
@@ -124,8 +124,11 @@ function SelectContent({
         <SelectPrimitive.Viewport
           className={cn(
             "p-1",
+            // Scroll mejorado con overscroll-contain para evitar scroll del fondo
+            "max-h-[280px] overflow-y-auto overscroll-contain",
+            // Scrollbar estilizado (usa la clase de globals.css)
+            "scrollbar-thin",
             position === "popper" && [
-              "h-[var(--radix-select-trigger-height)]",
               "w-full min-w-[var(--radix-select-trigger-width)]",
               "scroll-my-1"
             ]
@@ -212,9 +215,13 @@ function SelectScrollUpButton({
   return (
     <SelectPrimitive.ScrollUpButton
       data-slot="select-scroll-up-button"
+      aria-label="Desplazar hacia arriba"
       className={cn(
-        "flex cursor-default items-center justify-center py-1",
+        "flex cursor-pointer items-center justify-center py-1.5",
         "text-muted-foreground hover:text-foreground",
+        "bg-popover sticky top-0 z-10",
+        "border-b border-border/50",
+        "transition-colors duration-100",
         className
       )}
       {...props}>
@@ -230,9 +237,13 @@ function SelectScrollDownButton({
   return (
     <SelectPrimitive.ScrollDownButton
       data-slot="select-scroll-down-button"
+      aria-label="Desplazar hacia abajo"
       className={cn(
-        "flex cursor-default items-center justify-center py-1",
+        "flex cursor-pointer items-center justify-center py-1.5",
         "text-muted-foreground hover:text-foreground",
+        "bg-popover sticky bottom-0 z-10",
+        "border-t border-border/50",
+        "transition-colors duration-100",
         className
       )}
       {...props}>

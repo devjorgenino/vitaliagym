@@ -94,16 +94,15 @@ const DialogContent = React.forwardRef(
             "fixed z-50",
             "inset-0 sm:inset-auto",
             "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]",
-            // Layout
-            "flex flex-col sm:grid w-full sm:max-w-lg gap-3 sm:gap-4",
+            // Layout - usar grid por defecto, flex cuando se necesite scroll interno
+            "flex flex-col w-full sm:max-w-lg gap-3 sm:gap-4",
             // Appearance
             "border-0 sm:border bg-background shadow-xl",
             "rounded-none sm:rounded-lg",
             // Padding responsive
             "p-4 sm:p-6",
-            // Max height y scroll
-            "max-h-screen sm:max-h-[90vh]",
-            "overflow-y-auto",
+            // Max height - sin overflow aquí, se maneja internamente
+            "max-h-screen sm:max-h-[85vh]",
             // Animacion de salida CSS ultra rapida
             "data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0",
@@ -130,7 +129,9 @@ const DialogContent = React.forwardRef(
               "disabled:pointer-events-none",
               // Touch target mas grande en movil
               "min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0",
-              "flex items-center justify-center"
+              "flex items-center justify-center",
+              // Z-index para estar sobre el contenido
+              "z-10"
             )}
             aria-label="Cerrar dialogo"
           >
