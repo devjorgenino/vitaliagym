@@ -10,7 +10,7 @@ import {
   parsePhone,
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2, Building2, Phone, CreditCard, RefreshCw } from "lucide-react";
+import { Loader2, Phone, CreditCard, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+import { SearchableSelect } from "../ui/searchable-select";
 import {
   Table,
   TableBody,
@@ -155,10 +156,13 @@ export function PaymentsTable({
     paginateData,
   } = usePagination(10);
 
-  // Efecto para manejar pagos restantes desde props
+  // Efecto para abrir modal automáticamente cuando viene desde vista de clientes
   useEffect(() => {
-    if (payRemaining && preselectedClient && remainingAmount && paymentId) {
-      // Buscar el plan del cliente
+    // Solo procesar si hay un cliente preseleccionado y los planes ya cargaron
+    if (!preselectedClient || plansLoading || plans.length === 0) return;
+    
+    // Si es modo pago restante
+    if (payRemaining && remainingAmount && paymentId) {
       const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
 
       if (clientPlan) {
@@ -196,6 +200,32 @@ export function PaymentsTable({
         // Abrir el modal
         setIsDialogOpen(true);
       }
+    } else {
+      // Modo normal: solo preseleccionar cliente y abrir modal
+      const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
+      const planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
+      
+      setFormData({
+        client_id: preselectedClient.id,
+        plan_id: preselectedClient.plan_id || "",
+        amount_usd: planPrice > 0 ? planPrice.toFixed(2) : "",
+        amount_bs: planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "",
+        exchange_rate: rate || 1,
+        payment_date: new Date().toISOString().split("T")[0],
+        reference: "",
+        bank: "",
+        payment_type: "pago_movil",
+        phone_operator: "0414",
+        phone_payment: "",
+      });
+      
+      setPaymentMode("full");
+      setIsPayingRemaining(false);
+      setIsEditing(false);
+      setSelectedPayment(null);
+      
+      // Abrir el modal automáticamente
+      setIsDialogOpen(true);
     }
   }, [
     payRemaining,
@@ -203,6 +233,7 @@ export function PaymentsTable({
     remainingAmount,
     paymentId,
     plans,
+    plansLoading,
     rate,
   ]);
 
@@ -1064,10 +1095,16 @@ export function PaymentsTable({
                 <SelectContent>
                   <SelectItem value="all">Todos los bancos</SelectItem>
                   {VENEZUELAN_BANKS.map((bank) => (
-                    <SelectItem key={bank.code} value={bank.name}>
+                    <SelectItem 
+                      key={bank.code} 
+                      value={bank.name}
+                      aria-label={`${bank.name} - Código ${bank.code}`}
+                    >
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-3 w-3 text-muted-foreground" />
-                        {bank.shortName}
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded">
+                          {bank.code}
+                        </span>
+                        <span>{bank.shortName}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -1321,330 +1358,513 @@ export function PaymentsTable({
 
       {/* Modal para crear/editar pago */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" aria-hidden="true" />
+        <DialogContent 
+          className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+          aria-describedby="payment-form-description"
+        >
+          {/* Header fijo */}
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <CreditCard className="h-5 w-5 text-primary" aria-hidden="true" />
               {isPayingRemaining
-                ? `Pagar Restante - ${remainingPaymentData?.client_name}`
+                ? "Completar Pago Pendiente"
                 : isEditing
                   ? "Editar Pago"
-                  : preselectedClient
-                    ? `Nuevo Pago - ${preselectedClient.first_name} ${preselectedClient.last_name}`
-                    : "Nuevo Pago"}
+                  : "Registrar Nuevo Pago"}
             </DialogTitle>
-            <DialogDescription>
-              {isEditing
-                ? "Modifica los datos del pago."
-                : "Completa el formulario para registrar un nuevo pago."}
+            <DialogDescription id="payment-form-description">
+              {isPayingRemaining
+                ? `Pagando el saldo restante de ${remainingPaymentData?.client_name}`
+                : isEditing
+                  ? "Modifica los datos del pago registrado."
+                  : preselectedClient
+                    ? `Registrando pago para ${preselectedClient.first_name} ${preselectedClient.last_name}`
+                    : "Completa el formulario para registrar un nuevo pago."}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Resumen de pago restante */}
-          {isPayingRemaining && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-800">
-                <strong>Resumen de Pagos:</strong>
-              </p>
-              <p className="text-xs text-blue-700 mt-1">
-                Plan: {remainingPaymentData?.plan_name} - $
-                {remainingPaymentData?.plan_price?.toFixed(2)}
-              </p>
-              <p className="text-xs text-blue-700">
-                Ya pagado: ${remainingPaymentData?.total_paid?.toFixed(2)}
-              </p>
-              <p className="text-xs text-blue-700">
-                Restante: ${remainingPaymentData?.remaining_amount?.toFixed(2)}
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
-            {/* Cliente */}
-            <div className="space-y-2">
-              <Label htmlFor="client_id">
-                Cliente <span className="text-destructive">*</span>
-                {isPayingRemaining && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    (Bloqueado)
-                  </span>
-                )}
-              </Label>
-              <Select
-                value={formData.client_id}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, client_id: value }))
-                }
-                disabled={!!preselectedClient || isPayingRemaining || isEditing}
-              >
-                <SelectTrigger id="client_id">
-                  <SelectValue placeholder="Seleccionar cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.first_name} {client.last_name} - {client.cedula}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Plan */}
-            <div className="space-y-2">
-              <Label htmlFor="plan_id">
-                Plan <span className="text-destructive">*</span>
-                {isPayingRemaining && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    (Bloqueado)
-                  </span>
-                )}
-              </Label>
-              <Select
-                value={formData.plan_id}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, plan_id: value }))
-                }
-                disabled={isPayingRemaining || isEditing}
-              >
-                <SelectTrigger id="plan_id">
-                  <SelectValue placeholder="Seleccionar plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {plans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name} - ${plan.price}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Selector de modo de pago */}
-            {formData.plan_id && (
-              <div className="space-y-2">
-                <Label>Modo de Pago</Label>
-                <div className="flex space-x-4 pt-2">
-                  <label className="flex items-center text-sm">
-                    <input
-                      type="radio"
-                      name="payment_mode"
-                      value="full"
-                      checked={paymentMode === "full"}
-                      onChange={() => handlePaymentModeChange("full")}
-                      className="mr-2"
-                    />
-                    Completo ($
-                    {currentPaymentInfo.remainingAmount > 0
-                      ? currentPaymentInfo.remainingAmount.toFixed(2)
-                      : "0.00"}
-                    )
-                  </label>
-                  <label className="flex items-center text-sm">
-                    <input
-                      type="radio"
-                      name="payment_mode"
-                      value="partial"
-                      checked={paymentMode === "partial"}
-                      onChange={() => handlePaymentModeChange("partial")}
-                      className="mr-2"
-                    />
-                    Parcial
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* Monto USD */}
-            <div className="space-y-2">
-              <Label htmlFor="amount_usd">
-                Monto en USD <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="amount_usd"
-                type="number"
-                step="0.01"
-                name="amount_usd"
-                value={formData.amount_usd}
-                onChange={handleInputChange}
-                placeholder="10.00"
-                disabled={paymentMode === "full" && formData.plan_id && !isEditing}
-                className={partialValidationError ? "border-red-500" : ""}
-              />
-              {partialValidationError && (
-                <p className="text-red-500 text-xs">{partialValidationError}</p>
-              )}
-            </div>
-
-            {/* Monto Bs */}
-            <div className="space-y-2">
-              <Label htmlFor="amount_bs">Monto en Bs</Label>
-              <Input
-                id="amount_bs"
-                type="number"
-                value={formData.amount_bs}
-                readOnly
-                disabled
-                placeholder="Calculado automáticamente"
-              />
-            </div>
-
-            {/* Pago restante */}
-            {paymentMode === "partial" &&
-              formData.plan_id &&
-              formData.amount_usd &&
-              !partialValidationError && (
-                <div className="space-y-2">
-                  <Label>Restante después de este pago</Label>
-                  <div className="w-full px-3 py-2 border rounded-md bg-yellow-50 text-yellow-800 font-medium">
-                    $
-                    {
-                      calculateRemainingAfterCurrentAmount(
-                        formData.plan_id,
-                        formData.amount_usd,
-                      ).formattedAmount
-                    }
+          {/* Contenido scrolleable */}
+          <div className="flex-1 overflow-y-auto py-4 px-1 -mx-1 scrollbar-thin">
+            <div className="space-y-6">
+              
+              {/* Resumen de pago restante */}
+              {isPayingRemaining && remainingPaymentData && (
+                <div 
+                  className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    Resumen del Plan
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
+                      <p className="text-xs text-blue-600 dark:text-blue-300">Precio Plan</p>
+                      <p className="font-bold text-blue-900 dark:text-blue-100">
+                        ${remainingPaymentData.plan_price?.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
+                      <p className="text-xs text-green-600 dark:text-green-300">Ya Pagado</p>
+                      <p className="font-bold text-green-700 dark:text-green-100">
+                        ${remainingPaymentData.total_paid?.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
+                      <p className="text-xs text-orange-600 dark:text-orange-300">Restante</p>
+                      <p className="font-bold text-orange-700 dark:text-orange-100">
+                        ${remainingPaymentData.remaining_amount?.toFixed(2)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
 
-            {/* Tasa de cambio */}
-            <div className="space-y-2">
-              <Label htmlFor="exchange_rate">Tasa de Cambio</Label>
-              <Input
-                id="exchange_rate"
-                type="number"
-                step="0.0001"
-                name="exchange_rate"
-                value={formData.exchange_rate}
-                onChange={handleInputChange}
-                disabled={!isEditing}
-              />
-            </div>
-
-            {/* Tipo de pago */}
-            <div className="space-y-2">
-              <Label htmlFor="payment_type">
-                Tipo de Pago <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.payment_type}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, payment_type: value }))
-                }
-              >
-                <SelectTrigger id="payment_type">
-                  <SelectValue placeholder="Seleccionar tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pago_movil">Pago Móvil</SelectItem>
-                  <SelectItem value="transferencia">Transferencia</SelectItem>
-                  <SelectItem value="punto_de_venta">Punto de Venta</SelectItem>
-                  <SelectItem value="efectivo_dolares">Efectivo $</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Fecha de pago */}
-            <div className="space-y-2">
-              <Label htmlFor="payment_date">
-                Fecha de Pago <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="payment_date"
-                type="date"
-                name="payment_date"
-                value={formData.payment_date}
-                onChange={handleInputChange}
-              />
-            </div>
-
-            {/* Referencia - solo para pago móvil y transferencia */}
-            {(formData.payment_type === "pago_movil" ||
-              formData.payment_type === "transferencia") && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="reference">Referencia</Label>
-                  <Input
-                    id="reference"
-                    type="text"
-                    name="reference"
-                    value={formData.reference}
-                    onChange={handleInputChange}
-                    placeholder="Número de referencia"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="bank">Banco</Label>
-                  <Select
-                    value={formData.bank}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, bank: value }))
-                    }
-                  >
-                    <SelectTrigger id="bank">
-                      <SelectValue placeholder="Seleccionar banco" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VENEZUELAN_BANKS.map((bank) => (
-                        <SelectItem key={bank.code} value={bank.name}>
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-3 w-3 text-muted-foreground" />
-                            <span>{bank.name}</span>
+              {/* Sección: Información del Cliente */}
+              <fieldset className="space-y-4">
+                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
+                  Información del Cliente
+                </legend>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Cliente */}
+                  <div className="space-y-2">
+                    <Label htmlFor="client_id" className="text-sm font-medium">
+                      Cliente <span className="text-destructive" aria-hidden="true">*</span>
+                      <span className="sr-only">(requerido)</span>
+                    </Label>
+                    {(!!preselectedClient || isPayingRemaining || isEditing) ? (
+                      // Select deshabilitado para clientes preseleccionados
+                      <Select
+                        value={formData.client_id}
+                        disabled={true}
+                      >
+                        <SelectTrigger 
+                          id="client_id"
+                          className="bg-muted"
+                        >
+                          <SelectValue placeholder="Seleccionar cliente..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clients.map((client) => (
+                            <SelectItem key={client.id} value={client.id}>
+                              {client.first_name} {client.last_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      // SearchableSelect para búsqueda de clientes
+                      <SearchableSelect
+                        id="client_id"
+                        options={clients.map((client) => ({
+                          value: client.id,
+                          label: `${client.first_name} ${client.last_name}`,
+                          searchTerms: [
+                            client.first_name,
+                            client.last_name,
+                            client.cedula,
+                            `${client.first_name} ${client.last_name}`,
+                          ],
+                          cedula: client.cedula,
+                        }))}
+                        value={formData.client_id}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, client_id: value }))
+                        }
+                        placeholder="Buscar cliente..."
+                        searchPlaceholder="Nombre o cédula..."
+                        emptyMessage="No se encontró ningún cliente"
+                        aria-required="true"
+                        renderOption={(option) => (
+                          <div className="flex flex-col">
+                            <span className="font-medium">{option.label}</span>
+                            <span className="text-xs text-muted-foreground">{option.cedula}</span>
                           </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
+                        )}
+                        renderValue={(option) => (
+                          <span>{option.label}</span>
+                        )}
+                      />
+                    )}
+                  </div>
 
-            {/* Teléfono - solo para pago móvil */}
-            {formData.payment_type === "pago_movil" && (
-              <div className="space-y-2">
-                <Label htmlFor="phone_payment">Teléfono Pago Móvil</Label>
-                <div className="flex gap-1">
+                  {/* Plan */}
+                  <div className="space-y-2">
+                    <Label htmlFor="plan_id" className="text-sm font-medium">
+                      Plan <span className="text-destructive" aria-hidden="true">*</span>
+                      <span className="sr-only">(requerido)</span>
+                    </Label>
+                    <Select
+                      value={formData.plan_id}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, plan_id: value }))
+                      }
+                      disabled={isPayingRemaining || isEditing}
+                    >
+                      <SelectTrigger 
+                        id="plan_id"
+                        aria-required="true"
+                        className={isPayingRemaining || isEditing ? "bg-muted" : ""}
+                      >
+                        <SelectValue placeholder="Seleccionar plan..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plans.map((plan) => (
+                          <SelectItem key={plan.id} value={plan.id}>
+                            <span className="font-medium">{plan.name}</span>
+                            <span className="text-primary font-semibold ml-2">${plan.price}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* Sección: Detalles del Pago */}
+              <fieldset className="space-y-4">
+                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
+                  Detalles del Pago
+                </legend>
+
+                {/* Modo de pago */}
+                {formData.plan_id && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Modo de Pago</Label>
+                    <div 
+                      className="flex gap-3"
+                      role="radiogroup"
+                      aria-label="Seleccionar modo de pago"
+                    >
+                      <label 
+                        className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
+                          paymentMode === "full" 
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                            : "border-input hover:border-primary/50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="payment_mode"
+                          value="full"
+                          checked={paymentMode === "full"}
+                          onChange={() => handlePaymentModeChange("full")}
+                          className="sr-only"
+                        />
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          paymentMode === "full" ? "border-primary" : "border-muted-foreground"
+                        }`}>
+                          {paymentMode === "full" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Pago Completo</p>
+                          <p className="text-xs text-muted-foreground">
+                            ${currentPaymentInfo.remainingAmount > 0
+                              ? currentPaymentInfo.remainingAmount.toFixed(2)
+                              : "0.00"}
+                          </p>
+                        </div>
+                      </label>
+                      
+                      <label 
+                        className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
+                          paymentMode === "partial" 
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                            : "border-input hover:border-primary/50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="payment_mode"
+                          value="partial"
+                          checked={paymentMode === "partial"}
+                          onChange={() => handlePaymentModeChange("partial")}
+                          className="sr-only"
+                        />
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          paymentMode === "partial" ? "border-primary" : "border-muted-foreground"
+                        }`}>
+                          {paymentMode === "partial" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Pago Parcial</p>
+                          <p className="text-xs text-muted-foreground">Monto personalizado</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Monto USD */}
+                  <div className="space-y-2">
+                    <Label htmlFor="amount_usd" className="text-sm font-medium">
+                      Monto en USD <span className="text-destructive" aria-hidden="true">*</span>
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                      <Input
+                        id="amount_usd"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        name="amount_usd"
+                        value={formData.amount_usd}
+                        onChange={handleInputChange}
+                        placeholder="0.00"
+                        disabled={paymentMode === "full" && formData.plan_id && !isEditing}
+                        className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
+                          paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""
+                        }`}
+                        aria-invalid={!!partialValidationError}
+                        aria-describedby={partialValidationError ? "amount-error" : undefined}
+                      />
+                    </div>
+                    {partialValidationError && (
+                      <p id="amount-error" className="text-destructive text-xs flex items-center gap-1" role="alert">
+                        <span aria-hidden="true">!</span> {partialValidationError}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Monto Bs */}
+                  <div className="space-y-2">
+                    <Label htmlFor="amount_bs" className="text-sm font-medium text-muted-foreground">
+                      Monto en Bs <span className="text-xs">(calculado)</span>
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
+                      <Input
+                        id="amount_bs"
+                        type="text"
+                        value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString('es-VE') : ""}
+                        readOnly
+                        disabled
+                        className="pl-10 bg-muted"
+                        aria-readonly="true"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Restante después del pago */}
+                {paymentMode === "partial" &&
+                  formData.plan_id &&
+                  formData.amount_usd &&
+                  !partialValidationError && (
+                    <div 
+                      className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg"
+                      role="status"
+                    >
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        <span className="font-medium">Restante después de este pago:</span>{" "}
+                        <span className="font-bold">
+                          ${calculateRemainingAfterCurrentAmount(formData.plan_id, formData.amount_usd).formattedAmount}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Fecha de pago */}
+                  <div className="space-y-2">
+                    <Label htmlFor="payment_date" className="text-sm font-medium">
+                      Fecha de Pago <span className="text-destructive" aria-hidden="true">*</span>
+                    </Label>
+                    <Input
+                      id="payment_date"
+                      type="date"
+                      name="payment_date"
+                      value={formData.payment_date}
+                      onChange={handleInputChange}
+                      aria-required="true"
+                    />
+                  </div>
+
+                  {/* Tasa de cambio */}
+                  <div className="space-y-2">
+                    <Label htmlFor="exchange_rate" className="text-sm font-medium text-muted-foreground">
+                      Tasa de Cambio <span className="text-xs">(Bs/$)</span>
+                    </Label>
+                    <Input
+                      id="exchange_rate"
+                      type="number"
+                      step="0.0001"
+                      name="exchange_rate"
+                      value={formData.exchange_rate}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      className={!isEditing ? "bg-muted" : ""}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* Sección: Método de Pago */}
+              <fieldset className="space-y-4">
+                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">3</span>
+                  Método de Pago
+                </legend>
+
+                {/* Tipo de pago */}
+                <div className="space-y-2">
+                  <Label htmlFor="payment_type" className="text-sm font-medium">
+                    Tipo de Pago <span className="text-destructive" aria-hidden="true">*</span>
+                  </Label>
                   <Select
-                    value={formData.phone_operator}
+                    value={formData.payment_type}
                     onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        phone_operator: value,
-                      }))
+                      setFormData((prev) => ({ ...prev, payment_type: value }))
                     }
                   >
-                    <SelectTrigger
-                      className="w-[90px] flex-shrink-0"
-                      aria-label="Operador telefónico"
-                    >
-                      <SelectValue />
+                    <SelectTrigger id="payment_type" aria-required="true">
+                      <SelectValue placeholder="Seleccionar tipo de pago..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {PHONE_OPERATORS.map((op) => (
-                        <SelectItem key={op.code} value={op.code}>
-                          <span className="font-medium">{op.code}</span>
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="pago_movil">
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4" aria-hidden="true" />
+                          <span>Pago Móvil</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="transferencia">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="h-4 w-4" aria-hidden="true" />
+                          <span>Transferencia Bancaria</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="punto_de_venta">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="h-4 w-4" aria-hidden="true" />
+                          <span>Punto de Venta</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="efectivo_dolares">
+                        <div className="flex items-center gap-2">
+                          <DollarSignIcon className="h-4 w-4" aria-hidden="true" />
+                          <span>Efectivo en Dólares</span>
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input
-                    id="phone_payment"
-                    type="tel"
-                    name="phone_payment"
-                    value={formData.phone_payment}
-                    onChange={handleInputChange}
-                    placeholder="1234567"
-                    maxLength={7}
-                    className="flex-1"
-                  />
                 </div>
-              </div>
-            )}
+
+                {/* Campos adicionales según tipo de pago */}
+                {(formData.payment_type === "pago_movil" ||
+                  formData.payment_type === "transferencia") && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    {/* Banco */}
+                    <div className="space-y-2">
+                      <Label htmlFor="bank" className="text-sm font-medium">
+                        Banco Emisor
+                      </Label>
+                      <Select
+                        value={formData.bank}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, bank: value }))
+                        }
+                      >
+                        <SelectTrigger 
+                          id="bank"
+                          aria-label="Seleccionar banco emisor del pago"
+                        >
+                          <SelectValue placeholder="Seleccionar banco..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {VENEZUELAN_BANKS.map((bank) => (
+                            <SelectItem 
+                              key={bank.code} 
+                              value={bank.name}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                  {bank.code}
+                                </span>
+                                <span>{bank.shortName}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Referencia */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reference" className="text-sm font-medium">
+                        N° de Referencia
+                      </Label>
+                      <Input
+                        id="reference"
+                        type="text"
+                        name="reference"
+                        value={formData.reference}
+                        onChange={handleInputChange}
+                        placeholder="Ej: 123456789"
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Teléfono - solo para pago móvil */}
+                {formData.payment_type === "pago_movil" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="phone_payment" className="text-sm font-medium">
+                      Teléfono del Pago Móvil
+                    </Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={formData.phone_operator}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            phone_operator: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger
+                          className="w-24 flex-shrink-0"
+                          aria-label="Código de operador telefónico"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHONE_OPERATORS.map((op) => (
+                            <SelectItem key={op.code} value={op.code}>
+                              <span className="font-mono font-medium">{op.code}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        id="phone_payment"
+                        type="tel"
+                        name="phone_payment"
+                        value={formData.phone_payment}
+                        onChange={handleInputChange}
+                        placeholder="1234567"
+                        maxLength={7}
+                        className="flex-1 font-mono"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Número de teléfono asociado al pago móvil (7 dígitos)
+                    </p>
+                  </div>
+                )}
+              </fieldset>
+            </div>
           </div>
 
-          <DialogFooter>
+          {/* Footer fijo */}
+          <DialogFooter className="flex-shrink-0 pt-4 border-t gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
