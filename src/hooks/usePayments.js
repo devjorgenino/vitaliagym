@@ -3,6 +3,146 @@ import client from '../api/client';
 import { fetchWithOffline } from '../lib/offline-read';
 import { executeWithSync } from '../lib/data-sync';
 
+/**
+ * Calcula la fecha del próximo pago sumando N meses a la fecha de ingreso.
+ * Si el día no existe en el mes destino (ej: 31 de enero → febrero), 
+ * se usa el último día de ese mes.
+ * 
+ * @param {string} joinDate - Fecha de ingreso del cliente (formato YYYY-MM-DD)
+ * @param {number} monthsToAdd - Número de meses a sumar
+ * @returns {string} - Fecha del próximo pago (formato YYYY-MM-DD)
+ */
+function calculateNextPaymentDateWithCycles(joinDate, monthsToAdd) {
+  if (!joinDate || monthsToAdd < 1) return null;
+
+  // Parsear la fecha correctamente evitando problemas de zona horaria
+  let year, month, day;
+  
+  if (typeof joinDate === 'string') {
+    const parts = joinDate.split('-');
+    year = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10) - 1; // Los meses en JS son 0-indexados
+    day = parseInt(parts[2], 10);
+  } else {
+    year = joinDate.getFullYear();
+    month = joinDate.getMonth();
+    day = joinDate.getDate();
+  }
+
+  const originalDay = day;
+
+  // Calcular el mes y año destino
+  let targetMonth = month + monthsToAdd;
+  let targetYear = year;
+
+  while (targetMonth > 11) {
+    targetMonth -= 12;
+    targetYear += 1;
+  }
+
+  // Obtener el último día del mes destino
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+
+  // Usar el día original o el último día del mes si el original no existe
+  const finalDay = Math.min(originalDay, lastDayOfTargetMonth);
+
+  // Formatear la fecha como YYYY-MM-DD
+  const formattedYear = targetYear;
+  const formattedMonth = String(targetMonth + 1).padStart(2, '0');
+  const formattedDay = String(finalDay).padStart(2, '0');
+
+  return `${formattedYear}-${formattedMonth}-${formattedDay}`;
+}
+
+/**
+ * Calcula la fecha del próximo pago basándose en la fecha de pago actual del cliente.
+ * La lógica es: toma el día de la fecha de pago actual y lo mueve al siguiente mes.
+ * Si el día no existe en el mes siguiente (ej: 31 de enero → febrero), 
+ * se usa el último día de ese mes.
+ * 
+ * @param {string} currentPaymentDate - Fecha de pago actual del cliente (formato YYYY-MM-DD)
+ * @returns {string} - Nueva fecha del próximo pago (formato YYYY-MM-DD)
+ */
+function calculateNextPaymentDateFromCurrent(currentPaymentDate) {
+  return calculateNextPaymentDateWithCycles(currentPaymentDate, 1);
+}
+
+/**
+ * Recalcula la fecha del próximo pago de un cliente específico basándose en sus pagos.
+ * @param {string} clientId - ID del cliente
+ * @param {string} planId - ID del plan del cliente
+ */
+async function recalculateClientNextPaymentDate(clientId, planId) {
+  try {
+    // Obtener datos del cliente
+    const { data: clientData, error: clientError } = await client
+      .from('clients')
+      .select(`
+        id,
+        join_date,
+        plan_id,
+        plans (
+          id,
+          price
+        )
+      `)
+      .eq('id', clientId)
+      .single();
+
+    if (clientError || !clientData) {
+      console.error('Error fetching client for recalculation:', clientError);
+      return { success: false, error: clientError };
+    }
+
+    // Obtener todos los pagos del cliente para su plan
+    const { data: clientPayments, error: paymentsError } = await client
+      .from('payments')
+      .select('id, amount_usd')
+      .eq('client_id', clientId)
+      .eq('plan_id', clientData.plan_id);
+
+    if (paymentsError) {
+      console.error('Error fetching payments for recalculation:', paymentsError);
+      return { success: false, error: paymentsError };
+    }
+
+    // Calcular el total pagado
+    const totalPaid = (clientPayments || []).reduce(
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      0
+    );
+
+    // Obtener el precio del plan
+    const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
+
+    // Calcular cuántos ciclos completos ha pagado
+    let cyclesPaid = 0;
+    if (planPrice > 0 && totalPaid > 0) {
+      cyclesPaid = Math.floor(totalPaid / planPrice);
+    }
+
+    // Calcular la fecha del próximo pago = fecha_ingreso + (ciclos_pagados + 1) meses
+    const newNextPaymentDate = calculateNextPaymentDateWithCycles(clientData.join_date, cyclesPaid + 1);
+
+    if (newNextPaymentDate) {
+      const { error } = await client
+        .from('clients')
+        .update({ next_payment_date: newNextPaymentDate })
+        .eq('id', clientId);
+
+      if (error) {
+        console.error('Error updating client next_payment_date:', error);
+        return { success: false, error };
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Error recalculating client next_payment_date:', err);
+    return { success: false, error: err };
+  }
+}
+
 export function usePayments() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +203,11 @@ export function usePayments() {
         throw error;
       }
       
+      // Actualizar la fecha del próximo pago del cliente basándose en ciclos pagados
+      if (paymentData.client_id && paymentData.plan_id) {
+        await recalculateClientNextPaymentDate(paymentData.client_id, paymentData.plan_id);
+      }
+      
       // Optimistic update
       if (data && data[0]) {
           // data[0] is the raw inserted row. We might be missing joined data.
@@ -93,6 +238,11 @@ export function usePayments() {
 
       if (error) {
         throw error;
+      }
+      
+      // Actualizar la fecha del próximo pago del cliente basándose en ciclos pagados
+      if (paymentData.client_id && paymentData.plan_id) {
+        await recalculateClientNextPaymentDate(paymentData.client_id, paymentData.plan_id);
       }
       
       // Optimistic update
@@ -252,6 +402,114 @@ export function usePayments() {
     }
   };
 
+  /**
+   * Recalcula las fechas de próximo pago de todos los clientes basándose en sus pagos.
+   * La lógica es:
+   * 1. Para cada cliente, calcula cuántos ciclos completos ha pagado (total_pagado / precio_plan)
+   * 2. La fecha del próximo pago = fecha_ingreso + (ciclos_pagados + 1) meses
+   * 3. Si no tiene pagos, la fecha del próximo pago = fecha_ingreso + 1 mes
+   * 
+   * @returns {Promise<{success: boolean, updated: number, errors: string[]}>}
+   */
+  const recalculateAllNextPaymentDates = async () => {
+    try {
+      // Obtener todos los clientes con su fecha de ingreso, próximo pago y plan
+      const { data: allClients, error: clientsError } = await client
+        .from('clients')
+        .select(`
+          id, 
+          join_date, 
+          next_payment_date,
+          plan_id,
+          plans (
+            id,
+            price
+          )
+        `);
+
+      if (clientsError) throw clientsError;
+      if (!allClients || allClients.length === 0) {
+        return { success: true, updated: 0, total: 0, errors: [] };
+      }
+
+      // Obtener todos los pagos con el monto
+      const { data: allPayments, error: paymentsError } = await client
+        .from('payments')
+        .select('id, client_id, plan_id, amount_usd, payment_date');
+
+      if (paymentsError) throw paymentsError;
+
+      const updates = [];
+      const errors = [];
+
+      for (const c of allClients) {
+        if (!c.join_date) continue;
+
+        try {
+          // Obtener los pagos de este cliente para su plan actual
+          const clientPayments = (allPayments || []).filter(
+            p => p.client_id === c.id && p.plan_id === c.plan_id
+          );
+          
+          // Calcular el total pagado
+          const totalPaid = clientPayments.reduce(
+            (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+            0
+          );
+          
+          // Obtener el precio del plan
+          const planPrice = c.plans ? parseFloat(c.plans.price) || 0 : 0;
+          
+          // Calcular cuántos ciclos completos ha pagado
+          let cyclesPaid = 0;
+          if (planPrice > 0 && totalPaid > 0) {
+            cyclesPaid = Math.floor(totalPaid / planPrice);
+          }
+          
+          // Calcular la fecha del próximo pago
+          // = fecha_ingreso + (ciclos_pagados + 1) meses
+          const newNextPaymentDate = calculateNextPaymentDateWithCycles(c.join_date, cyclesPaid + 1);
+
+          if (newNextPaymentDate && c.next_payment_date !== newNextPaymentDate) {
+            updates.push({
+              id: c.id,
+              next_payment_date: newNextPaymentDate
+            });
+          }
+        } catch (err) {
+          errors.push(`Cliente ${c.id}: ${err.message}`);
+        }
+      }
+
+      if (updates.length > 0) {
+        // Actualizar en lotes
+        const batchSize = 50;
+        let updatedCount = 0;
+
+        for (let i = 0; i < updates.length; i += batchSize) {
+          const chunk = updates.slice(i, i + batchSize);
+          await Promise.all(chunk.map(async (u) => {
+            const { error } = await client
+              .from('clients')
+              .update({ next_payment_date: u.next_payment_date })
+              .eq('id', u.id);
+
+            if (error) errors.push(`Error updating ${u.id}: ${error.message}`);
+            else updatedCount++;
+          }));
+        }
+
+        return { success: errors.length === 0, updated: updatedCount, total: allClients.length, errors };
+      }
+
+      return { success: true, updated: 0, total: allClients.length, errors: [] };
+
+    } catch (err) {
+      console.error('Error recalculating payment dates:', err);
+      return { success: false, updated: 0, errors: [err.message] };
+    }
+  };
+
   useEffect(() => {
     fetchPayments();
     
@@ -274,5 +532,6 @@ export function usePayments() {
     applyFilters,
     searchPaymentsByClient,
     searchPaymentsWithFilters,
+    recalculateAllNextPaymentDates,
   };
 }

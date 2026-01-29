@@ -116,6 +116,7 @@ export function ClientsTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   // Estados para paginación
   const {
@@ -130,6 +131,62 @@ export function ClientsTable() {
   const getPlanPrice = (planId) => {
     const plan = plans.find((p) => p.id === planId);
     return plan ? parseFloat(plan.price) || 0 : 0;
+  };
+
+  // Calcular el status del cliente basado en sus pagos
+  // Activo: tiene pagos al día (no tiene pagos pendientes/vencidos)
+  // Inactivo: tiene pagos vencidos o no ha pagado
+  const getClientStatus = (client) => {
+    if (!client || !client.plan_id) {
+      return { status: "inactivo", label: "Inactivo" };
+    }
+
+    // Si tiene días hasta el próximo pago negativos, está vencido (inactivo)
+    if (client.daysUntilPayment !== null && client.daysUntilPayment < 0) {
+      return { status: "inactivo", label: "Inactivo" };
+    }
+
+    // Verificar si el cliente ha pagado el plan actual
+    const planPrice = getPlanPrice(client.plan_id);
+    if (planPrice <= 0) {
+      return { status: "activo", label: "Activo" };
+    }
+
+    const allClientPayments = payments.filter(
+      (p) => p.client_id === client.id && p.plan_id === client.plan_id,
+    );
+
+    // Si no tiene pagos, está inactivo
+    if (allClientPayments.length === 0) {
+      return { status: "inactivo", label: "Inactivo" };
+    }
+
+    const totalPaidSoFar = allClientPayments.reduce(
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      0,
+    );
+
+    // Calcular el ciclo actual de pago
+    let paidForCurrentCycle = totalPaidSoFar % planPrice;
+
+    if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
+      paidForCurrentCycle = planPrice;
+    }
+
+    const currentRemaining = planPrice - paidForCurrentCycle;
+    const isFullyPaid = currentRemaining < 0.001;
+
+    // Si pagó completo el ciclo actual, está activo
+    if (isFullyPaid) {
+      return { status: "activo", label: "Activo" };
+    }
+
+    // Si tiene pago pendiente pero no está vencido, está activo
+    if (client.daysUntilPayment !== null && client.daysUntilPayment >= 0) {
+      return { status: "activo", label: "Activo" };
+    }
+
+    return { status: "inactivo", label: "Inactivo" };
   };
 
   const calculatePaymentStatus = (client) => {
@@ -424,7 +481,14 @@ export function ClientsTable() {
         client.daysUntilPayment !== null && client.daysUntilPayment < 0;
     }
 
-    return matchesSearch && matchesPlan && matchesPayment;
+    // Filtrar por status
+    let matchesStatus = true;
+    if (statusFilter !== "") {
+      const clientStatus = getClientStatus(client);
+      matchesStatus = clientStatus.status === statusFilter;
+    }
+
+    return matchesSearch && matchesPlan && matchesPayment && matchesStatus;
   });
 
   // Función para limpiar todos los filtros
@@ -432,13 +496,14 @@ export function ClientsTable() {
     setSearchTerm("");
     setSelectedPlan("");
     setPaymentFilter("");
+    setStatusFilter("");
     resetPage();
   };
 
   // Resetear página cuando cambian los filtros
   useEffect(() => {
     resetPage();
-  }, [searchTerm, selectedPlan, paymentFilter, resetPage]);
+  }, [searchTerm, selectedPlan, paymentFilter, statusFilter, resetPage]);
 
   // Datos paginados
   const paginatedClients = useMemo(() => {
@@ -446,7 +511,7 @@ export function ClientsTable() {
   }, [filteredClients, paginateData]);
 
   // Contar filtros activos
-  const activeFiltersCount = [searchTerm, selectedPlan, paymentFilter].filter(
+  const activeFiltersCount = [searchTerm, selectedPlan, paymentFilter, statusFilter].filter(
     (filter) => filter !== "",
   ).length;
 
@@ -613,6 +678,23 @@ export function ClientsTable() {
               Vencidos
             </Button>
 
+            {/* Filtro por status */}
+            <Select
+              value={statusFilter || "all"}
+              onValueChange={(value) =>
+                setStatusFilter(value === "all" ? "" : value)
+              }
+            >
+              <SelectTrigger className="w-[120px] sm:w-[140px] h-8 text-xs sm:text-sm">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="activo">Activo</SelectItem>
+                <SelectItem value="inactivo">Inactivo</SelectItem>
+              </SelectContent>
+            </Select>
+
             {/* Boton para limpiar filtros */}
             {activeFiltersCount > 0 && (
               <Button
@@ -671,13 +753,8 @@ export function ClientsTable() {
                     <TableHead className="hidden md:table-cell">
                       Teléfono
                     </TableHead>
-                    {/* <TableHead className="hidden xl:table-cell">
-                    Dirección
-                  </TableHead> */}
-                    <TableHead className="hidden xl:table-cell">
-                      Observaciones
-                    </TableHead>
                     <TableHead>Plan</TableHead>
+                    <TableHead className="hidden sm:table-cell">Status</TableHead>
                     <TableHead className="hidden lg:table-cell">
                       Ingreso
                     </TableHead>
@@ -694,6 +771,8 @@ export function ClientsTable() {
                       client.plan_id && !paymentStatus.isFullyPaid;
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
+                    // Calcular el status del cliente
+                    const clientStatus = getClientStatus(client);
 
                     return (
                       <TableRow key={client.id}>
@@ -730,27 +809,23 @@ export function ClientsTable() {
                             <span className="text-muted-foreground">N/A</span>
                           )}
                         </TableCell>
-                        {/* <TableCell className="hidden xl:table-cell">
-                        <TruncatedCell
-                          value={client.address}
-                          maxWidth="150px"
-                          fallback="N/A"
-                        />
-                      </TableCell> */}
-                        <TableCell className="hidden xl:table-cell">
-                          <TruncatedCell
-                            value={client.observations}
-                            maxWidth="120px"
-                            className="italic"
-                            fallback="N/A"
-                          />
-                        </TableCell>
                         <TableCell>
                           <TruncatedCell
                             value={client.plans?.name || "Sin plan"}
                             maxWidth="100px"
                             className="font-medium"
                           />
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              clientStatus.status === "activo"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {clientStatus.label}
+                          </span>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell whitespace-nowrap">
                           {formatDate(client.join_date)}

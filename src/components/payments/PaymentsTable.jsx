@@ -10,13 +10,21 @@ import {
   parsePhone,
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2, Phone, CreditCard, RefreshCw } from "lucide-react";
+import { Loader2, Phone, CreditCard, RefreshCw, Settings2, CalendarClock } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 import {
   EditIcon,
   TrashIcon,
@@ -95,6 +103,7 @@ export function PaymentsTable({
     createPayment,
     updatePayment,
     deletePayment,
+    recalculateAllNextPaymentDates,
   } = usePayments();
 
   const { clients, loading: clientsLoading } = useClients();
@@ -1015,6 +1024,31 @@ export function PaymentsTable({
               </>
             )}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Menu de mantenimiento">
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Mantenimiento</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={async () => {
+                toast.loading("Recalculando fechas de pago...");
+                const res = await recalculateAllNextPaymentDates();
+                toast.dismiss();
+                if(res.success) {
+                  toast.success(`Fechas recalculadas: ${res.updated} de ${res.total} clientes`);
+                  // Refrescar la lista de pagos para ver los cambios reflejados
+                  refetch();
+                } else {
+                  toast.error("Error al recalcular fechas: " + (res.errors?.[0] || "Error desconocido"));
+                }
+              }}>
+                <CalendarClock className="mr-2 h-4 w-4" /> Recalcular Fechas de Pago
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
       <CardContent>
@@ -1238,7 +1272,9 @@ export function PaymentsTable({
                           ${(parseFloat(payment.amount_usd) || 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {rateLoading ? (
+                          {payment.payment_type === "efectivo_dolares" ? (
+                            <span className="text-muted-foreground">N/A</span>
+                          ) : rateLoading ? (
                             "..."
                           ) : (
                             <span className="text-green-600 whitespace-nowrap">
@@ -1598,57 +1634,146 @@ export function PaymentsTable({
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Monto USD */}
-                  <div className="space-y-2">
-                    <Label htmlFor="amount_usd" className="text-sm font-medium">
-                      Monto en USD <span className="text-destructive" aria-hidden="true">*</span>
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
-                      <Input
-                        id="amount_usd"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        name="amount_usd"
-                        value={formData.amount_usd}
-                        onChange={handleInputChange}
-                        placeholder="0.00"
-                        disabled={paymentMode === "full" && formData.plan_id && !isEditing}
-                        className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
-                          paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""
-                        }`}
-                        aria-invalid={!!partialValidationError}
-                        aria-describedby={partialValidationError ? "amount-error" : undefined}
-                      />
+                {/* Campos de monto y fecha - layout adaptativo según tipo de pago */}
+                {formData.payment_type === "efectivo_dolares" ? (
+                  /* Layout para efectivo en dólares: 2 campos en una fila */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Monto USD */}
+                    <div className="space-y-2">
+                      <Label htmlFor="amount_usd" className="text-sm font-medium">
+                        Monto en USD <span className="text-destructive" aria-hidden="true">*</span>
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                        <Input
+                          id="amount_usd"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          name="amount_usd"
+                          value={formData.amount_usd}
+                          onChange={handleInputChange}
+                          placeholder="0.00"
+                          disabled={paymentMode === "full" && formData.plan_id && !isEditing}
+                          className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
+                            paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""
+                          }`}
+                          aria-invalid={!!partialValidationError}
+                          aria-describedby={partialValidationError ? "amount-error" : undefined}
+                        />
+                      </div>
+                      {partialValidationError && (
+                        <p id="amount-error" className="text-destructive text-xs flex items-center gap-1" role="alert">
+                          <span aria-hidden="true">!</span> {partialValidationError}
+                        </p>
+                      )}
                     </div>
-                    {partialValidationError && (
-                      <p id="amount-error" className="text-destructive text-xs flex items-center gap-1" role="alert">
-                        <span aria-hidden="true">!</span> {partialValidationError}
-                      </p>
-                    )}
-                  </div>
 
-                  {/* Monto Bs */}
-                  <div className="space-y-2">
-                    <Label htmlFor="amount_bs" className="text-sm font-medium text-muted-foreground">
-                      Monto en Bs <span className="text-xs">(calculado)</span>
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
+                    {/* Fecha de pago */}
+                    <div className="space-y-2">
+                      <Label htmlFor="payment_date" className="text-sm font-medium">
+                        Fecha de Pago <span className="text-destructive" aria-hidden="true">*</span>
+                      </Label>
                       <Input
-                        id="amount_bs"
-                        type="text"
-                        value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString('es-VE') : ""}
-                        readOnly
-                        disabled
-                        className="pl-10 bg-muted"
-                        aria-readonly="true"
+                        id="payment_date"
+                        type="date"
+                        name="payment_date"
+                        value={formData.payment_date}
+                        onChange={handleInputChange}
+                        aria-required="true"
                       />
                     </div>
                   </div>
-                </div>
+                ) : (
+                  /* Layout normal: 4 campos en 2 filas */
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Monto USD */}
+                      <div className="space-y-2">
+                        <Label htmlFor="amount_usd" className="text-sm font-medium">
+                          Monto en USD <span className="text-destructive" aria-hidden="true">*</span>
+                        </Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                          <Input
+                            id="amount_usd"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            name="amount_usd"
+                            value={formData.amount_usd}
+                            onChange={handleInputChange}
+                            placeholder="0.00"
+                            disabled={paymentMode === "full" && formData.plan_id && !isEditing}
+                            className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
+                              paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""
+                            }`}
+                            aria-invalid={!!partialValidationError}
+                            aria-describedby={partialValidationError ? "amount-error" : undefined}
+                          />
+                        </div>
+                        {partialValidationError && (
+                          <p id="amount-error" className="text-destructive text-xs flex items-center gap-1" role="alert">
+                            <span aria-hidden="true">!</span> {partialValidationError}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Monto Bs */}
+                      <div className="space-y-2">
+                        <Label htmlFor="amount_bs" className="text-sm font-medium text-muted-foreground">
+                          Monto en Bs <span className="text-xs">(calculado)</span>
+                        </Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
+                          <Input
+                            id="amount_bs"
+                            type="text"
+                            value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString('es-VE') : ""}
+                            readOnly
+                            disabled
+                            className="pl-10 bg-muted"
+                            aria-readonly="true"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Fecha de pago */}
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_date" className="text-sm font-medium">
+                          Fecha de Pago <span className="text-destructive" aria-hidden="true">*</span>
+                        </Label>
+                        <Input
+                          id="payment_date"
+                          type="date"
+                          name="payment_date"
+                          value={formData.payment_date}
+                          onChange={handleInputChange}
+                          aria-required="true"
+                        />
+                      </div>
+
+                      {/* Tasa de cambio */}
+                      <div className="space-y-2">
+                        <Label htmlFor="exchange_rate" className="text-sm font-medium text-muted-foreground">
+                          Tasa de Cambio <span className="text-xs">(Bs/$)</span>
+                        </Label>
+                        <Input
+                          id="exchange_rate"
+                          type="number"
+                          step="0.0001"
+                          name="exchange_rate"
+                          value={formData.exchange_rate}
+                          onChange={handleInputChange}
+                          disabled={!isEditing}
+                          className={!isEditing ? "bg-muted" : ""}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Restante después del pago */}
                 {paymentMode === "partial" &&
@@ -1667,40 +1792,6 @@ export function PaymentsTable({
                       </p>
                     </div>
                   )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Fecha de pago */}
-                  <div className="space-y-2">
-                    <Label htmlFor="payment_date" className="text-sm font-medium">
-                      Fecha de Pago <span className="text-destructive" aria-hidden="true">*</span>
-                    </Label>
-                    <Input
-                      id="payment_date"
-                      type="date"
-                      name="payment_date"
-                      value={formData.payment_date}
-                      onChange={handleInputChange}
-                      aria-required="true"
-                    />
-                  </div>
-
-                  {/* Tasa de cambio */}
-                  <div className="space-y-2">
-                    <Label htmlFor="exchange_rate" className="text-sm font-medium text-muted-foreground">
-                      Tasa de Cambio <span className="text-xs">(Bs/$)</span>
-                    </Label>
-                    <Input
-                      id="exchange_rate"
-                      type="number"
-                      step="0.0001"
-                      name="exchange_rate"
-                      value={formData.exchange_rate}
-                      onChange={handleInputChange}
-                      disabled={!isEditing}
-                      className={!isEditing ? "bg-muted" : ""}
-                    />
-                  </div>
-                </div>
               </fieldset>
 
               {/* Sección: Método de Pago */}
