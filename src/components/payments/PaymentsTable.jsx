@@ -10,7 +10,14 @@ import {
   parsePhone,
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
-import { Loader2, Phone, CreditCard, RefreshCw, Settings2, CalendarClock } from "lucide-react";
+import {
+  Loader2,
+  Phone,
+  CreditCard,
+  RefreshCw,
+  Settings2,
+  CalendarClock,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -143,7 +150,10 @@ export function PaymentsTable({
 
   // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, payment: null });
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    payment: null,
+  });
 
   // Estados para búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -169,7 +179,7 @@ export function PaymentsTable({
   useEffect(() => {
     // Solo procesar si hay un cliente preseleccionado y los planes ya cargaron
     if (!preselectedClient || plansLoading || plans.length === 0) return;
-    
+
     // Si es modo pago restante
     if (payRemaining && remainingAmount && paymentId) {
       const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
@@ -213,7 +223,7 @@ export function PaymentsTable({
       // Modo normal: solo preseleccionar cliente y abrir modal
       const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
       const planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
-      
+
       setFormData({
         client_id: preselectedClient.id,
         plan_id: preselectedClient.plan_id || "",
@@ -227,12 +237,12 @@ export function PaymentsTable({
         phone_operator: "0414",
         phone_payment: "",
       });
-      
+
       setPaymentMode("full");
       setIsPayingRemaining(false);
       setIsEditing(false);
       setSelectedPayment(null);
-      
+
       // Abrir el modal automáticamente
       setIsDialogOpen(true);
     }
@@ -476,7 +486,12 @@ export function PaymentsTable({
 
   // Efecto unificado para auto-cargar el monto al cambiar cliente, plan o modo de pago
   useEffect(() => {
-    if (isDialogOpen && !isEditing && formData.plan_id && paymentMode === "full") {
+    if (
+      isDialogOpen &&
+      !isEditing &&
+      formData.plan_id &&
+      paymentMode === "full"
+    ) {
       const amountToPay = currentPaymentInfo.remainingAmount;
       setFormData((prev) => ({
         ...prev,
@@ -798,9 +813,13 @@ export function PaymentsTable({
         );
       }
     } catch (err) {
-      console.error(`Error al ${isEditing ? "actualizar" : "registrar"} pago:`, err);
+      console.error(
+        `Error al ${isEditing ? "actualizar" : "registrar"} pago:`,
+        err,
+      );
       toast.error(
-        `Error al ${isEditing ? "actualizar" : "registrar"} pago: ` + err.message,
+        `Error al ${isEditing ? "actualizar" : "registrar"} pago: ` +
+          err.message,
       );
     } finally {
       setIsSubmitting(false);
@@ -876,7 +895,7 @@ export function PaymentsTable({
 
   const handleDeletePayment = async () => {
     if (!deleteDialog.payment) return;
-    
+
     setDeletingId(deleteDialog.payment.id);
     try {
       const result = await deletePayment(deleteDialog.payment.id);
@@ -991,7 +1010,10 @@ export function PaymentsTable({
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
         <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
-          <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
+          <CreditCard
+            className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+            aria-hidden="true"
+          />
           <span>
             Pagos ({displayPayments.length}
             {activeFiltersCount > 0 ? ` de ${payments.length}` : ""})
@@ -1024,7 +1046,7 @@ export function PaymentsTable({
               </>
             )}
           </Button>
-          <DropdownMenu>
+          {/*           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Menu de mantenimiento">
                 <Settings2 className="h-4 w-4" />
@@ -1048,7 +1070,7 @@ export function PaymentsTable({
                 <CalendarClock className="mr-2 h-4 w-4" /> Recalcular Fechas de Pago
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu> */}
         </div>
       </CardHeader>
       <CardContent>
@@ -1120,17 +1142,17 @@ export function PaymentsTable({
                   setSelectedBank(value === "all" ? "" : value)
                 }
               >
-              <SelectTrigger
-                className="w-[140px] sm:w-[200px] text-xs sm:text-sm"
-                aria-label="Filtrar por banco"
-              >
+                <SelectTrigger
+                  className="w-[140px] sm:w-[200px] text-xs sm:text-sm"
+                  aria-label="Filtrar por banco"
+                >
                   <SelectValue placeholder="Todos los bancos" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los bancos</SelectItem>
                   {VENEZUELAN_BANKS.map((bank) => (
-                    <SelectItem 
-                      key={bank.code} 
+                    <SelectItem
+                      key={bank.code}
                       value={bank.name}
                       aria-label={`${bank.name} - Código ${bank.code}`}
                     >
@@ -1177,7 +1199,9 @@ export function PaymentsTable({
                 className="text-muted-foreground hover:text-foreground text-xs sm:text-sm"
               >
                 <FilterXIcon className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Limpiar ({activeFiltersCount})</span>
+                <span className="hidden sm:inline">
+                  Limpiar ({activeFiltersCount})
+                </span>
                 <span className="sm:hidden">({activeFiltersCount})</span>
               </Button>
             )}
@@ -1211,7 +1235,7 @@ export function PaymentsTable({
                 💰 Para empezar:
               </h4>
               <ol className="text-sm text-blue-800 text-left space-y-1">
-                <li>Haz clic en "+ Nuevo Pago"</li>
+                <li>Haz clic en + Nuevo Pago</li>
               </ol>
             </div>
           </div>
@@ -1394,7 +1418,7 @@ export function PaymentsTable({
 
       {/* Modal para crear/editar pago */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent 
+        <DialogContent
           className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
           aria-describedby="payment-form-description"
         >
@@ -1422,10 +1446,9 @@ export function PaymentsTable({
           {/* Contenido scrolleable */}
           <div className="flex-1 overflow-y-auto py-4 px-1 -mx-1 scrollbar-thin">
             <div className="space-y-6">
-              
               {/* Resumen de pago restante */}
               {isPayingRemaining && remainingPaymentData && (
-                <div 
+                <div
                   className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
                   role="status"
                   aria-live="polite"
@@ -1435,19 +1458,25 @@ export function PaymentsTable({
                   </h4>
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-blue-600 dark:text-blue-300">Precio Plan</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-300">
+                        Precio Plan
+                      </p>
                       <p className="font-bold text-blue-900 dark:text-blue-100">
                         ${remainingPaymentData.plan_price?.toFixed(2)}
                       </p>
                     </div>
                     <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-green-600 dark:text-green-300">Ya Pagado</p>
+                      <p className="text-xs text-green-600 dark:text-green-300">
+                        Ya Pagado
+                      </p>
                       <p className="font-bold text-green-700 dark:text-green-100">
                         ${remainingPaymentData.total_paid?.toFixed(2)}
                       </p>
                     </div>
                     <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-orange-600 dark:text-orange-300">Restante</p>
+                      <p className="text-xs text-orange-600 dark:text-orange-300">
+                        Restante
+                      </p>
                       <p className="font-bold text-orange-700 dark:text-orange-100">
                         ${remainingPaymentData.remaining_amount?.toFixed(2)}
                       </p>
@@ -1459,27 +1488,26 @@ export function PaymentsTable({
               {/* Sección: Información del Cliente */}
               <fieldset className="space-y-4">
                 <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                    1
+                  </span>
                   Información del Cliente
                 </legend>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Cliente */}
                   <div className="space-y-2">
                     <Label htmlFor="client_id" className="text-sm font-medium">
-                      Cliente <span className="text-destructive" aria-hidden="true">*</span>
+                      Cliente{" "}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
                       <span className="sr-only">(requerido)</span>
                     </Label>
-                    {(!!preselectedClient || isPayingRemaining || isEditing) ? (
+                    {!!preselectedClient || isPayingRemaining || isEditing ? (
                       // Select deshabilitado para clientes preseleccionados
-                      <Select
-                        value={formData.client_id}
-                        disabled={true}
-                      >
-                        <SelectTrigger 
-                          id="client_id"
-                          className="bg-muted"
-                        >
+                      <Select value={formData.client_id} disabled={true}>
+                        <SelectTrigger id="client_id" className="bg-muted">
                           <SelectValue placeholder="Seleccionar cliente..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -1516,12 +1544,12 @@ export function PaymentsTable({
                         renderOption={(option) => (
                           <div className="flex flex-col">
                             <span className="font-medium">{option.label}</span>
-                            <span className="text-xs text-muted-foreground">{option.cedula}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {option.cedula}
+                            </span>
                           </div>
                         )}
-                        renderValue={(option) => (
-                          <span>{option.label}</span>
-                        )}
+                        renderValue={(option) => <span>{option.label}</span>}
                       />
                     )}
                   </div>
@@ -1529,7 +1557,10 @@ export function PaymentsTable({
                   {/* Plan */}
                   <div className="space-y-2">
                     <Label htmlFor="plan_id" className="text-sm font-medium">
-                      Plan <span className="text-destructive" aria-hidden="true">*</span>
+                      Plan{" "}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
                       <span className="sr-only">(requerido)</span>
                     </Label>
                     <Select
@@ -1539,10 +1570,12 @@ export function PaymentsTable({
                       }
                       disabled={isPayingRemaining || isEditing}
                     >
-                      <SelectTrigger 
+                      <SelectTrigger
                         id="plan_id"
                         aria-required="true"
-                        className={isPayingRemaining || isEditing ? "bg-muted" : ""}
+                        className={
+                          isPayingRemaining || isEditing ? "bg-muted" : ""
+                        }
                       >
                         <SelectValue placeholder="Seleccionar plan..." />
                       </SelectTrigger>
@@ -1550,7 +1583,9 @@ export function PaymentsTable({
                         {plans.map((plan) => (
                           <SelectItem key={plan.id} value={plan.id}>
                             <span className="font-medium">{plan.name}</span>
-                            <span className="text-primary font-semibold ml-2">${plan.price}</span>
+                            <span className="text-primary font-semibold ml-2">
+                              ${plan.price}
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1562,7 +1597,9 @@ export function PaymentsTable({
               {/* Sección: Detalles del Pago */}
               <fieldset className="space-y-4">
                 <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                    2
+                  </span>
                   Detalles del Pago
                 </legend>
 
@@ -1570,15 +1607,15 @@ export function PaymentsTable({
                 {formData.plan_id && (
                   <div className="space-y-3">
                     <Label className="text-sm font-medium">Modo de Pago</Label>
-                    <div 
+                    <div
                       className="flex gap-3"
                       role="radiogroup"
                       aria-label="Seleccionar modo de pago"
                     >
-                      <label 
+                      <label
                         className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
-                          paymentMode === "full" 
-                            ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                          paymentMode === "full"
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                             : "border-input hover:border-primary/50"
                         }`}
                       >
@@ -1590,25 +1627,32 @@ export function PaymentsTable({
                           onChange={() => handlePaymentModeChange("full")}
                           className="sr-only"
                         />
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                          paymentMode === "full" ? "border-primary" : "border-muted-foreground"
-                        }`}>
-                          {paymentMode === "full" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            paymentMode === "full"
+                              ? "border-primary"
+                              : "border-muted-foreground"
+                          }`}
+                        >
+                          {paymentMode === "full" && (
+                            <div className="w-2 h-2 rounded-full bg-primary" />
+                          )}
                         </div>
                         <div>
                           <p className="font-medium text-sm">Pago Completo</p>
                           <p className="text-xs text-muted-foreground">
-                            ${currentPaymentInfo.remainingAmount > 0
+                            $
+                            {currentPaymentInfo.remainingAmount > 0
                               ? currentPaymentInfo.remainingAmount.toFixed(2)
                               : "0.00"}
                           </p>
                         </div>
                       </label>
-                      
-                      <label 
+
+                      <label
                         className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
-                          paymentMode === "partial" 
-                            ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                          paymentMode === "partial"
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                             : "border-input hover:border-primary/50"
                         }`}
                       >
@@ -1620,14 +1664,22 @@ export function PaymentsTable({
                           onChange={() => handlePaymentModeChange("partial")}
                           className="sr-only"
                         />
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                          paymentMode === "partial" ? "border-primary" : "border-muted-foreground"
-                        }`}>
-                          {paymentMode === "partial" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            paymentMode === "partial"
+                              ? "border-primary"
+                              : "border-muted-foreground"
+                          }`}
+                        >
+                          {paymentMode === "partial" && (
+                            <div className="w-2 h-2 rounded-full bg-primary" />
+                          )}
                         </div>
                         <div>
                           <p className="font-medium text-sm">Pago Parcial</p>
-                          <p className="text-xs text-muted-foreground">Monto personalizado</p>
+                          <p className="text-xs text-muted-foreground">
+                            Monto personalizado
+                          </p>
                         </div>
                       </label>
                     </div>
@@ -1640,11 +1692,19 @@ export function PaymentsTable({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Monto USD */}
                     <div className="space-y-2">
-                      <Label htmlFor="amount_usd" className="text-sm font-medium">
-                        Monto en USD <span className="text-destructive" aria-hidden="true">*</span>
+                      <Label
+                        htmlFor="amount_usd"
+                        className="text-sm font-medium"
+                      >
+                        Monto en USD{" "}
+                        <span className="text-destructive" aria-hidden="true">
+                          *
+                        </span>
                       </Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                          $
+                        </span>
                         <Input
                           id="amount_usd"
                           type="number"
@@ -1654,25 +1714,46 @@ export function PaymentsTable({
                           value={formData.amount_usd}
                           onChange={handleInputChange}
                           placeholder="0.00"
-                          disabled={paymentMode === "full" && formData.plan_id && !isEditing}
+                          disabled={
+                            paymentMode === "full" &&
+                            formData.plan_id &&
+                            !isEditing
+                          }
                           className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
-                            paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""
+                            paymentMode === "full" &&
+                            formData.plan_id &&
+                            !isEditing
+                              ? "bg-muted"
+                              : ""
                           }`}
                           aria-invalid={!!partialValidationError}
-                          aria-describedby={partialValidationError ? "amount-error" : undefined}
+                          aria-describedby={
+                            partialValidationError ? "amount-error" : undefined
+                          }
                         />
                       </div>
                       {partialValidationError && (
-                        <p id="amount-error" className="text-destructive text-xs flex items-center gap-1" role="alert">
-                          <span aria-hidden="true">!</span> {partialValidationError}
+                        <p
+                          id="amount-error"
+                          className="text-destructive text-xs flex items-center gap-1"
+                          role="alert"
+                        >
+                          <span aria-hidden="true">!</span>{" "}
+                          {partialValidationError}
                         </p>
                       )}
                     </div>
 
                     {/* Fecha de pago */}
                     <div className="space-y-2">
-                      <Label htmlFor="payment_date" className="text-sm font-medium">
-                        Fecha de Pago <span className="text-destructive" aria-hidden="true">*</span>
+                      <Label
+                        htmlFor="payment_date"
+                        className="text-sm font-medium"
+                      >
+                        Fecha de Pago{" "}
+                        <span className="text-destructive" aria-hidden="true">
+                          *
+                        </span>
                       </Label>
                       <Input
                         id="payment_date"
@@ -1690,11 +1771,19 @@ export function PaymentsTable({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Monto USD */}
                       <div className="space-y-2">
-                        <Label htmlFor="amount_usd" className="text-sm font-medium">
-                          Monto en USD <span className="text-destructive" aria-hidden="true">*</span>
+                        <Label
+                          htmlFor="amount_usd"
+                          className="text-sm font-medium"
+                        >
+                          Monto en USD{" "}
+                          <span className="text-destructive" aria-hidden="true">
+                            *
+                          </span>
                         </Label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                            $
+                          </span>
                           <Input
                             id="amount_usd"
                             type="number"
@@ -1704,32 +1793,61 @@ export function PaymentsTable({
                             value={formData.amount_usd}
                             onChange={handleInputChange}
                             placeholder="0.00"
-                            disabled={paymentMode === "full" && formData.plan_id && !isEditing}
+                            disabled={
+                              paymentMode === "full" &&
+                              formData.plan_id &&
+                              !isEditing
+                            }
                             className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
-                              paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""
+                              paymentMode === "full" &&
+                              formData.plan_id &&
+                              !isEditing
+                                ? "bg-muted"
+                                : ""
                             }`}
                             aria-invalid={!!partialValidationError}
-                            aria-describedby={partialValidationError ? "amount-error" : undefined}
+                            aria-describedby={
+                              partialValidationError
+                                ? "amount-error"
+                                : undefined
+                            }
                           />
                         </div>
                         {partialValidationError && (
-                          <p id="amount-error" className="text-destructive text-xs flex items-center gap-1" role="alert">
-                            <span aria-hidden="true">!</span> {partialValidationError}
+                          <p
+                            id="amount-error"
+                            className="text-destructive text-xs flex items-center gap-1"
+                            role="alert"
+                          >
+                            <span aria-hidden="true">!</span>{" "}
+                            {partialValidationError}
                           </p>
                         )}
                       </div>
 
                       {/* Monto Bs */}
                       <div className="space-y-2">
-                        <Label htmlFor="amount_bs" className="text-sm font-medium text-muted-foreground">
-                          Monto en Bs <span className="text-xs">(calculado)</span>
+                        <Label
+                          htmlFor="amount_bs"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          Monto en Bs{" "}
+                          <span className="text-xs">(calculado)</span>
                         </Label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                            Bs
+                          </span>
                           <Input
                             id="amount_bs"
                             type="text"
-                            value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString('es-VE') : ""}
+                            value={
+                              formData.amount_bs
+                                ? parseFloat(formData.amount_bs).toLocaleString(
+                                    "es-VE",
+                                  )
+                                : ""
+                            }
                             readOnly
                             disabled
                             className="pl-10 bg-muted"
@@ -1742,8 +1860,14 @@ export function PaymentsTable({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Fecha de pago */}
                       <div className="space-y-2">
-                        <Label htmlFor="payment_date" className="text-sm font-medium">
-                          Fecha de Pago <span className="text-destructive" aria-hidden="true">*</span>
+                        <Label
+                          htmlFor="payment_date"
+                          className="text-sm font-medium"
+                        >
+                          Fecha de Pago{" "}
+                          <span className="text-destructive" aria-hidden="true">
+                            *
+                          </span>
                         </Label>
                         <Input
                           id="payment_date"
@@ -1757,7 +1881,10 @@ export function PaymentsTable({
 
                       {/* Tasa de cambio */}
                       <div className="space-y-2">
-                        <Label htmlFor="exchange_rate" className="text-sm font-medium text-muted-foreground">
+                        <Label
+                          htmlFor="exchange_rate"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
                           Tasa de Cambio <span className="text-xs">(Bs/$)</span>
                         </Label>
                         <Input
@@ -1780,14 +1907,22 @@ export function PaymentsTable({
                   formData.plan_id &&
                   formData.amount_usd &&
                   !partialValidationError && (
-                    <div 
+                    <div
                       className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg"
                       role="status"
                     >
                       <p className="text-sm text-amber-800 dark:text-amber-200">
-                        <span className="font-medium">Restante después de este pago:</span>{" "}
+                        <span className="font-medium">
+                          Restante después de este pago:
+                        </span>{" "}
                         <span className="font-bold">
-                          ${calculateRemainingAfterCurrentAmount(formData.plan_id, formData.amount_usd).formattedAmount}
+                          $
+                          {
+                            calculateRemainingAfterCurrentAmount(
+                              formData.plan_id,
+                              formData.amount_usd,
+                            ).formattedAmount
+                          }
                         </span>
                       </p>
                     </div>
@@ -1797,14 +1932,19 @@ export function PaymentsTable({
               {/* Sección: Método de Pago */}
               <fieldset className="space-y-4">
                 <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">3</span>
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                    3
+                  </span>
                   Método de Pago
                 </legend>
 
                 {/* Tipo de pago */}
                 <div className="space-y-2">
                   <Label htmlFor="payment_type" className="text-sm font-medium">
-                    Tipo de Pago <span className="text-destructive" aria-hidden="true">*</span>
+                    Tipo de Pago{" "}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
                   </Label>
                   <Select
                     value={formData.payment_type}
@@ -1836,7 +1976,10 @@ export function PaymentsTable({
                       </SelectItem>
                       <SelectItem value="efectivo_dolares">
                         <div className="flex items-center gap-2">
-                          <DollarSignIcon className="h-4 w-4" aria-hidden="true" />
+                          <DollarSignIcon
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
                           <span>Efectivo en Dólares</span>
                         </div>
                       </SelectItem>
@@ -1859,7 +2002,7 @@ export function PaymentsTable({
                           setFormData((prev) => ({ ...prev, bank: value }))
                         }
                       >
-                        <SelectTrigger 
+                        <SelectTrigger
                           id="bank"
                           aria-label="Seleccionar banco emisor del pago"
                         >
@@ -1867,10 +2010,7 @@ export function PaymentsTable({
                         </SelectTrigger>
                         <SelectContent>
                           {VENEZUELAN_BANKS.map((bank) => (
-                            <SelectItem 
-                              key={bank.code} 
-                              value={bank.name}
-                            >
+                            <SelectItem key={bank.code} value={bank.name}>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                                   {bank.code}
@@ -1885,7 +2025,10 @@ export function PaymentsTable({
 
                     {/* Referencia */}
                     <div className="space-y-2">
-                      <Label htmlFor="reference" className="text-sm font-medium">
+                      <Label
+                        htmlFor="reference"
+                        className="text-sm font-medium"
+                      >
                         N° de Referencia
                       </Label>
                       <Input
@@ -1904,7 +2047,10 @@ export function PaymentsTable({
                 {/* Teléfono - solo para pago móvil */}
                 {formData.payment_type === "pago_movil" && (
                   <div className="space-y-2">
-                    <Label htmlFor="phone_payment" className="text-sm font-medium">
+                    <Label
+                      htmlFor="phone_payment"
+                      className="text-sm font-medium"
+                    >
                       Teléfono del Pago Móvil
                     </Label>
                     <div className="flex gap-2">
@@ -1926,7 +2072,9 @@ export function PaymentsTable({
                         <SelectContent>
                           {PHONE_OPERATORS.map((op) => (
                             <SelectItem key={op.code} value={op.code}>
-                              <span className="font-mono font-medium">{op.code}</span>
+                              <span className="font-mono font-medium">
+                                {op.code}
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1967,7 +2115,12 @@ export function PaymentsTable({
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={isSubmitting || clientsLoading || plansLoading || !!partialValidationError}
+              disabled={
+                isSubmitting ||
+                clientsLoading ||
+                plansLoading ||
+                !!partialValidationError
+              }
               loading={isSubmitting}
             >
               {isEditing ? "Actualizar Pago" : "Registrar Pago"}

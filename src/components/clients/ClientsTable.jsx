@@ -21,7 +21,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Loader2, IdCard, Phone, Settings2, CalendarClock, Users, RefreshCw } from "lucide-react";
+import {
+  Loader2,
+  IdCard,
+  Phone,
+  Settings2,
+  CalendarClock,
+  Users,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
@@ -134,19 +142,24 @@ export function ClientsTable() {
   };
 
   // Calcular el status del cliente basado en sus pagos
-  // Activo: tiene pagos al día (no tiene pagos pendientes/vencidos)
-  // Inactivo: tiene pagos vencidos o no ha pagado
+  // Activo: tiene días restantes positivos o ha pagado su membresía
+  // Inactivo: tiene días vencidos (negativos)
   const getClientStatus = (client) => {
     if (!client || !client.plan_id) {
       return { status: "inactivo", label: "Inactivo" };
     }
 
-    // Si tiene días hasta el próximo pago negativos, está vencido (inactivo)
+    // REGLA PRINCIPAL: Si tiene días hasta el próximo pago negativos, está vencido (inactivo)
     if (client.daysUntilPayment !== null && client.daysUntilPayment < 0) {
       return { status: "inactivo", label: "Inactivo" };
     }
 
-    // Verificar si el cliente ha pagado el plan actual
+    // REGLA PRINCIPAL: Si tiene días hasta el próximo pago >= 0, está activo (tiene tiempo)
+    if (client.daysUntilPayment !== null && client.daysUntilPayment >= 0) {
+      return { status: "activo", label: "Activo" };
+    }
+
+    // Si no tiene next_payment_date calculado, verificar si ha pagado
     const planPrice = getPlanPrice(client.plan_id);
     if (planPrice <= 0) {
       return { status: "activo", label: "Activo" };
@@ -156,7 +169,7 @@ export function ClientsTable() {
       (p) => p.client_id === client.id && p.plan_id === client.plan_id,
     );
 
-    // Si no tiene pagos, está inactivo
+    // Si no tiene pagos y no tiene daysUntilPayment, está inactivo
     if (allClientPayments.length === 0) {
       return { status: "inactivo", label: "Inactivo" };
     }
@@ -181,11 +194,7 @@ export function ClientsTable() {
       return { status: "activo", label: "Activo" };
     }
 
-    // Si tiene pago pendiente pero no está vencido, está activo
-    if (client.daysUntilPayment !== null && client.daysUntilPayment >= 0) {
-      return { status: "activo", label: "Activo" };
-    }
-
+    // Por defecto, si tiene pagos pero no está al día, inactivo
     return { status: "inactivo", label: "Inactivo" };
   };
 
@@ -404,9 +413,13 @@ export function ClientsTable() {
         );
       }
     } catch (err) {
-      console.error(`Error al ${isEditing ? "actualizar" : "crear"} cliente:`, err);
+      console.error(
+        `Error al ${isEditing ? "actualizar" : "crear"} cliente:`,
+        err,
+      );
       toast.error(
-        `Error al ${isEditing ? "actualizar" : "crear"} cliente: ` + err.message,
+        `Error al ${isEditing ? "actualizar" : "crear"} cliente: ` +
+          err.message,
       );
     } finally {
       setIsSubmitting(false);
@@ -511,9 +524,12 @@ export function ClientsTable() {
   }, [filteredClients, paginateData]);
 
   // Contar filtros activos
-  const activeFiltersCount = [searchTerm, selectedPlan, paymentFilter, statusFilter].filter(
-    (filter) => filter !== "",
-  ).length;
+  const activeFiltersCount = [
+    searchTerm,
+    selectedPlan,
+    paymentFilter,
+    statusFilter,
+  ].filter((filter) => filter !== "").length;
 
   if (loading || paymentsLoading) {
     return (
@@ -552,12 +568,16 @@ export function ClientsTable() {
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
         <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
-          <Users className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
+          <Users
+            className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+            aria-hidden="true"
+          />
           <span>
             Clientes ({filteredClients.length}
             {filteredClients.length !== clients.length
               ? ` de ${clients.length}`
-              : ""})
+              : ""}
+            )
           </span>
         </CardTitle>
         <div className="flex flex-wrap gap-2">
@@ -569,11 +589,17 @@ export function ClientsTable() {
           >
             + Nuevo Cliente
           </Button>
-          <Button onClick={refetch} variant="outline" size="sm" className="text-xs sm:text-sm" aria-label="Actualizar lista de clientes">
+          <Button
+            onClick={refetch}
+            variant="outline"
+            size="sm"
+            className="text-xs sm:text-sm"
+            aria-label="Actualizar lista de clientes"
+          >
             <RefreshCw className="h-3.5 w-3.5 sm:mr-1.5" aria-hidden="true" />
             <span className="hidden sm:inline">Actualizar</span>
           </Button>
-          <DropdownMenu>
+          {/*           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Menu de mantenimiento">
                 <Settings2 className="h-4 w-4" />
@@ -601,7 +627,7 @@ export function ClientsTable() {
                 <CalendarClock className="mr-2 h-4 w-4" /> Corregir Fechas Pago
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu> */}
         </div>
       </CardHeader>
       <CardContent>
@@ -609,7 +635,10 @@ export function ClientsTable() {
         <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
           {/* Barra de busqueda */}
           <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" aria-hidden="true" />
+            <SearchIcon
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4"
+              aria-hidden="true"
+            />
             <Input
               type="text"
               placeholder="Buscar por nombre o cedula..."
@@ -754,7 +783,9 @@ export function ClientsTable() {
                       Teléfono
                     </TableHead>
                     <TableHead>Plan</TableHead>
-                    <TableHead className="hidden sm:table-cell">Status</TableHead>
+                    <TableHead className="hidden sm:table-cell">
+                      Status
+                    </TableHead>
                     <TableHead className="hidden lg:table-cell">
                       Ingreso
                     </TableHead>

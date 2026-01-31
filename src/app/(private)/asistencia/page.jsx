@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAttendance } from "../../../hooks/useAttendance";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
@@ -48,6 +48,8 @@ import {
   XCircle,
   Search,
   Calendar,
+  Zap,
+  User,
 } from "lucide-react";
 import {
   Table,
@@ -70,7 +72,13 @@ const Asistencia = () => {
     deleteAttendance,
     checkClientStatus,
     getAttendanceByClientId,
+    searchClientSuggestions,
   } = useAttendance();
+
+  // Refs para gestión de foco y cancelación
+  const searchInputRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const registerButtonRef = useRef(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [checking, setChecking] = useState(false);
@@ -84,29 +92,180 @@ const Asistencia = () => {
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
 
+  // Estados para autocompletado
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const [searchingSuggestions, setSearchingSuggestions] = useState(false);
+
   // Estados para búsqueda y filtros de la tabla
   const [tableSearchTerm, setTableSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const handleCheckCedula = async () => {
+  // Auto-focus en el campo de búsqueda al cargar y después de registrar
+  useEffect(() => {
+    if (!loading && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [loading]);
+
+  // Restablecer focus después de registrar asistencia
+  useEffect(() => {
+    if (!markingAttendance && !clientStatus && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [markingAttendance, clientStatus]);
+
+  // Buscar sugerencias mientras el usuario escribe (con cancelación)
+  useEffect(() => {
+    const searchSuggestions = async () => {
+      if (searchTerm.trim().length < 2) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+
+      // Cancelar búsqueda anterior si existe
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      abortControllerRef.current = new AbortController();
+
+      setSearchingSuggestions(true);
+      try {
+        const results = await searchClientSuggestions(searchTerm);
+        setSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Error searching suggestions:', err);
+        }
+      } finally {
+        setSearchingSuggestions(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchSuggestions, 300);
+    return () => {
+      clearTimeout(debounceTimer);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [searchTerm, searchClientSuggestions]);
+
+  // Memoizar la función de selección de sugerencia
+  const handleSelectSuggestion = useCallback(async (client) => {
+    setSearchTerm(`${client.first_name} ${client.last_name}`);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSelectedSuggestionIndex(-1);
+    setSearchingSuggestions(false); // Limpiar el loader
+    
+    // Verificar automáticamente el cliente seleccionado
+    setChecking(true);
+    const result = await checkClientStatus(client.cedula);
+    setClientStatus(result);
+    setChecking(false);
+
+    // Auto-focus en el botón de registrar si puede entrar
+    if (result.found && result.canEnter && registerButtonRef.current) {
+      setTimeout(() => registerButtonRef.current?.focus(), 100);
+    }
+  }, [checkClientStatus]);
+
+  // Memoizar verificación
+  const handleCheckCedula = useCallback(async () => {
     if (!searchTerm.trim()) {
       toast.error("Por favor ingrese una cédula o nombre");
+      searchInputRef.current?.focus();
       return;
     }
 
+    setShowSuggestions(false);
     setChecking(true);
     const result = await checkClientStatus(searchTerm);
     setClientStatus(result);
     setChecking(false);
-  };
 
-  const handleCancelVerification = () => {
+    // Auto-focus en el botón de registrar si puede entrar
+    if (result.found && result.canEnter && registerButtonRef.current) {
+      setTimeout(() => registerButtonRef.current?.focus(), 100);
+    }
+  }, [searchTerm, checkClientStatus]);
+
+  // Cancelar verificación
+  const handleCancelVerification = useCallback(() => {
     setSearchTerm("");
     setClientStatus(null);
-  };
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+    setSearchingSuggestions(false); // Limpiar el loader
+    searchInputRef.current?.focus();
+  }, []);
 
-  const handleMarkAttendance = async (clientId, date) => {
+  // Navegación por teclado en sugerencias (optimizada)
+  const handleKeyDown = useCallback((e) => {
+    if (!showSuggestions || suggestions.length === 0) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleCheckCedula();
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (selectedSuggestionIndex >= 0) {
+          handleSelectSuggestion(suggestions[selectedSuggestionIndex]);
+        } else {
+          handleCheckCedula();
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        break;
+      default:
+        break;
+    }
+  }, [showSuggestions, suggestions, selectedSuggestionIndex, handleCheckCedula, handleSelectSuggestion]);
+
+  // Atajo de teclado global: Ctrl/Cmd + K para enfocar búsqueda
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Registrar asistencia con feedback mejorado
+  const handleMarkAttendance = useCallback(async (clientId, date) => {
     setMarkingAttendance(true);
+    
+    // Mostrar toast de loading
+    const loadingToast = toast.loading("Registrando asistencia...");
+    
     try {
       const today = new Date().toISOString().split("T")[0];
       const result = await registerAttendance({
@@ -119,20 +278,41 @@ const Asistencia = () => {
       });
 
       if (result.success) {
-        // Limpiar formulario y esconder información del cliente
+        // Limpiar formulario y estados
         setSearchTerm("");
         setClientStatus(null);
-        toast.success("Asistencia registrada exitosamente");
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        
+        // Refrescar la lista
+        await refetch();
+        
+        // Actualizar toast de loading a success
+        toast.success("¡Asistencia registrada exitosamente!", {
+          id: loadingToast,
+          description: `Cliente registrado a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`,
+          duration: 3000,
+        });
+
+        // Focus de vuelta al campo de búsqueda para siguiente registro
+        setTimeout(() => searchInputRef.current?.focus(), 100);
       } else {
-        toast.error("Error al registrar asistencia: " + result.error);
+        toast.error("Error al registrar asistencia", {
+          id: loadingToast,
+          description: result.error,
+        });
       }
     } catch (err) {
       console.error("Error marking attendance:", err);
-      toast.error("Error al registrar asistencia: " + err.message);
+      toast.error("Error al registrar asistencia", {
+        id: loadingToast,
+        description: err.message,
+      });
     } finally {
       setMarkingAttendance(false);
     }
-  };
+  }, [registerAttendance, refetch]);
 
   const openDeleteDialog = (record) => {
     setDeleteDialog({ open: true, record });
@@ -173,7 +353,10 @@ const Asistencia = () => {
   const formatTime = (timeString) => {
     if (!timeString) return "N/A";
     const [hours, minutes] = timeString.split(":");
-    return `${hours}:${minutes}`;
+    const hour = parseInt(hours, 10);
+    const period = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minutes} ${period}`;
   };
 
   const getStatusBadge = (status) => {
@@ -337,51 +520,151 @@ const Asistencia = () => {
         <Card>
           <CardHeader className="pb-3 sm:pb-4">
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Search className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
+              <Zap className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 text-primary" aria-hidden="true" />
               <span>Verificar Cliente</span>
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
-              Ingresa la cedula o nombre del cliente para verificar su
-              membresia y registrar asistencia
+              Ingresa la cédula o nombre del cliente para verificar su membresía y registrar asistencia
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 space-y-2 relative">
                 <Label htmlFor="client-search" className="sr-only">
-                  Cedula o nombre del cliente
+                  Cédula o nombre del cliente
                 </Label>
-                <Input
-                  id="client-search"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Ingrese cedula o nombre del cliente"
-                  aria-describedby="search-hint"
-                  className="text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleCheckCedula();
-                    }
-                  }}
-                />
+                <div className="relative">
+                  <Input
+                    ref={searchInputRef}
+                    id="client-search"
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    placeholder="Ingrese cédula o nombre del cliente"
+                    aria-describedby="search-hint search-status"
+                    aria-autocomplete="list"
+                    aria-controls="suggestions-list"
+                    aria-expanded={showSuggestions}
+                    aria-label="Buscar cliente por cédula o nombre"
+                    className="text-sm pr-10 transition-all"
+                    autoComplete="off"
+                    disabled={checking || markingAttendance}
+                  />
+                  {searchingSuggestions && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Buscando..." />
+                    </div>
+                  )}
+                </div>
+
+                {/* ARIA live region para anunciar resultados */}
+                <div
+                  id="search-status"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="sr-only"
+                >
+                  {searchingSuggestions && "Buscando clientes..."}
+                  {!searchingSuggestions && suggestions.length > 0 && 
+                    `${suggestions.length} ${suggestions.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+                  }
+                  {!searchingSuggestions && searchTerm.length >= 2 && suggestions.length === 0 && 
+                    "No se encontraron resultados"
+                  }
+                </div>
+
+                {/* Lista de sugerencias */}
+                {showSuggestions && suggestions.length > 0 && !clientStatus && (
+                  <div
+                    id="suggestions-list"
+                    role="listbox"
+                    aria-label="Sugerencias de clientes"
+                    className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-md shadow-lg max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-200"
+                  >
+                    <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b bg-muted/50">
+                      {suggestions.length} {suggestions.length === 1 ? 'resultado' : 'resultados'}
+                    </div>
+                    {suggestions.map((client, index) => {
+                      const daysLeft = client.next_payment_date
+                        ? Math.ceil(
+                            (new Date(client.next_payment_date) - new Date()) /
+                              (1000 * 60 * 60 * 24)
+                          )
+                        : null;
+                      const isExpired = daysLeft !== null && daysLeft < 0;
+
+                      return (
+                        <div
+                          key={client.id}
+                          role="option"
+                          aria-selected={index === selectedSuggestionIndex}
+                          aria-label={`${client.first_name} ${client.last_name}, cédula ${client.cedula}, ${isExpired ? 'membresía vencida' : 'membresía activa'}`}
+                          onClick={() => handleSelectSuggestion(client)}
+                          className={`px-3 py-3 cursor-pointer transition-all hover:bg-accent focus:bg-accent focus:outline-none ${
+                            index === selectedSuggestionIndex
+                              ? "bg-accent"
+                              : ""
+                          } ${index < suggestions.length - 1 ? "border-b" : ""}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-2 items-start flex-1 min-w-0">
+                              <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                                <User className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm truncate">
+                                  {client.first_name} {client.last_name}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {client.cedula}
+                                </div>
+                                {client.plans?.name && (
+                                  <div className="text-xs text-muted-foreground mt-0.5">
+                                    Plan: {client.plans.name}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0">
+                              <Badge
+                                variant={isExpired ? "destructive" : "success"}
+                                className="text-xs"
+                              >
+                                {isExpired ? "Vencido" : "Activo"}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <p id="search-hint" className="text-[10px] sm:text-xs text-muted-foreground">
-                  Presiona Enter o haz clic en Verificar para buscar
+                  {showSuggestions
+                    ? "↑↓ para navegar • Enter para seleccionar • Esc para cerrar"
+                    : searchTerm.length >= 2
+                    ? `${suggestions.length === 0 && !searchingSuggestions ? 'No hay resultados' : 'Escribe para buscar'}`
+                    : "Escribe al menos 2 caracteres • Ctrl+K para enfocar"}
                 </p>
               </div>
               <Button
                 onClick={handleCheckCedula}
-                disabled={checking || !searchTerm.trim()}
-                className="gap-2 sm:self-start text-sm"
+                disabled={checking || !searchTerm.trim() || markingAttendance}
+                className="gap-2 sm:self-start text-sm transition-all"
+                aria-label={checking ? "Verificando cliente" : "Verificar cliente"}
               >
                 {checking ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     <span className="hidden xs:inline">Verificando...</span>
                   </>
                 ) : (
                   <>
-                    <Search className="h-4 w-4" />
+                    <Search className="h-4 w-4" aria-hidden="true" />
                     Verificar
                   </>
                 )}
@@ -465,20 +748,23 @@ const Asistencia = () => {
                       <div className="mt-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
                         {clientStatus.canEnter && (
                           <Button
+                            ref={registerButtonRef}
                             onClick={() =>
                               handleMarkAttendance(clientStatus.client.id)
                             }
                             className="gap-2"
                             disabled={markingAttendance}
+                            aria-label="Registrar asistencia del cliente"
+                            autoFocus
                           >
                             {markingAttendance ? (
                               <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                                 Registrando...
                               </>
                             ) : (
                               <>
-                                <CheckCircle2 className="h-4 w-4" />
+                                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                                 Registrar Asistencia
                               </>
                             )}
@@ -488,9 +774,11 @@ const Asistencia = () => {
                           onClick={handleCancelVerification}
                           variant="outline"
                           className="gap-2"
+                          disabled={markingAttendance}
+                          aria-label="Cancelar y buscar otro cliente"
                         >
-                          <XCircle className="h-4 w-4" />
-                          Cerrar
+                          <XCircle className="h-4 w-4" aria-hidden="true" />
+                          {clientStatus.canEnter ? "Cancelar" : "Cerrar"}
                         </Button>
                       </div>
                     </div>

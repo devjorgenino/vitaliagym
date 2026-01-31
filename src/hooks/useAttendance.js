@@ -90,16 +90,9 @@ export function useAttendance() {
         throw error;
       }
       
-      // Optimistic update
-      if (data && data[0]) {
-          // data[0] is raw row. UI needs joins but for list it's usually date/status.
-          // Note: If we use it, we might break filters expecting 'clients' object.
-          // Safest is to refetch if online, or only update if we can mock joined data.
-          // For now, let's try to add it.
-          setAttendance(prev => [data[0], ...prev]);
-      } else {
-          await fetchAttendance();
-      }
+      // Siempre refrescar para obtener los datos con JOIN (clients)
+      // Esto asegura que el nombre del cliente aparezca inmediatamente
+      await fetchAttendance();
 
       return { success: true, data: data ? data[0] : null };
     } catch (err) {
@@ -131,11 +124,8 @@ export function useAttendance() {
         throw error;
       }
       
-      if (data && data[0]) {
-          setAttendance(prev => prev.map(a => a.id === id ? { ...a, ...data[0] } : a));
-      } else {
-          await fetchAttendance();
-      }
+      // Refrescar para obtener datos actualizados con JOIN
+      await fetchAttendance();
 
       return { success: true, data: data ? data[0] : null };
     } catch (err) {
@@ -360,5 +350,53 @@ export function useAttendance() {
     deleteAttendance,
     getAttendanceByClientId,
     checkClientStatus,
+    searchClientSuggestions: async (searchTerm) => {
+      if (!searchTerm || searchTerm.trim().length < 2) {
+        return [];
+      }
+
+      try {
+        const searchWords = searchTerm.toLowerCase().trim().split(/\s+/);
+        let query = client
+          .from("clients")
+          .select(`
+            id,
+            cedula,
+            first_name,
+            last_name,
+            next_payment_date,
+            plans (
+              name
+            )
+          `)
+          .limit(10);
+
+        // Si parece ser una cédula (solo números), buscar por cédula
+        if (/^\d+$/.test(searchTerm.trim())) {
+          query = query.ilike('cedula', `%${searchTerm.trim()}%`);
+        } else {
+          // Buscar por nombre
+          if (searchWords.length >= 2) {
+            const [firstWord, secondWord] = searchWords;
+            query = query.or(`first_name.ilike.%${firstWord}%,last_name.ilike.%${firstWord}%,first_name.ilike.%${secondWord}%,last_name.ilike.%${secondWord}%`);
+          } else {
+            const searchWord = searchWords[0];
+            query = query.or(`first_name.ilike.%${searchWord}%,last_name.ilike.%${searchWord}%`);
+          }
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('Error searching clients:', error);
+          return [];
+        }
+
+        return data || [];
+      } catch (err) {
+        console.error('Error in searchClientSuggestions:', err);
+        return [];
+      }
+    },
   };
 }
