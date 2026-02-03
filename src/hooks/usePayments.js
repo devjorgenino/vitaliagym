@@ -34,7 +34,7 @@ export function usePayments() {
             price
           )
         `)
-        .order('payment_date', { ascending: false }));
+        .order('created_at', { ascending: false }));
 
       if (error) {
         if (error.message.includes('relation') && error.message.includes('does not exist')) {
@@ -75,14 +75,9 @@ export function usePayments() {
         });
       }
       
-      // Optimistic update
-      if (data && data[0]) {
-          // data[0] is the raw inserted row. We might be missing joined data.
-          // We can try to guess/mock or just accept partial display.
-          setPayments(prev => [data[0], ...prev]);
-      } else {
-        await fetchPayments();
-      }
+      // Refetch para obtener los datos completos con joins (clients, plans)
+      // El optimistic update con data[0] no incluye la información de relaciones
+      await fetchPayments();
 
       // Note: Data sync returns the raw inserted data, but our UI usually expects joined data.
       // fetchPayments refreshes the list with joins, so returning basic data is usually fine,
@@ -115,12 +110,8 @@ export function usePayments() {
         });
       }
       
-      // Optimistic update
-      if (data && data[0]) {
-           setPayments(prev => prev.map(p => p.id === id ? { ...p, ...data[0] } : p));
-      } else {
-           await fetchPayments();
-      }
+      // Refetch para obtener los datos completos con joins (clients, plans)
+      await fetchPayments();
 
       return { success: true, data: data ? data[0] : null };
     } catch (err) {
@@ -254,7 +245,7 @@ export function usePayments() {
             query = query.lte('payment_date', filters.date_to);
           }
           
-          return query.order('payment_date', { ascending: false });
+          return query.order('created_at', { ascending: false });
       });
 
       if (error) {
