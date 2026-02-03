@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS payments (
   payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
   reference TEXT,
   bank TEXT,
-  payment_type TEXT NOT NULL CHECK (payment_type IN ('pago_movil', 'transferencia', 'punto_de_venta', 'efectivo_dolares')),
+  payment_type TEXT NOT NULL CHECK (payment_type IN ('pago_movil', 'transferencia', 'punto_de_venta', 'efectivo_dolares', 'efectivo_bolivares')),
   phone_payment TEXT, -- Solo para pago móvil
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

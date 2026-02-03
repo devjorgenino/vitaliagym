@@ -931,6 +931,7 @@ export function PaymentsTable({
       transferencia: "Transferencia",
       punto_de_venta: "Punto de Venta",
       efectivo_dolares: "Efectivo $",
+      efectivo_bolivares: "Efectivo Bs",
     };
     return types[type] || type;
   };
@@ -1129,6 +1130,7 @@ export function PaymentsTable({
                 <SelectItem value="transferencia">Transferencia</SelectItem>
                 <SelectItem value="punto_de_venta">Punto de Venta</SelectItem>
                 <SelectItem value="efectivo_dolares">Efectivo $</SelectItem>
+                <SelectItem value="efectivo_bolivares">Efectivo Bs</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1981,6 +1983,15 @@ export function PaymentsTable({
                             aria-hidden="true"
                           />
                           <span>Efectivo en Dólares</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="efectivo_bolivares">
+                        <div className="flex items-center gap-2">
+                          <DollarSignIcon
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                          <span>Efectivo en Bolívares</span>
                         </div>
                       </SelectItem>
                     </SelectContent>
