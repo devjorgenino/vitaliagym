@@ -931,6 +931,7 @@ export function PaymentsTable({
       transferencia: "Transferencia",
       punto_de_venta: "Punto de Venta",
       efectivo_dolares: "Efectivo $",
+      efectivo_bolivares: "Efectivo Bs",
     };
     return types[type] || type;
   };
@@ -1129,6 +1130,7 @@ export function PaymentsTable({
                 <SelectItem value="transferencia">Transferencia</SelectItem>
                 <SelectItem value="punto_de_venta">Punto de Venta</SelectItem>
                 <SelectItem value="efectivo_dolares">Efectivo $</SelectItem>
+                <SelectItem value="efectivo_bolivares">Efectivo Bs</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1261,7 +1263,6 @@ export function PaymentsTable({
                       Banco
                     </TableHead>
                     <TableHead className="hidden sm:table-cell">Tipo</TableHead>
-                    <TableHead className="hidden xl:table-cell">Tel.</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
@@ -1334,9 +1335,6 @@ export function PaymentsTable({
                           <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
                             {formatPaymentType(payment.payment_type)}
                           </span>
-                        </TableCell>
-                        <TableCell className="hidden xl:table-cell whitespace-nowrap">
-                          {payment.phone_payment || "N/A"}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {formatDate(payment.payment_date)}
@@ -1532,11 +1530,24 @@ export function PaymentsTable({
                             `${client.first_name} ${client.last_name}`,
                           ],
                           cedula: client.cedula,
+                          plan_id: client.plan_id,
                         }))}
                         value={formData.client_id}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, client_id: value }))
-                        }
+                        onValueChange={(value) => {
+                          // Buscar el cliente seleccionado para obtener su plan
+                          const selectedClient = clients.find(c => c.id === value);
+                          const clientPlanId = selectedClient?.plan_id || "";
+                          const clientPlan = plans.find(p => p.id === clientPlanId);
+                          const planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
+                          
+                          setFormData((prev) => ({
+                            ...prev,
+                            client_id: value,
+                            plan_id: clientPlanId,
+                            amount_usd: planPrice > 0 ? planPrice.toFixed(2) : "",
+                            amount_bs: planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "",
+                          }));
+                        }}
                         placeholder="Buscar cliente..."
                         searchPlaceholder="Nombre o cédula..."
                         emptyMessage="No se encontró ningún cliente"
@@ -1568,13 +1579,13 @@ export function PaymentsTable({
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, plan_id: value }))
                       }
-                      disabled={isPayingRemaining || isEditing}
+                      disabled={isPayingRemaining || isEditing || !!formData.client_id}
                     >
                       <SelectTrigger
                         id="plan_id"
                         aria-required="true"
                         className={
-                          isPayingRemaining || isEditing ? "bg-muted" : ""
+                          isPayingRemaining || isEditing || formData.client_id ? "bg-muted" : ""
                         }
                       >
                         <SelectValue placeholder="Seleccionar plan..." />
@@ -1983,6 +1994,15 @@ export function PaymentsTable({
                           <span>Efectivo en Dólares</span>
                         </div>
                       </SelectItem>
+                      <SelectItem value="efectivo_bolivares">
+                        <div className="flex items-center gap-2">
+                          <DollarSignIcon
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                          <span>Efectivo en Bolívares</span>
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2103,7 +2123,7 @@ export function PaymentsTable({
           </div>
 
           {/* Footer fijo */}
-          <DialogFooter className="flex-shrink-0 pt-4 border-t gap-2 sm:gap-0">
+          <DialogFooter className="flex-shrink-0 pt-4 border-t gap-3">
             <Button
               type="button"
               variant="outline"
