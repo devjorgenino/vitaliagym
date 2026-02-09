@@ -119,14 +119,25 @@ export function DashboardView() {
         {/* Clientes proximos a vencer */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-3 sm:pb-4">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0" aria-hidden="true" />
-              <span className="truncate">Clientes Proximos a Vencer</span>
+            <CardTitle className="flex items-center justify-between gap-2 text-base sm:text-lg">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0" aria-hidden="true" />
+                <span className="truncate">Clientes Proximos a Vencer</span>
+              </div>
+              {metrics.expiringSoon?.length > 0 && (
+                <span className="text-xs sm:text-sm font-normal bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-full">
+                  {metrics.expiringSoon.length} cliente{metrics.expiringSoon.length !== 1 ? 's' : ''}
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             {metrics.expiringSoon?.length > 0 ? (
-              <div className="space-y-2 sm:space-y-3 max-h-[300px] sm:max-h-[400px] overflow-y-auto scrollbar-thin">
+              <div 
+                className="space-y-2 sm:space-y-3 max-h-[350px] sm:max-h-[450px] overflow-y-auto scrollbar-thin pr-1"
+                role="list"
+                aria-label={`Lista de ${metrics.expiringSoon.length} clientes proximos a vencer`}
+              >
                 {metrics.expiringSoon.map((client, index) => {
                   // Parsear la fecha correctamente evitando problemas de zona horaria
                   const paymentDateParts = client.next_payment_date.split("-");
@@ -143,10 +154,28 @@ export function DashboardView() {
                   const daysUntil = Math.round(
                     (paymentDate - today) / (1000 * 60 * 60 * 24),
                   );
+                  
+                  // Determinar estilos segun urgencia
+                  const isExpired = daysUntil <= 0;
+                  const isUrgent = daysUntil <= 2 && daysUntil > 0;
+                  
+                  const cardStyles = isExpired 
+                    ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
+                    : isUrgent 
+                      ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800"
+                      : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800";
+                  
+                  const textStyles = isExpired 
+                    ? "text-red-600 dark:text-red-400"
+                    : isUrgent 
+                      ? "text-orange-600 dark:text-orange-400"
+                      : "text-amber-600 dark:text-amber-400";
+
                   return (
                     <div
                       key={client.id}
-                      className="flex items-center justify-between p-2.5 sm:p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 gap-2"
+                      className={`flex items-center justify-between p-2.5 sm:p-3 rounded-lg border gap-2 ${cardStyles}`}
+                      role="listitem"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm sm:text-base truncate">
@@ -157,10 +186,12 @@ export function DashboardView() {
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <span className="text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                          {daysUntil <= 0
-                            ? `${Math.abs(daysUntil)} dias vencido`
-                            : `${daysUntil} dias`}
+                        <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${textStyles}`}>
+                          {isExpired
+                            ? daysUntil === 0 
+                              ? "Vence hoy"
+                              : `${Math.abs(daysUntil)} dia${Math.abs(daysUntil) !== 1 ? 's' : ''} vencido`
+                            : `${daysUntil} dia${daysUntil !== 1 ? 's' : ''}`}
                         </span>
                         <p className="text-[10px] sm:text-xs text-muted-foreground">
                           {paymentDate.toLocaleDateString("es-ES")}

@@ -21,7 +21,7 @@ export function useDashboardMetrics() {
       setLoading(true);
       setError(null);
 
-      // 1. Clientes próximos a vencer (5 días)
+      // 1. Clientes próximos a vencer (5 días) - sin límite para mostrar todos
       const { data: expiringData } = await fetchWithOffline('dashboard-expiring', () => client
         .from('clients')
         .select(`
@@ -34,8 +34,7 @@ export function useDashboardMetrics() {
         `)
         .gte('next_payment_date', new Date().toISOString().split('T')[0])
         .lte('next_payment_date', new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-        .order('next_payment_date', { ascending: true })
-        .limit(5));
+        .order('next_payment_date', { ascending: true }));
 
       // 2. Cumpleaños del mes actual
       const today = new Date();

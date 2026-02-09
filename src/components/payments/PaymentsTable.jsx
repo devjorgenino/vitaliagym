@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Settings2,
   CalendarClock,
+  FileText,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -140,6 +141,7 @@ export function PaymentsTable({
     payment_type: "pago_movil",
     phone_operator: "0414",
     phone_payment: "",
+    payment_detail: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [partialValidationError, setPartialValidationError] = useState("");
@@ -202,6 +204,7 @@ export function PaymentsTable({
           payment_type: "pago_movil",
           phone_operator: "0414",
           phone_payment: "",
+          payment_detail: "",
         });
 
         // Configurar datos del pago restante para visualización
@@ -236,6 +239,7 @@ export function PaymentsTable({
         payment_type: "pago_movil",
         phone_operator: "0414",
         phone_payment: "",
+        payment_detail: "",
       });
 
       setPaymentMode("full");
@@ -665,6 +669,7 @@ export function PaymentsTable({
       payment_type: "pago_movil",
       phone_operator: "0414",
       phone_payment: "",
+      payment_detail: "",
     });
     setSelectedPayment(null);
     setIsEditing(false);
@@ -700,6 +705,7 @@ export function PaymentsTable({
       payment_type: payment.payment_type,
       phone_operator: operator,
       phone_payment: number,
+      payment_detail: payment.payment_detail || "",
     });
     setIsEditing(true);
     setIsDialogOpen(true);
@@ -762,6 +768,14 @@ export function PaymentsTable({
       return;
     }
 
+    // Validación para tipo de pago "otro" - requiere detalle
+    if (formData.payment_type === "otro" && !formData.payment_detail?.trim()) {
+      toast.error(
+        "Cuando el tipo de pago es 'Otro', debes especificar el detalle del pago",
+      );
+      return;
+    }
+
     // Validación adicional para pagos parciales
     if (paymentMode === "partial" && partialValidationError) {
       toast.error(partialValidationError);
@@ -778,6 +792,7 @@ export function PaymentsTable({
         phone_payment: formData.phone_payment
           ? formatPhone(formData.phone_operator, formData.phone_payment)
           : "",
+        payment_detail: formData.payment_type === "otro" ? formData.payment_detail?.trim() : "",
       };
       // Remove phone_operator from payload as it's only for UI
       delete paymentData.phone_operator;
@@ -869,6 +884,7 @@ export function PaymentsTable({
       payment_type: "pago_movil",
       phone_operator: "0414",
       phone_payment: "",
+      payment_detail: "",
     };
 
     // Establecer modo "full" (pagar restante completo) por defecto
@@ -932,6 +948,7 @@ export function PaymentsTable({
       punto_de_venta: "Punto de Venta",
       efectivo_dolares: "Efectivo $",
       efectivo_bolivares: "Efectivo Bs",
+      otro: "Otro",
     };
     return types[type] || type;
   };
@@ -1131,6 +1148,7 @@ export function PaymentsTable({
                 <SelectItem value="punto_de_venta">Punto de Venta</SelectItem>
                 <SelectItem value="efectivo_dolares">Efectivo $</SelectItem>
                 <SelectItem value="efectivo_bolivares">Efectivo Bs</SelectItem>
+                <SelectItem value="otro">Otro</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1579,13 +1597,13 @@ export function PaymentsTable({
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, plan_id: value }))
                       }
-                      disabled={isPayingRemaining || isEditing || !!formData.client_id}
+                      disabled={isPayingRemaining}
                     >
                       <SelectTrigger
                         id="plan_id"
                         aria-required="true"
                         className={
-                          isPayingRemaining || isEditing || formData.client_id ? "bg-muted" : ""
+                          isPayingRemaining ? "bg-muted" : ""
                         }
                       >
                         <SelectValue placeholder="Seleccionar plan..." />
@@ -2003,6 +2021,15 @@ export function PaymentsTable({
                           <span>Efectivo en Bolívares</span>
                         </div>
                       </SelectItem>
+                      <SelectItem value="otro">
+                        <div className="flex items-center gap-2">
+                          <FileText
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                          <span>Otro</span>
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2115,6 +2142,35 @@ export function PaymentsTable({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Número de teléfono asociado al pago móvil (7 dígitos)
+                    </p>
+                  </div>
+                )}
+
+                {/* Campo de detalle - solo para tipo "otro" */}
+                {formData.payment_type === "otro" && (
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="payment_detail"
+                      className="text-sm font-medium"
+                    >
+                      Detalle del Pago{" "}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only">(requerido)</span>
+                    </Label>
+                    <Input
+                      id="payment_detail"
+                      type="text"
+                      name="payment_detail"
+                      value={formData.payment_detail}
+                      onChange={handleInputChange}
+                      placeholder="Describe el método de pago utilizado..."
+                      aria-required="true"
+                      aria-describedby="payment-detail-help"
+                    />
+                    <p id="payment-detail-help" className="text-xs text-muted-foreground">
+                      Especifica el tipo de pago o método utilizado (ej: Zelle, PayPal, Criptomoneda, Intercambio, etc.)
                     </p>
                   </div>
                 )}
