@@ -120,7 +120,7 @@ export function usePayments() {
     }
   };
 
-  const deletePayment = async (id) => {
+  const deletePayment = async (id, { clientId, planId } = {}) => {
     try {
       const { error } = await executeWithSync({
         table: 'payments',
@@ -131,9 +131,14 @@ export function usePayments() {
       if (error) {
         throw error;
       }
-      
-      // Optimistic update
-      setPayments(prev => prev.filter(p => p.id !== id));
+
+      // Recalculate next_payment_date after removing a payment
+      if (clientId && planId) {
+        await recalculateNextPaymentDate({ clientId, planId });
+      }
+
+      // Refetch to reflect updated state
+      await fetchPayments();
 
       return { success: true };
     } catch (err) {

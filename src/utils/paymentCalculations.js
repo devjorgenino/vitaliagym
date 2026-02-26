@@ -150,11 +150,13 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     // 5. Calcular cuántos ciclos completos se han pagado
     const totalCyclesCompleted = Math.floor(totalPaid / planPrice);
 
-    // 6. Calcular nueva fecha: join_date + (ciclos + 1) meses
-    // El "+1" es porque next_payment_date siempre apunta al PRÓXIMO pago
+    // 6. Calcular nueva fecha: join_date + max(1, ciclos) meses
+    // - 0 ciclos pagados (pago parcial o sin pagos): mantener join_date + 1
+    // - N ciclos pagados: avanzar a join_date + N
+    // Ejemplo: join_date=Jan 28, 1 pago completo → Feb 28 (no Mar 28)
     const newNextPaymentDate = addMonthsToDate(
       clientData.join_date, 
-      totalCyclesCompleted + 1
+      Math.max(1, totalCyclesCompleted)
     );
 
     // 7. Solo actualizar si la fecha cambió
@@ -257,8 +259,10 @@ export async function recalculateAllNextPaymentDates() {
         // Calcular ciclos completos
         const cyclesPaid = Math.floor(totalPaid / planPrice);
         
-        // Calcular nueva fecha: join_date + (ciclos + 1) meses
-        const newNextPaymentDate = addMonthsToDate(clientData.join_date, cyclesPaid + 1);
+        // Calcular nueva fecha: join_date + max(1, ciclos) meses
+        // - 0 ciclos pagados: mantener join_date + 1 (primer pago aún pendiente)
+        // - N ciclos pagados: avanzar a join_date + N
+        const newNextPaymentDate = addMonthsToDate(clientData.join_date, Math.max(1, cyclesPaid));
 
         if (newNextPaymentDate && newNextPaymentDate !== clientData.next_payment_date) {
           updates.push({
@@ -306,6 +310,133 @@ export async function recalculateAllNextPaymentDates() {
     console.error('Error recalculating all payment dates:', err);
     return { success: false, updated: 0, total: 0, errors: [err.message] };
   }
+}
+
+/**
+ * Audita las fechas de próximo pago de TODOS los clientes sin modificar nada.
+ * Compara el valor almacenado contra el valor esperado según los pagos reales.
+ *
+ * @returns {Promise<{
+ *   success: boolean,
+ *   total: number,
+ *   correct: number,
+ *   discrepancies: Array<{
+ *     id: string,
+ *     name: string,
+ *     join_date: string,
+ *     stored: string,
+ *     expected: string,
+ *     totalPaid: number,
+ *     cycles: number,
+ *   }>,
+ *   errors: string[]
+ * }>}
+ */
+export async function auditNextPaymentDates() {
+  try {
+    const { data: allClients, error: fetchError } = await client
+      .from('clients')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        join_date,
+        next_payment_date,
+        plan_id,
+        plans ( id, price )
+      `);
+
+    if (fetchError) throw fetchError;
+    if (!allClients || allClients.length === 0) {
+      return { success: true, total: 0, correct: 0, discrepancies: [], errors: [] };
+    }
+
+    const { data: allPayments, error: paymentsError } = await client
+      .from('payments')
+      .select('id, client_id, plan_id, amount_usd');
+
+    if (paymentsError) throw paymentsError;
+
+    const discrepancies = [];
+    const errors = [];
+
+    for (const c of allClients) {
+      if (!c.join_date) {
+        errors.push(`${c.first_name} ${c.last_name} (${c.id}): sin join_date`);
+        continue;
+      }
+
+      const planPrice = c.plans ? parseFloat(c.plans.price) || 0 : 0;
+      if (planPrice <= 0) {
+        errors.push(`${c.first_name} ${c.last_name} (${c.id}): precio de plan inválido`);
+        continue;
+      }
+
+      const clientPayments = (allPayments || []).filter(
+        p => p.client_id === c.id && p.plan_id === c.plan_id
+      );
+      const totalPaid = clientPayments.reduce(
+        (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+        0
+      );
+      const cycles = Math.floor(totalPaid / planPrice);
+      const expected = addMonthsToDate(c.join_date, Math.max(1, cycles));
+
+      if (expected !== c.next_payment_date) {
+        discrepancies.push({
+          id: c.id,
+          name: `${c.first_name} ${c.last_name}`,
+          join_date: c.join_date,
+          stored: c.next_payment_date,
+          expected,
+          totalPaid,
+          cycles,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      total: allClients.length,
+      correct: allClients.length - discrepancies.length - errors.length,
+      discrepancies,
+      errors,
+    };
+  } catch (err) {
+    console.error('Error auditing payment dates:', err);
+    return { success: false, total: 0, correct: 0, discrepancies: [], errors: [err.message] };
+  }
+}
+
+/**
+ * Corrige las fechas de próximo pago de los clientes con discrepancias.
+ * Recibe el array `discrepancies` que devuelve auditNextPaymentDates().
+ *
+ * @param {Array<{id: string, expected: string}>} discrepancies
+ * @returns {Promise<{success: boolean, updated: number, errors: string[]}>}
+ */
+export async function fixAuditDiscrepancies(discrepancies) {
+  if (!discrepancies || discrepancies.length === 0) {
+    return { success: true, updated: 0, errors: [] };
+  }
+
+  const errors = [];
+  let updated = 0;
+
+  await Promise.all(discrepancies.map(async (d) => {
+    const { error } = await client
+      .from('clients')
+      .update({ next_payment_date: d.expected })
+      .eq('id', d.id);
+
+    if (error) {
+      errors.push(`${d.name} (${d.id}): ${error.message}`);
+    } else {
+      updated++;
+    }
+  }));
+
+  return { success: errors.length === 0, updated, errors };
 }
 
 /**

@@ -55,9 +55,9 @@ export function DashboardView() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="flex flex-col h-full gap-4 sm:gap-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 shrink-0">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">Dashboard</h1>
           <p className="text-sm sm:text-base text-muted-foreground">Vista general del gimnasio</p>
@@ -78,47 +78,49 @@ export function DashboardView() {
       </div>
 
       {/* Metricas Principales - Grid responsive */}
-      <StatsGrid>
-        <StatCard
-          title="Clientes por Vencer"
-          value={metrics.expiringSoon?.length || 0}
-          subtitle="Proximos 5 dias"
-          icon={Clock}
-          color="amber"
-        />
+      <div className="shrink-0">
+        <StatsGrid>
+          <StatCard
+            title="Clientes por Vencer"
+            value={metrics.expiringSoon?.length || 0}
+            subtitle="Proximos 5 dias"
+            icon={Clock}
+            color="amber"
+          />
 
-        <StatCard
-          title="Cumpleanos Proximos"
-          value={metrics.upcomingBirthdays?.length || 0}
-          subtitle="Proximos 7 dias"
-          icon={Cake}
-          color="purple"
-        />
+          <StatCard
+            title="Cumpleanos Proximos"
+            value={metrics.upcomingBirthdays?.length || 0}
+            subtitle="Proximos 7 dias"
+            icon={Cake}
+            color="purple"
+          />
 
-        <StatCard
-          title="Clientes Nuevos"
-          value={metrics.newClients?.length || 0}
-          subtitle="Este mes"
-          icon={UserPlus}
-          color="green"
-        />
+          <StatCard
+            title="Clientes Nuevos"
+            value={metrics.newClients?.length || 0}
+            subtitle="Este mes"
+            icon={UserPlus}
+            color="green"
+          />
 
-        <StatCard
-          title="Asistencia Semanal"
-          value={metrics.weeklyAttendance || 0}
-          subtitle={`${metrics.weeklyUniqueClients || 0} clientes unicos (${(
-            metrics.weeklyPercentage || 0
-          ).toFixed(1)}%)`}
-          icon={Activity}
-          color="blue"
-        />
-      </StatsGrid>
+          <StatCard
+            title="Asistencia Semanal"
+            value={metrics.weeklyAttendance || 0}
+            subtitle={`${metrics.weeklyUniqueClients || 0} clientes unicos (${(
+              metrics.weeklyPercentage || 0
+            ).toFixed(1)}%)`}
+            icon={Activity}
+            color="blue"
+          />
+        </StatsGrid>
+      </div>
 
-      {/* Graficos y Listas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      {/* Graficos y Listas — ocupa el espacio restante */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 flex-1 min-h-0">
         {/* Clientes proximos a vencer */}
-        <Card className="overflow-hidden">
-          <CardHeader className="pb-3 sm:pb-4">
+        <Card className="overflow-hidden flex flex-col min-h-0">
+          <CardHeader className="pb-3 sm:pb-4 shrink-0">
             <CardTitle className="flex items-center justify-between gap-2 text-base sm:text-lg">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0" aria-hidden="true" />
@@ -131,15 +133,14 @@ export function DashboardView() {
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 flex-1 min-h-0 overflow-y-auto">
             {metrics.expiringSoon?.length > 0 ? (
               <div 
-                className="space-y-2 sm:space-y-3 max-h-[350px] sm:max-h-[450px] overflow-y-auto scrollbar-thin pr-1"
+                className="space-y-2 sm:space-y-3 pr-1"
                 role="list"
                 aria-label={`Lista de ${metrics.expiringSoon.length} clientes proximos a vencer`}
               >
                 {metrics.expiringSoon.map((client, index) => {
-                  // Parsear la fecha correctamente evitando problemas de zona horaria
                   const paymentDateParts = client.next_payment_date.split("-");
                   const paymentDate = new Date(
                     parseInt(paymentDateParts[0], 10),
@@ -155,7 +156,6 @@ export function DashboardView() {
                     (paymentDate - today) / (1000 * 60 * 60 * 24),
                   );
                   
-                  // Determinar estilos segun urgencia
                   const isExpired = daysUntil <= 0;
                   const isUrgent = daysUntil <= 2 && daysUntil > 0;
                   
@@ -212,16 +212,16 @@ export function DashboardView() {
         </Card>
 
         {/* Proximos cumpleanos */}
-        <Card className="overflow-hidden">
-          <CardHeader className="pb-3 sm:pb-4">
+        <Card className="overflow-hidden flex flex-col min-h-0">
+          <CardHeader className="pb-3 sm:pb-4 shrink-0">
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Cake className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" aria-hidden="true" />
               <span className="truncate">Cumpleanos del Mes</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 flex-1 min-h-0 overflow-y-auto">
             {metrics.upcomingBirthdays?.length > 0 ? (
-              <div className="space-y-2 sm:space-y-3 max-h-[300px] sm:max-h-[400px] overflow-y-auto scrollbar-thin">
+              <div className="space-y-2 sm:space-y-3">
                 {metrics.upcomingBirthdays.map((client, index) => {
                   const birthDate = new Date(client.birth_date);
                   const today = new Date();

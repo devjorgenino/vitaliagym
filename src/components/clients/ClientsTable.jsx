@@ -14,19 +14,9 @@ import {
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
-import {
   Loader2,
   IdCard,
   Phone,
-  Settings2,
-  CalendarClock,
   Users,
   RefreshCw,
 } from "lucide-react";
@@ -599,35 +589,6 @@ export function ClientsTable() {
             <RefreshCw className="h-3.5 w-3.5 sm:mr-1.5" aria-hidden="true" />
             <span className="hidden sm:inline">Actualizar</span>
           </Button>
-          {/*           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Menu de mantenimiento">
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Mantenimiento</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={async () => {
-                toast.loading("Corrigiendo telefonos...");
-                const res = await fixAllPhones();
-                toast.dismiss();
-                if(res.success) toast.success(`Telefonos corregidos: ${res.updated}`);
-                else toast.error("Error al corregir telefonos");
-              }}>
-                <Phone className="mr-2 h-4 w-4" /> Corregir Telefonos
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={async () => {
-                 toast.loading("Recalculando fechas...");
-                 const res = await recalculateAllNextPaymentDates();
-                 toast.dismiss();
-                 if(res.success) toast.success(`Fechas corregidas: ${res.updated}`);
-                 else toast.error("Error al corregir fechas");
-              }}>
-                <CalendarClock className="mr-2 h-4 w-4" /> Corregir Fechas Pago
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu> */}
         </div>
       </CardHeader>
       <CardContent>

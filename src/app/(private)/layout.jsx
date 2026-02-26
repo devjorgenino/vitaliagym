@@ -113,7 +113,7 @@ const PrivatePagesLayout = ({ children }) => {
   const breadcrumbs = getBreadcrumbs();
 
   return (
-    <div className="min-h-screen">
+    <div className="h-screen overflow-hidden">
       {/* Skip link for accessibility */}
       <a 
         href="#main-content" 
@@ -221,7 +221,7 @@ const PrivatePagesLayout = ({ children }) => {
           
           <main 
             id="main-content"
-            className="flex flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6"
+            className="flex flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 overflow-y-auto min-h-0"
             role="main"
           >
             {/* Verificar acceso a la ruta */}
@@ -236,7 +236,7 @@ const PrivatePagesLayout = ({ children }) => {
                 <Skeleton className="h-[300px] sm:h-[400px] w-full" />
               </div>
             ) : (
-              <div className="animate-fade-in">
+              <div className="animate-fade-in flex flex-col flex-1 min-h-0">
                 {children}
               </div>
             )}
