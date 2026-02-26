@@ -103,6 +103,15 @@ export function PaymentsTable({
   remainingAmount = null,
   paymentId = null,
 }) {
+  const { clients, loading: clientsLoading, refetch: refetchClients } = useClients();
+  const { plans, loading: plansLoading } = usePlans();
+  const {
+    rate,
+    formatMultiCurrency,
+    formatCurrency,
+    loading: rateLoading,
+  } = useExchangeRate();
+
   const {
     payments,
     loading,
@@ -112,16 +121,7 @@ export function PaymentsTable({
     updatePayment,
     deletePayment,
     recalculateAllNextPaymentDates,
-  } = usePayments();
-
-  const { clients, loading: clientsLoading } = useClients();
-  const { plans, loading: plansLoading } = usePlans();
-  const {
-    rate,
-    formatMultiCurrency,
-    formatCurrency,
-    loading: rateLoading,
-  } = useExchangeRate();
+  } = usePayments({ onClientUpdate: refetchClients });
 
   // Estados del modal unificado para crear/editar
   const [isDialogOpen, setIsDialogOpen] = useState(false);

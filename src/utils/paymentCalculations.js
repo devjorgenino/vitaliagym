@@ -1,11 +1,12 @@
 /**
  * Utilidades para el cálculo de fechas de próximo pago
- * 
+ *
  * LÓGICA DEL SISTEMA:
- * - Pago anticipado: Mantiene el día de pago original (no pierde días)
- * - Pago atrasado: No se penaliza, mantiene su día original
- * - Pagos múltiples: Solo extiende 1 mes por cada ciclo completo pagado
- * - Pagos parciales: No extiende hasta completar el precio del plan
+ * - El DÍA de pago siempre es el mismo día del join_date (ej: día 13 si se unió el 13)
+ * - next_payment_date = día(join_date) en el mes siguiente al último pago registrado
+ * - Pago puntual: día 13 del mes siguiente al mes de pago
+ * - Pago atrasado: igual, día 13 del mes siguiente al mes en que pagó (no se penaliza con más)
+ * - Pagos parciales: no modifica la fecha hasta completar el precio del plan
  * - Primera inscripción: Próximo pago = join_date + 1 mes
  */
 
@@ -64,21 +65,65 @@ export function addMonthsToDate(baseDate, monthsToAdd) {
 }
 
 /**
- * Calcula la nueva fecha de próximo pago después de registrar un pago.
- * 
- * REGLAS:
- * 1. Si es cliente nuevo (sin next_payment_date): join_date + 1 mes
- * 2. Si el pago completa ciclos: next_payment_date actual + ciclos completados
- * 3. Si es pago parcial: no modifica la fecha
- * 
+ * Calcula la next_payment_date correcta para un cliente.
+ *
+ * REGLA DE NEGOCIO:
+ * - El DÍA siempre es el mismo que el join_date (ej: si se unió el 13, siempre paga el 13)
+ * - El MES es el mes siguiente al mes del último pago registrado
+ *
+ * Ejemplo: join_date=2025-11-13, último pago=2026-02-25 → next=2026-03-13
+ * Ejemplo: join_date=2026-01-17, último pago=2026-02-25 → next=2026-03-17
+ * Ejemplo: join_date=2026-01-05, pagos=[ene, feb]      → next=2026-03-05
+ *
+ * @param {string} joinDate        - Fecha de ingreso del cliente (YYYY-MM-DD)
+ * @param {Array}  clientPayments  - Pagos del plan actual, ordenados por payment_date asc
+ * @param {number} planPrice       - Precio del plan
+ * @returns {string|null}          - Fecha calculada en formato YYYY-MM-DD
+ */
+export function computeNextPaymentDate(joinDate, clientPayments, planPrice) {
+  if (!joinDate || planPrice <= 0) return null;
+
+  const joinParts = joinDate.split('-');
+  const joinDay   = parseInt(joinParts[2], 10); // el día ancla (ej: 13)
+
+  const totalPaid   = (clientPayments || []).reduce((s, p) => s + (parseFloat(p.amount_usd) || 0), 0);
+  const totalCycles = Math.floor(totalPaid / planPrice);
+
+  // Sin ciclos completos → primer vencimiento = join_date + 1 mes
+  if (totalCycles === 0) {
+    return addMonthsToDate(joinDate, 1);
+  }
+
+  // Con ciclos completos:
+  // - Tomar el último pago registrado
+  // - El mes siguiente a ese pago, en el día del join_date
+  const lastPayment = clientPayments[clientPayments.length - 1];
+  const lastPayParts = lastPayment.payment_date.split('-');
+  let targetYear  = parseInt(lastPayParts[0], 10);
+  let targetMonth = parseInt(lastPayParts[1], 10); // ya es 1-indexado, y queremos MES SIGUIENTE
+
+  // Avanzar 1 mes
+  targetMonth += 1;
+  if (targetMonth > 12) { targetMonth = 1; targetYear += 1; }
+
+  // Ajustar el día si el mes destino tiene menos días (ej: 31 en febrero)
+  const lastDayOfTarget = new Date(targetYear, targetMonth, 0).getDate();
+  const finalDay = Math.min(joinDay, lastDayOfTarget);
+
+  return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`;
+}
+
+/**
+ * Recalcula y persiste la next_payment_date de un cliente tras registrar/editar/borrar un pago.
+ *
  * @param {Object} params
  * @param {string} params.clientId - ID del cliente
- * @param {string} params.planId - ID del plan actual del cliente
+ * @param {string} params.planId   - ID del plan actual del cliente
  * @returns {Promise<{success: boolean, newDate?: string, cyclesExtended?: number, error?: any}>}
  */
 export async function recalculateNextPaymentDate({ clientId, planId }) {
   try {
-    // 1. Obtener datos del cliente
+    // 1. Datos del cliente
     const { data: clientData, error: clientError } = await client
       .from('clients')
       .select(`
@@ -100,35 +145,13 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     }
 
     const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
-    
+
     if (planPrice <= 0) {
       console.error('Plan price is invalid or zero');
       return { success: false, error: 'Plan price is invalid' };
     }
 
-    // 2. Caso: Cliente nuevo sin next_payment_date
-    if (!clientData.next_payment_date) {
-      const newNextPaymentDate = addMonthsToDate(clientData.join_date, 1);
-      
-      const { error } = await client
-        .from('clients')
-        .update({ next_payment_date: newNextPaymentDate })
-        .eq('id', clientId);
-
-      if (error) {
-        console.error('Error updating client next_payment_date:', error);
-        return { success: false, error };
-      }
-
-      return { 
-        success: true, 
-        newDate: newNextPaymentDate, 
-        cyclesExtended: 1,
-        isNewClient: true 
-      };
-    }
-
-    // 3. Obtener todos los pagos del cliente para su plan actual
+    // 2. Pagos del cliente para su plan actual, ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
       .select('id, amount_usd, payment_date')
@@ -141,25 +164,18 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
       return { success: false, error: paymentsError };
     }
 
-    // 4. Calcular total pagado
-    const totalPaid = (allPayments || []).reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
+    // 3. Calcular la fecha correcta con la regla de negocio
+    const newNextPaymentDate = computeNextPaymentDate(
+      clientData.join_date,
+      allPayments || [],
+      planPrice
     );
 
-    // 5. Calcular cuántos ciclos completos se han pagado
-    const totalCyclesCompleted = Math.floor(totalPaid / planPrice);
+    if (!newNextPaymentDate) {
+      return { success: false, error: 'No se pudo calcular la nueva fecha' };
+    }
 
-    // 6. Calcular nueva fecha: join_date + max(1, ciclos) meses
-    // - 0 ciclos pagados (pago parcial o sin pagos): mantener join_date + 1
-    // - N ciclos pagados: avanzar a join_date + N
-    // Ejemplo: join_date=Jan 28, 1 pago completo → Feb 28 (no Mar 28)
-    const newNextPaymentDate = addMonthsToDate(
-      clientData.join_date, 
-      Math.max(1, totalCyclesCompleted)
-    );
-
-    // 7. Solo actualizar si la fecha cambió
+    // 4. Actualizar solo si la fecha cambió
     if (newNextPaymentDate !== clientData.next_payment_date) {
       const { error } = await client
         .from('clients')
@@ -171,22 +187,21 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
         return { success: false, error };
       }
 
-      return { 
-        success: true, 
-        newDate: newNextPaymentDate, 
-        cyclesExtended: totalCyclesCompleted,
-        previousDate: clientData.next_payment_date
+      return {
+        success: true,
+        newDate: newNextPaymentDate,
+        previousDate: clientData.next_payment_date,
       };
     }
 
-    // No hubo cambio (pago parcial)
-    return { 
-      success: true, 
-      newDate: clientData.next_payment_date, 
+    // Sin cambio
+    return {
+      success: true,
+      newDate: clientData.next_payment_date,
       cyclesExtended: 0,
       isPartialPayment: true
     };
-    
+
   } catch (err) {
     console.error('Error recalculating client next_payment_date:', err);
     return { success: false, error: err };
@@ -220,10 +235,11 @@ export async function recalculateAllNextPaymentDates() {
       return { success: true, updated: 0, total: 0, errors: [] };
     }
 
-    // 2. Obtener todos los pagos
+    // 2. Obtener todos los pagos ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd');
+      .select('id, client_id, plan_id, amount_usd, payment_date')
+      .order('payment_date', { ascending: true });
 
     if (paymentsError) throw paymentsError;
 
@@ -245,24 +261,17 @@ export async function recalculateAllNextPaymentDates() {
           continue;
         }
 
-        // Filtrar pagos de este cliente para su plan actual
+        // Pagos del cliente para su plan actual, ya ordenados por fecha
         const clientPayments = (allPayments || []).filter(
           p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
         );
-        
-        // Calcular total pagado
-        const totalPaid = clientPayments.reduce(
-          (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-          0
+
+        // Calcular la fecha correcta con la regla de negocio
+        const newNextPaymentDate = computeNextPaymentDate(
+          clientData.join_date,
+          clientPayments,
+          planPrice
         );
-        
-        // Calcular ciclos completos
-        const cyclesPaid = Math.floor(totalPaid / planPrice);
-        
-        // Calcular nueva fecha: join_date + max(1, ciclos) meses
-        // - 0 ciclos pagados: mantener join_date + 1 (primer pago aún pendiente)
-        // - N ciclos pagados: avanzar a join_date + N
-        const newNextPaymentDate = addMonthsToDate(clientData.join_date, Math.max(1, cyclesPaid));
 
         if (newNextPaymentDate && newNextPaymentDate !== clientData.next_payment_date) {
           updates.push({
@@ -353,7 +362,8 @@ export async function auditNextPaymentDates() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd');
+      .select('id, client_id, plan_id, amount_usd, payment_date')
+      .order('payment_date', { ascending: true });
 
     if (paymentsError) throw paymentsError;
 
@@ -379,8 +389,8 @@ export async function auditNextPaymentDates() {
         (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
         0
       );
-      const cycles = Math.floor(totalPaid / planPrice);
-      const expected = addMonthsToDate(c.join_date, Math.max(1, cycles));
+      const cycles   = Math.floor(totalPaid / planPrice);
+      const expected = computeNextPaymentDate(c.join_date, clientPayments, planPrice);
 
       if (expected !== c.next_payment_date) {
         discrepancies.push({

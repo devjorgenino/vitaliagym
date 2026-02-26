@@ -7,7 +7,7 @@ import {
   recalculateAllNextPaymentDates as recalculateAllDates
 } from '../utils/paymentCalculations';
 
-export function usePayments() {
+export function usePayments({ onClientUpdate } = {}) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -76,12 +76,13 @@ export function usePayments() {
       }
       
       // Refetch para obtener los datos completos con joins (clients, plans)
-      // El optimistic update con data[0] no incluye la información de relaciones
       await fetchPayments();
 
-      // Note: Data sync returns the raw inserted data, but our UI usually expects joined data.
-      // fetchPayments refreshes the list with joins, so returning basic data is usually fine,
-      // or we can just return success: true.
+      // Refrescar la lista de clientes para que el status se actualice en la tabla
+      if (typeof onClientUpdate === 'function') {
+        await onClientUpdate();
+      }
+
       return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error("Error creating payment:", err);
@@ -113,6 +114,11 @@ export function usePayments() {
       // Refetch para obtener los datos completos con joins (clients, plans)
       await fetchPayments();
 
+      // Refrescar la lista de clientes para que el status se actualice en la tabla
+      if (typeof onClientUpdate === 'function') {
+        await onClientUpdate();
+      }
+
       return { success: true, data: data ? data[0] : null };
     } catch (err) {
       console.error("Error updating payment:", err);
@@ -139,6 +145,11 @@ export function usePayments() {
 
       // Refetch to reflect updated state
       await fetchPayments();
+
+      // Refrescar la lista de clientes para que el status se actualice en la tabla
+      if (typeof onClientUpdate === 'function') {
+        await onClientUpdate();
+      }
 
       return { success: true };
     } catch (err) {
