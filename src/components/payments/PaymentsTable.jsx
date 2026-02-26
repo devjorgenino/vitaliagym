@@ -914,7 +914,10 @@ export function PaymentsTable({
 
     setDeletingId(deleteDialog.payment.id);
     try {
-      const result = await deletePayment(deleteDialog.payment.id);
+      const result = await deletePayment(deleteDialog.payment.id, {
+        clientId: deleteDialog.payment.client_id,
+        planId: deleteDialog.payment.plan_id,
+      });
       if (result.success) {
         toast.success("Pago eliminado exitosamente");
         setDeleteDialog({ open: false, payment: null });

@@ -75,7 +75,7 @@ const Login = () => {
             </div>
           </CardTitle>
           <CardDescription className="text-center text-muted-foreground">
-            <p>Bienvenido de nuevo</p>
+            Bienvenido de nuevo
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -5,7 +5,8 @@ import { executeWithSync } from "../lib/data-sync";
 import { 
   calculateDaysUntilPayment as calcDaysUntilPayment,
   getPaymentStatusColor as getStatusColor,
-  recalculateAllNextPaymentDates as recalculateAllDates
+  recalculateAllNextPaymentDates as recalculateAllDates,
+  recalculateNextPaymentDate
 } from "../utils/paymentCalculations";
 
 export function useClients() {
@@ -174,22 +175,22 @@ export function useClients() {
 
   const updateClient = async (id, clientData) => {
     try {
-      // Si se actualiza la fecha de ingreso, recalcular la próxima fecha de pago
-      let updatedData = { ...clientData };
-      if (clientData.join_date) {
-        const nextPaymentDate = calculateNextPaymentDate(clientData.join_date);
-        updatedData.next_payment_date = formatDateToLocal(nextPaymentDate);
-      }
-
+      // Don't override next_payment_date here — let recalculateNextPaymentDate
+      // compute it correctly from actual payment history after saving.
       const { data, error } = await executeWithSync({
         table: 'clients',
         type: 'UPDATE',
-        data: updatedData,
+        data: clientData,
         match: { id }
       });
 
       if (error) {
         throw error;
+      }
+
+      // If join_date changed, recalculate next_payment_date from actual payments
+      if (clientData.join_date && clientData.plan_id) {
+        await recalculateNextPaymentDate({ clientId: id, planId: clientData.plan_id });
       }
 
       await fetchClients();
