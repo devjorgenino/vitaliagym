@@ -113,7 +113,7 @@ const PrivatePagesLayout = ({ children }) => {
   const breadcrumbs = getBreadcrumbs();
 
   return (
-    <div className="h-screen overflow-hidden">
+    <div className="h-screen overflow-hidden flex flex-col">
       {/* Skip link for accessibility */}
       <a 
         href="#main-content" 
@@ -122,7 +122,7 @@ const PrivatePagesLayout = ({ children }) => {
         Saltar al contenido principal
       </a>
       
-      <SidebarProvider>
+      <SidebarProvider className="flex-1 min-h-0 h-full">
         <AppSidebar />
         <SidebarInset>
           <header 
