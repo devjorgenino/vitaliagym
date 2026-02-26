@@ -71,7 +71,7 @@ export default function useAdminStats() {
         // Client payments / income (this year)
         fetchWithOffline(`admin-client-payments-${currentYear}`, () => client
           .from("payments")
-          .select("*")
+          .select("*, clients(first_name, last_name), plans(name)")
           .gte("payment_date", startOfYear)
           .lte("payment_date", endOfYear)),
 
@@ -141,10 +141,10 @@ export default function useAdminStats() {
       0
     );
 
-    // Client payments (income)
-    const completedClientPayments = clientPayments.filter(p => p.status === "completed" || p.status === "paid");
+    // Client payments (income) - la tabla payments NO tiene campo status
+    const completedClientPayments = clientPayments;
     const totalIncome = completedClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount) || 0), 
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0), 
       0
     );
 
@@ -198,15 +198,15 @@ export default function useAdminStats() {
       nomina: 0,
     }));
 
-    // Income (client payments)
+    // Income (client payments) - sin filtro de status (tabla payments no tiene ese campo)
     clientPayments
       .filter(p => {
         const paymentYear = new Date(p.payment_date).getFullYear();
-        return paymentYear === currentYear && (p.status === "completed" || p.status === "paid");
+        return paymentYear === currentYear;
       })
       .forEach(p => {
         const month = new Date(p.payment_date).getMonth();
-        data[month].ingresos += parseFloat(p.amount) || 0;
+        data[month].ingresos += parseFloat(p.amount_usd) || 0;
       });
 
     // Expenses
@@ -324,10 +324,10 @@ export default function useAdminStats() {
       ...clientPayments.slice(0, 20).map(p => ({
         id: `cp-${p.id}`,
         type: "income",
-        description: "Pago de membresía",
-        amount: parseFloat(p.amount) || 0,
+        description: `Pago de membresía${p.clients ? ` - ${p.clients.first_name} ${p.clients.last_name}` : ""}${p.plans ? ` (${p.plans.name})` : ""}`,
+        amount: parseFloat(p.amount_usd) || 0,
         date: p.payment_date,
-        status: p.status,
+        status: "paid",
       })),
     ];
 
@@ -348,8 +348,8 @@ export default function useAdminStats() {
     };
 
     const monthIncome = clientPayments
-      .filter(p => isCurrentMonth(p.payment_date) && (p.status === "completed" || p.status === "paid"))
-      .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      .filter(p => isCurrentMonth(p.payment_date))
+      .reduce((sum, p) => sum + (parseFloat(p.amount_usd) || 0), 0);
 
     const monthExpenses = expenses
       .filter(e => isCurrentMonth(e.expense_date) && e.status === "paid")

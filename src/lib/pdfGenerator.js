@@ -291,135 +291,123 @@ export const generateStaffReport = async (staff, options = {}) => {
 };
 
 /**
- * Generar reporte de pagos al personal
+ * Generar reporte de pagos al personal (nómina)
+ * Recibe TODOS los pagos sin filtrar; filtra internamente por período si se indica.
  */
 export const generatePaymentsReport = async (payments, options = {}) => {
   const doc = createBasePDF("landscape");
   const period = options.period || "Todos los períodos";
-  let y = await addHeader(doc, "Reporte de Pagos", period);
-  
-  // Estadísticas
-  const paidPayments = payments.filter((p) => p.status === "paid");
+  let y = await addHeader(doc, "Reporte de Nómina", period);
+
+  // Estadísticas sobre TODOS los pagos recibidos
+  const paidPayments    = payments.filter((p) => p.status === "paid");
   const pendingPayments = payments.filter((p) => p.status === "pending");
-  const totalPaid = paidPayments.reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
+  const totalPaid    = paidPayments.reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
   const totalPending = pendingPayments.reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
-  
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const cardWidth = (pageWidth - 60) / 4;
-  
-  addStatCard(doc, 15, y, cardWidth, "Total Pagos", payments.length, COLORS.primary);
-  addStatCard(doc, 15 + cardWidth + 10, y, cardWidth, "Pagados", paidPayments.length, COLORS.success);
-  addStatCard(doc, 15 + (cardWidth + 10) * 2, y, cardWidth, "Total Pagado", formatCurrency(totalPaid), COLORS.success);
-  addStatCard(doc, 15 + (cardWidth + 10) * 3, y, cardWidth, "Pendiente", formatCurrency(totalPending), COLORS.warning);
-  
+
+  addStatCard(doc, 15,                        y, cardWidth, "Total Registros",  payments.length,          COLORS.primary);
+  addStatCard(doc, 15 + (cardWidth + 10),     y, cardWidth, "Pagados",          paidPayments.length,      COLORS.success);
+  addStatCard(doc, 15 + (cardWidth + 10) * 2, y, cardWidth, "Total Pagado",     formatCurrency(totalPaid),    COLORS.success);
+  addStatCard(doc, 15 + (cardWidth + 10) * 3, y, cardWidth, "Total Pendiente",  formatCurrency(totalPending), COLORS.warning);
+
   y += 35;
-  y = addSection(doc, y, "Detalle de Pagos");
-  
-  // Tabla de pagos
+  y = addSection(doc, y, "Detalle de Pagos al Personal");
+
+  const PAYMENT_METHOD_LABELS = {
+    cash: "Efectivo", transfer: "Transferencia",
+    check: "Cheque", mobile_payment: "Pago Móvil",
+  };
+
   const tableData = payments.map((p) => [
-    p.staff ? `${p.staff.first_name} ${p.staff.last_name}` : "-",
-    p.staff?.position || "-",
+    p.staff ? `${p.staff.first_name} ${p.staff.last_name}` : "—",
+    p.staff?.position || "—",
     formatDate(p.payment_date),
     `${formatDate(p.period_start)} - ${formatDate(p.period_end)}`,
-    formatCurrency(p.base_amount),
-    formatCurrency(p.bonus),
-    formatCurrency(p.deductions),
-    formatCurrency(p.total_amount),
+    formatCurrency(parseFloat(p.base_amount) || 0),
+    formatCurrency(parseFloat(p.bonus) || 0),
+    formatCurrency(parseFloat(p.deductions) || 0),
+    formatCurrency(parseFloat(p.total_amount) || 0),
+    PAYMENT_METHOD_LABELS[p.payment_method] || p.payment_method || "—",
     p.status === "paid" ? "Pagado" : p.status === "pending" ? "Pendiente" : "Cancelado",
   ]);
-  
+
   doc.autoTable({
     startY: y,
-    head: [["Empleado", "Cargo", "Fecha Pago", "Período", "Base", "Bonos", "Deducciones", "Total", "Estado"]],
+    head: [["Empleado", "Cargo", "Fecha Pago", "Período", "Base", "Bonos", "Deduc.", "Total", "Método", "Estado"]],
     body: tableData,
     theme: "grid",
-    headStyles: {
-      fillColor: COLORS.primary,
-      textColor: COLORS.white,
-      fontStyle: "bold",
-      fontSize: 8,
-    },
-    bodyStyles: {
-      fontSize: 7,
-      textColor: COLORS.foreground,
-    },
-    alternateRowStyles: {
-      fillColor: COLORS.light,
-    },
+    headStyles: { fillColor: COLORS.primary, textColor: COLORS.white, fontStyle: "bold", fontSize: 7 },
+    bodyStyles: { fontSize: 6.5, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    foot: [["", "", "", "TOTAL", "", "", "", formatCurrency(totalPaid), "", ""]],
+    footStyles: { fillColor: COLORS.secondary, textColor: COLORS.primaryDark, fontStyle: "bold", fontSize: 7 },
     columnStyles: {
       0: { fontStyle: "bold" },
-      4: { halign: "right" },
-      5: { halign: "right" },
-      6: { halign: "right" },
-      7: { halign: "right", fontStyle: "bold" },
-      8: { halign: "center" },
+      4: { halign: "right" }, 5: { halign: "right" },
+      6: { halign: "right" }, 7: { halign: "right", fontStyle: "bold" },
+      8: { halign: "center" }, 9: { halign: "center" },
     },
     margin: { left: 15, right: 15 },
-    styles: {
-      lineColor: COLORS.muted,
-      lineWidth: 0.1,
-    },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1, overflow: "ellipsize" },
   });
-  
-  // Agregar totales
-  const finalY = doc.lastAutoTable.finalY + 5;
-  
-  // Caja de resumen
+
+  // Caja de totales
+  const finalY = doc.lastAutoTable.finalY + 6;
   doc.setFillColor(...COLORS.secondary);
-  doc.roundedRect(pageWidth - 105, finalY, 90, 25, 3, 3, "F");
-  
+  doc.roundedRect(pageWidth - 125, finalY, 110, 28, 3, 3, "F");
   doc.setTextColor(...COLORS.primaryDark);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("TOTAL PAGADO:", pageWidth - 100, finalY + 10);
-  doc.setFontSize(12);
-  doc.text(formatCurrency(totalPaid), pageWidth - 20, finalY + 10, { align: "right" });
-  
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text("Pendiente:", pageWidth - 100, finalY + 19);
-  doc.text(formatCurrency(totalPending), pageWidth - 20, finalY + 19, { align: "right" });
-  
-  // Agregar pies de página
+  doc.setFont("helvetica", "bold");
+  doc.text("TOTAL PAGADO:", pageWidth - 120, finalY + 10);
+  doc.setFontSize(13);
+  doc.text(formatCurrency(totalPaid), pageWidth - 18, finalY + 10, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text(`Pendiente: ${formatCurrency(totalPending)}`, pageWidth - 120, finalY + 21);
+
   const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    addFooter(doc, i, totalPages);
-  }
-  
+  for (let i = 1; i <= totalPages; i++) { doc.setPage(i); addFooter(doc, i, totalPages); }
   return doc;
 };
 
 /**
  * Generar reporte de gastos
+ * Incluye TODOS los gastos recibidos, sin filtrar por status en el total visible.
  */
 export const generateExpensesReport = async (expenses, options = {}) => {
   const doc = createBasePDF("portrait");
   const period = options.period || "Todos los períodos";
   let y = await addHeader(doc, "Reporte de Gastos", period);
-  
-  // Estadísticas
+
+  // Todos los gastos (independiente de status) para conteo; monto solo pagados
   const paidExpenses = expenses.filter((e) => e.status === "paid");
-  const totalAmount = paidExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-  
-  // Agrupar por categoría
+  const totalAmount  = paidExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+  const totalPending = expenses
+    .filter((e) => e.status === "pending")
+    .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+  // Agrupar pagados por categoría
   const byCategory = paidExpenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + (parseFloat(e.amount) || 0);
+    const cat = e.category || "Sin categoría";
+    acc[cat] = (acc[cat] || 0) + (parseFloat(e.amount) || 0);
     return acc;
   }, {});
-  
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const cardWidth = (pageWidth - 50) / 3;
-  
-  addStatCard(doc, 15, y, cardWidth, "Total Gastos", expenses.length, COLORS.primary);
-  addStatCard(doc, 15 + cardWidth + 10, y, cardWidth, "Monto Total", formatCurrency(totalAmount), COLORS.danger);
-  addStatCard(doc, 15 + (cardWidth + 10) * 2, y, cardWidth, "Categorías", Object.keys(byCategory).length, COLORS.muted);
-  
+
+  addStatCard(doc, 15,                        y, cardWidth, "Total Gastos",   expenses.length,           COLORS.primary);
+  addStatCard(doc, 15 + (cardWidth + 10),     y, cardWidth, "Monto Pagado",   formatCurrency(totalAmount),   COLORS.danger);
+  addStatCard(doc, 15 + (cardWidth + 10) * 2, y, cardWidth, "Monto Pendiente",formatCurrency(totalPending),  COLORS.warning);
+
   y += 35;
-  
+
   // Resumen por categoría
   y = addSection(doc, y, "Resumen por Categoría");
-  
+
   const categoryData = Object.entries(byCategory)
     .sort((a, b) => b[1] - a[1])
     .map(([category, amount]) => [
@@ -427,88 +415,60 @@ export const generateExpensesReport = async (expenses, options = {}) => {
       formatCurrency(amount),
       totalAmount > 0 ? `${((amount / totalAmount) * 100).toFixed(1)}%` : "0%",
     ]);
-  
+
+  if (categoryData.length === 0) categoryData.push(["Sin datos", formatCurrency(0), "0%"]);
+
   doc.autoTable({
     startY: y,
     head: [["Categoría", "Monto", "Porcentaje"]],
     body: categoryData,
     theme: "grid",
-    headStyles: {
-      fillColor: COLORS.primaryDark,
-      textColor: COLORS.white,
-      fontStyle: "bold",
-      fontSize: 10,
-    },
-    bodyStyles: {
-      fontSize: 9,
-      textColor: COLORS.foreground,
-    },
-    alternateRowStyles: {
-      fillColor: COLORS.light,
-    },
-    columnStyles: {
-      0: { fontStyle: "bold" },
-      1: { halign: "right" },
-      2: { halign: "center" },
-    },
+    headStyles: { fillColor: COLORS.primaryDark, textColor: COLORS.white, fontStyle: "bold", fontSize: 10 },
+    bodyStyles: { fontSize: 9, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    columnStyles: { 0: { fontStyle: "bold" }, 1: { halign: "right" }, 2: { halign: "center" } },
     margin: { left: 15, right: 15 },
     tableWidth: pageWidth - 30,
-    styles: {
-      lineColor: COLORS.muted,
-      lineWidth: 0.1,
-    },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
   });
-  
+
   y = doc.lastAutoTable.finalY + 15;
-  
-  // Detalle de gastos
+
+  // Detalle completo de gastos
   y = addSection(doc, y, "Detalle de Gastos");
-  
-  const tableData = expenses.map((e) => [
-    formatDate(e.expense_date),
-    e.category,
-    e.description.length > 40 ? e.description.substring(0, 40) + "..." : e.description,
-    e.vendor || "-",
-    formatCurrency(e.amount),
-    e.status === "paid" ? "Pagado" : e.status === "pending" ? "Pendiente" : "Cancelado",
-  ]);
-  
+
+  const tableData = expenses.map((e) => {
+    const desc = e.description || "—";
+    return [
+      formatDate(e.expense_date),
+      e.category || "—",
+      desc.length > 40 ? desc.substring(0, 40) + "…" : desc,
+      e.vendor || "—",
+      formatCurrency(parseFloat(e.amount) || 0),
+      e.status === "paid" ? "Pagado" : e.status === "pending" ? "Pendiente" : "Cancelado",
+    ];
+  });
+
   doc.autoTable({
     startY: y,
     head: [["Fecha", "Categoría", "Descripción", "Proveedor", "Monto", "Estado"]],
     body: tableData,
     theme: "grid",
-    headStyles: {
-      fillColor: COLORS.primary,
-      textColor: COLORS.white,
-      fontStyle: "bold",
-      fontSize: 9,
-    },
-    bodyStyles: {
-      fontSize: 8,
-      textColor: COLORS.foreground,
-    },
-    alternateRowStyles: {
-      fillColor: COLORS.light,
-    },
+    headStyles: { fillColor: COLORS.primary, textColor: COLORS.white, fontStyle: "bold", fontSize: 9 },
+    bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    foot: [["", "", "", "TOTAL PAGADO", formatCurrency(totalAmount), ""]],
+    footStyles: { fillColor: COLORS.secondary, textColor: COLORS.primaryDark, fontStyle: "bold", fontSize: 8 },
     columnStyles: {
       4: { halign: "right", fontStyle: "bold" },
       5: { halign: "center" },
     },
     margin: { left: 15, right: 15 },
-    styles: {
-      lineColor: COLORS.muted,
-      lineWidth: 0.1,
-    },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1, overflow: "ellipsize" },
   });
-  
-  // Agregar pies de página
+
   const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    addFooter(doc, i, totalPages);
-  }
-  
+  for (let i = 1; i <= totalPages; i++) { doc.setPage(i); addFooter(doc, i, totalPages); }
   return doc;
 };
 
@@ -520,52 +480,54 @@ export const generateFinancialReport = async (data, options = {}) => {
   const doc = createBasePDF("portrait");
   const period = options.period || new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   let y = await addHeader(doc, "Reporte Financiero", period);
-  
+
   const pageWidth = doc.internal.pageSize.getWidth();
-  
-  // Calcular totales
-  const totalIncome = income || 0;
-  const totalPayments = payments
+
+  // income ya viene en USD (amount_usd sumado en ReportsPanel)
+  const formatUSD = (v) => `$${(v || 0).toFixed(2)}`;
+
+  const totalIncome   = income || 0;
+  const totalPayroll  = payments
     .filter((p) => p.status === "paid")
     .reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
   const totalExpenses = expenses
     .filter((e) => e.status === "paid")
     .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-  const netResult = totalIncome - totalPayments - totalExpenses;
-  
-  // Tarjetas de resumen
+  // balance: ingresos USD - egresos Bs (nota informativa; si quieres comparar en la misma moneda
+  //           necesitarías la tasa de cambio, pero mostramos las cifras separadas)
+  const netResult = totalIncome - totalPayroll - totalExpenses;
+
+  // Tarjetas — ingresos en USD, egresos en Bs (se indica la moneda)
   const cardWidth = (pageWidth - 50) / 3;
-  
-  addStatCard(doc, 15, y, cardWidth, "Ingresos", formatCurrency(totalIncome), COLORS.success);
-  addStatCard(doc, 15 + cardWidth + 10, y, cardWidth, "Nómina", formatCurrency(totalPayments), COLORS.warning);
-  addStatCard(doc, 15 + (cardWidth + 10) * 2, y, cardWidth, "Gastos Operativos", formatCurrency(totalExpenses), COLORS.danger);
-  
+  addStatCard(doc, 15,                        y, cardWidth, "Ingresos (USD)",       formatUSD(totalIncome),          COLORS.success);
+  addStatCard(doc, 15 + (cardWidth + 10),     y, cardWidth, "Nómina Pagada (Bs)",   formatCurrency(totalPayroll),    COLORS.warning);
+  addStatCard(doc, 15 + (cardWidth + 10) * 2, y, cardWidth, "Gastos Operativos (Bs)",formatCurrency(totalExpenses),  COLORS.danger);
+
   y += 35;
-  
-  // Resultado neto
+
+  // Resultado neto en USD
   const resultColor = netResult >= 0 ? COLORS.success : COLORS.danger;
   doc.setFillColor(...resultColor);
   doc.roundedRect(15, y, pageWidth - 30, 22, 3, 3, "F");
-  
   doc.setTextColor(...COLORS.white);
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text("RESULTADO NETO:", 25, y + 14);
-  doc.setFontSize(16);
-  doc.text(formatCurrency(netResult), pageWidth - 25, y + 14, { align: "right" });
-  
+  doc.text("RESULTADO NETO (USD):", 25, y + 14);
+  doc.setFontSize(15);
+  doc.text(formatUSD(netResult), pageWidth - 25, y + 14, { align: "right" });
+
   y += 32;
-  
-  // Sección de nómina
-  y = addSection(doc, y, "Resumen de Nómina");
-  
+
+  // ── Resumen de nómina del período ──────────────────────────────────────────
+  y = addSection(doc, y, "Resumen de Nómina del Período");
+
   const staffByPosition = staff.reduce((acc, s) => {
     if (s.status === "active") {
       acc[s.position] = (acc[s.position] || 0) + 1;
     }
     return acc;
   }, {});
-  
+
   const staffData = Object.entries(staffByPosition).map(([position, count]) => [
     position,
     count,
@@ -575,87 +537,394 @@ export const generateFinancialReport = async (data, options = {}) => {
         .reduce((sum, s) => sum + (parseFloat(s.salary) || 0), 0)
     ),
   ]);
-  
+
+  if (staffData.length === 0) staffData.push(["Sin personal activo", "0", formatCurrency(0)]);
+
   doc.autoTable({
     startY: y,
-    head: [["Cargo", "Cantidad", "Costo Mensual"]],
+    head: [["Cargo", "Cantidad", "Costo Mensual Estimado (Bs)"]],
     body: staffData,
+    theme: "grid",
+    headStyles: { fillColor: COLORS.primary, textColor: COLORS.white, fontStyle: "bold", fontSize: 10 },
+    bodyStyles: { fontSize: 9, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    columnStyles: { 1: { halign: "center" }, 2: { halign: "right" } },
+    margin: { left: 15, right: 15 },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
+  });
+
+  y = doc.lastAutoTable.finalY + 15;
+
+  // ── Nómina pagada en el período ────────────────────────────────────────────
+  if (payments.length > 0) {
+    y = addSection(doc, y, "Detalle de Nómina Pagada");
+
+    const payrollData = payments
+      .filter((p) => p.status === "paid")
+      .map((p) => [
+        p.staff ? `${p.staff.first_name} ${p.staff.last_name}` : "—",
+        p.staff?.position || "—",
+        formatDate(p.payment_date),
+        formatCurrency(parseFloat(p.total_amount) || 0),
+      ]);
+
+    if (payrollData.length > 0) {
+      doc.autoTable({
+        startY: y,
+        head: [["Empleado", "Cargo", "Fecha Pago", "Monto (Bs)"]],
+        body: payrollData,
+        theme: "grid",
+        headStyles: { fillColor: COLORS.primary, textColor: COLORS.white, fontStyle: "bold", fontSize: 9 },
+        bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
+        alternateRowStyles: { fillColor: COLORS.light },
+        foot: [["", "", "TOTAL", formatCurrency(totalPayroll)]],
+        footStyles: { fillColor: COLORS.secondary, textColor: COLORS.primaryDark, fontStyle: "bold", fontSize: 8 },
+        columnStyles: { 3: { halign: "right", fontStyle: "bold" } },
+        margin: { left: 15, right: 15 },
+        styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
+      });
+      y = doc.lastAutoTable.finalY + 15;
+    }
+  }
+
+  // ── Gastos por categoría ───────────────────────────────────────────────────
+  y = addSection(doc, y, "Gastos por Categoría");
+
+  const expensesByCategory = expenses
+    .filter((e) => e.status === "paid")
+    .reduce((acc, e) => {
+      const cat = e.category || "Sin categoría";
+      acc[cat] = (acc[cat] || 0) + (parseFloat(e.amount) || 0);
+      return acc;
+    }, {});
+
+  const expensesData = Object.entries(expensesByCategory)
+    .sort((a, b) => b[1] - a[1])
+    .map(([category, amount]) => [category, formatCurrency(amount)]);
+
+  if (expensesData.length === 0) expensesData.push(["Sin gastos en el período", formatCurrency(0)]);
+
+  doc.autoTable({
+    startY: y,
+    head: [["Categoría", "Monto (Bs)"]],
+    body: expensesData,
+    theme: "grid",
+    headStyles: { fillColor: COLORS.danger, textColor: COLORS.white, fontStyle: "bold", fontSize: 10 },
+    bodyStyles: { fontSize: 9, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    foot: [["TOTAL", formatCurrency(totalExpenses)]],
+    footStyles: { fillColor: COLORS.secondary, textColor: COLORS.primaryDark, fontStyle: "bold", fontSize: 9 },
+    columnStyles: { 1: { halign: "right" } },
+    margin: { left: 15, right: 15 },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
+  });
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) { doc.setPage(i); addFooter(doc, i, totalPages); }
+  return doc;
+};
+
+/**
+ * Generar reporte de consolidación de ingresos (membresías de clientes)
+ * Incluye TODOS los pagos desde el inicio del sistema, agrupados por mes/año.
+ */
+export const generateIncomeReport = async (payments, options = {}) => {
+  const doc = createBasePDF("landscape");
+  const period = options.period || "Histórico completo";
+  let y = await addHeader(doc, "Consolidado de Ingresos", period);
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  const PAYMENT_TYPE_LABELS = {
+    pago_movil:        "Pago Móvil",
+    transferencia:     "Transferencia",
+    punto_de_venta:    "Punto de Venta",
+    efectivo_dolares:  "Efectivo USD",
+    efectivo_bolivares:"Efectivo Bs",
+  };
+
+  const formatUSD = (v) => `$${(v || 0).toFixed(2)}`;
+  const formatBs  = (v) => `Bs ${(v || 0).toFixed(2)}`;
+
+  // ── Totales globales ───────────────────────────────────────────────────────
+  const totalUSD = payments.reduce((s, p) => s + (parseFloat(p.amount_usd) || 0), 0);
+  const totalBs  = payments.reduce((s, p) => s + (parseFloat(p.amount_bs)  || 0), 0);
+
+  // ── Agrupación por mes/año (orden cronológico) ─────────────────────────────
+  const byMonth = {};
+  payments.forEach((p) => {
+    const d = new Date(p.payment_date + "T00:00:00"); // evitar offset UTC
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!byMonth[key]) {
+      byMonth[key] = {
+        label: d.toLocaleDateString("es-VE", { month: "long", year: "numeric" }),
+        count: 0,
+        usd: 0,
+        bs: 0,
+      };
+    }
+    byMonth[key].count += 1;
+    byMonth[key].usd   += parseFloat(p.amount_usd) || 0;
+    byMonth[key].bs    += parseFloat(p.amount_bs)  || 0;
+  });
+
+  const monthKeys = Object.keys(byMonth).sort();
+
+  // ── Agrupación por método de pago ──────────────────────────────────────────
+  const byType = {};
+  payments.forEach((p) => {
+    const lbl = PAYMENT_TYPE_LABELS[p.payment_type] || p.payment_type || "Otro";
+    if (!byType[lbl]) byType[lbl] = { count: 0, usd: 0 };
+    byType[lbl].count += 1;
+    byType[lbl].usd   += parseFloat(p.amount_usd) || 0;
+  });
+
+  // ── Agrupación por plan ────────────────────────────────────────────────────
+  const byPlan = {};
+  payments.forEach((p) => {
+    const lbl = p.plans?.name || "Sin plan";
+    if (!byPlan[lbl]) byPlan[lbl] = { count: 0, usd: 0 };
+    byPlan[lbl].count += 1;
+    byPlan[lbl].usd   += parseFloat(p.amount_usd) || 0;
+  });
+
+  // ── Tarjetas de resumen ────────────────────────────────────────────────────
+  const cardWidth = (pageWidth - 60) / 4;
+  addStatCard(doc, 15,                        y, cardWidth, "Total Transacciones", payments.length,                                           COLORS.primary);
+  addStatCard(doc, 15 + (cardWidth + 10),     y, cardWidth, "Total USD",           formatUSD(totalUSD),                                       COLORS.success);
+  addStatCard(doc, 15 + (cardWidth + 10) * 2, y, cardWidth, "Total Bs",            formatBs(totalBs),                                         COLORS.primaryDark);
+  addStatCard(doc, 15 + (cardWidth + 10) * 3, y, cardWidth, "Meses con ingresos",  monthKeys.length,                                          COLORS.muted);
+
+  y += 35;
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SECCIÓN 1 — RESUMEN POR MES / AÑO
+  // ══════════════════════════════════════════════════════════════════════════
+  y = addSection(doc, y, "Resumen por Mes / Año");
+
+  const monthTableData = monthKeys.map((k) => {
+    const m = byMonth[k];
+    const pct = totalUSD > 0 ? ((m.usd / totalUSD) * 100).toFixed(1) : "0.0";
+    return [
+      // Capitalizar primera letra del mes
+      m.label.charAt(0).toUpperCase() + m.label.slice(1),
+      m.count.toString(),
+      formatUSD(m.usd),
+      formatBs(m.bs),
+      `${pct}%`,
+    ];
+  });
+
+  // Fila de totales
+  monthTableData.push([
+    "TOTAL GENERAL",
+    payments.length.toString(),
+    formatUSD(totalUSD),
+    formatBs(totalBs),
+    "100%",
+  ]);
+
+  doc.autoTable({
+    startY: y,
+    head: [["Mes / Año", "N° Pagos", "Total USD", "Total Bs", "% del Total"]],
+    body: monthTableData,
     theme: "grid",
     headStyles: {
       fillColor: COLORS.primary,
       textColor: COLORS.white,
       fontStyle: "bold",
-      fontSize: 10,
-    },
-    bodyStyles: {
       fontSize: 9,
-      textColor: COLORS.foreground,
     },
-    alternateRowStyles: {
-      fillColor: COLORS.light,
+    bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    foot: [],
+    didParseCell: (data) => {
+      // Resaltar fila de totales
+      if (data.row.index === monthTableData.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = COLORS.secondary;
+        data.cell.styles.textColor = COLORS.primaryDark;
+      }
     },
     columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 55 },
       1: { halign: "center" },
-      2: { halign: "right" },
+      2: { halign: "right", fontStyle: "bold" },
+      3: { halign: "right" },
+      4: { halign: "center" },
     },
-    margin: { left: 15, right: 15 },
-    styles: {
-      lineColor: COLORS.muted,
-      lineWidth: 0.1,
-    },
+    margin: { left: 15, right: pageWidth / 2 + 5 },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
+    tableWidth: pageWidth / 2 - 25,
   });
-  
-  y = doc.lastAutoTable.finalY + 15;
-  
-  // Sección de gastos por categoría
-  y = addSection(doc, y, "Gastos por Categoría");
-  
-  const expensesByCategory = expenses
-    .filter((e) => e.status === "paid")
-    .reduce((acc, e) => {
-      acc[e.category] = (acc[e.category] || 0) + (parseFloat(e.amount) || 0);
-      return acc;
-    }, {});
-  
-  const expensesData = Object.entries(expensesByCategory)
-    .sort((a, b) => b[1] - a[1])
-    .map(([category, amount]) => [category, formatCurrency(amount)]);
-  
+
+  // ── Métodos de pago (columna derecha) ──────────────────────────────────────
+  const typeTableY = y;
+  const typeData = Object.entries(byType)
+    .sort((a, b) => b[1].usd - a[1].usd)
+    .map(([lbl, v]) => [
+      lbl,
+      v.count.toString(),
+      formatUSD(v.usd),
+      totalUSD > 0 ? `${((v.usd / totalUSD) * 100).toFixed(1)}%` : "0%",
+    ]);
+
   doc.autoTable({
-    startY: y,
-    head: [["Categoría", "Monto"]],
-    body: expensesData,
+    startY: typeTableY,
+    head: [["Método de Pago", "N°", "Total USD", "%"]],
+    body: typeData,
     theme: "grid",
     headStyles: {
-      fillColor: COLORS.danger,
+      fillColor: COLORS.primaryDark,
       textColor: COLORS.white,
       fontStyle: "bold",
-      fontSize: 10,
-    },
-    bodyStyles: {
       fontSize: 9,
-      textColor: COLORS.foreground,
     },
-    alternateRowStyles: {
-      fillColor: COLORS.light,
-    },
+    bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
     columnStyles: {
-      1: { halign: "right" },
+      0: { fontStyle: "bold" },
+      1: { halign: "center" },
+      2: { halign: "right" },
+      3: { halign: "center" },
+    },
+    margin: { left: pageWidth / 2 + 5, right: 15 },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
+    tableWidth: pageWidth / 2 - 25,
+  });
+
+  y = doc.lastAutoTable.finalY + 15;
+
+  // ── Resumen por plan (tabla estrecha, nueva fila) ──────────────────────────
+  y = addSection(doc, y, "Resumen por Plan / Membresía");
+
+  const planData = Object.entries(byPlan)
+    .sort((a, b) => b[1].usd - a[1].usd)
+    .map(([lbl, v]) => [
+      lbl,
+      v.count.toString(),
+      formatUSD(v.usd),
+      totalUSD > 0 ? `${((v.usd / totalUSD) * 100).toFixed(1)}%` : "0%",
+    ]);
+
+  doc.autoTable({
+    startY: y,
+    head: [["Plan / Membresía", "N° Pagos", "Total USD", "% del Total"]],
+    body: planData,
+    theme: "grid",
+    headStyles: {
+      fillColor: COLORS.primaryDark,
+      textColor: COLORS.white,
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    columnStyles: {
+      0: { fontStyle: "bold" },
+      1: { halign: "center" },
+      2: { halign: "right", fontStyle: "bold" },
+      3: { halign: "center" },
     },
     margin: { left: 15, right: 15 },
-    styles: {
-      lineColor: COLORS.muted,
-      lineWidth: 0.1,
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
+  });
+
+  y = doc.lastAutoTable.finalY + 15;
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SECCIÓN 2 — DETALLE COMPLETO (una fila por pago, ordenado fecha ASC)
+  // ══════════════════════════════════════════════════════════════════════════
+  y = addSection(doc, y, "Detalle Completo de Pagos");
+
+  const detailData = payments.map((p, idx) => [
+    (idx + 1).toString(),
+    formatDate(p.payment_date),
+    p.clients
+      ? `${p.clients.first_name} ${p.clients.last_name}`
+      : "—",
+    p.clients?.cedula || "—",
+    p.plans?.name || "—",
+    PAYMENT_TYPE_LABELS[p.payment_type] || p.payment_type || "—",
+    p.bank || "—",
+    p.reference || "—",
+    formatUSD(parseFloat(p.amount_usd) || 0),
+    formatBs(parseFloat(p.amount_bs) || 0),
+  ]);
+
+  doc.autoTable({
+    startY: y,
+    head: [[
+      "#", "Fecha", "Cliente", "Cédula", "Plan",
+      "Método", "Banco", "Referencia", "Monto USD", "Monto Bs",
+    ]],
+    body: detailData,
+    theme: "striped",
+    headStyles: {
+      fillColor: COLORS.primary,
+      textColor: COLORS.white,
+      fontStyle: "bold",
+      fontSize: 7,
+    },
+    bodyStyles: { fontSize: 6.5, textColor: COLORS.foreground },
+    alternateRowStyles: { fillColor: COLORS.light },
+    columnStyles: {
+      0:  { halign: "center", cellWidth: 8 },
+      1:  { cellWidth: 20 },
+      2:  { fontStyle: "bold", cellWidth: 38 },
+      3:  { cellWidth: 22 },
+      4:  { cellWidth: 28 },
+      5:  { cellWidth: 28 },
+      6:  { cellWidth: 22 },
+      7:  { cellWidth: 26 },
+      8:  { halign: "right", fontStyle: "bold", cellWidth: 22 },
+      9:  { halign: "right", cellWidth: 26 },
+    },
+    margin: { left: 15, right: 15 },
+    styles: { lineColor: COLORS.muted, lineWidth: 0.1, overflow: "ellipsize" },
+    // Fila de gran total al final de la tabla
+    foot: [[
+      "", "TOTAL", "", "", "",
+      "", "", "",
+      formatUSD(totalUSD),
+      formatBs(totalBs),
+    ]],
+    footStyles: {
+      fillColor: COLORS.secondary,
+      textColor: COLORS.primaryDark,
+      fontStyle: "bold",
+      fontSize: 7,
     },
   });
-  
-  // Agregar pies de página
+
+  // ── Caja de gran total ─────────────────────────────────────────────────────
+  const finalY = doc.lastAutoTable.finalY + 6;
+  const boxWidth = 130;
+  doc.setFillColor(...COLORS.secondary);
+  doc.roundedRect(pageWidth - boxWidth - 15, finalY, boxWidth, 28, 3, 3, "F");
+  doc.setFillColor(...COLORS.primary);
+  doc.roundedRect(pageWidth - boxWidth - 15, finalY, 4, 28, 2, 2, "F");
+
+  doc.setTextColor(...COLORS.primaryDark);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("TOTAL HISTÓRICO USD:", pageWidth - boxWidth - 8, finalY + 10);
+  doc.setFontSize(13);
+  doc.text(formatUSD(totalUSD), pageWidth - 18, finalY + 10, { align: "right" });
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Total Bs:", pageWidth - boxWidth - 8, finalY + 21);
+  doc.setFont("helvetica", "bold");
+  doc.text(formatBs(totalBs), pageWidth - 18, finalY + 21, { align: "right" });
+
+  // ── Pies de página ─────────────────────────────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     addFooter(doc, i, totalPages);
   }
-  
+
   return doc;
 };
 
