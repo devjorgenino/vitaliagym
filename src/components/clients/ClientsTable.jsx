@@ -116,6 +116,17 @@ export function ClientsTable() {
   const [paymentFilter, setPaymentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  // Refrescar clientes al volver a la pestaña (p. ej. después de registrar un pago en /pagos)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refetch();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [refetch]);
+
   // Estados para paginación
   const {
     currentPage,

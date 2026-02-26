@@ -13,7 +13,9 @@
     "clean": "next clean",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "db:recalculate-dates": "node scripts/recalculate-payment-dates.mjs",
+    "db:recalculate-dates:dry": "node scripts/recalculate-payment-dates.mjs --dry-run"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
@@ -54,6 +56,7 @@
     "@types/node": "^25.0.10",
     "@types/react": "19.2.7",
     "@vitejs/plugin-react": "^5.1.2",
+    "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "jsdom": "^27.4.0",
