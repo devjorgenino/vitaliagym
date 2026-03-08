@@ -36,7 +36,7 @@ import { getInitials } from "@/lib/getInitials";
 import { items, configItems, filterItemsByPermission } from "@/lib/sidebarData";
 import { logoBlurDataURL, logoSmallBlurDataURL } from "@/lib/imagePlaceholders";
 import "@/styles/image-optimization.css";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useCallback } from "react";
 import { useInstallPWA } from "@/hooks/useInstallPWA";
 
@@ -49,6 +49,7 @@ export const AppSidebar = () => {
     loading: permissionsLoading,
   } = usePermissions();
   const pathname = usePathname();
+  const router = useRouter();
   const { canShow: canShowInstall, install, dismiss } = useInstallPWA();
 
   const username = user?.user_metadata?.full_name || "Usuario";
@@ -377,7 +378,10 @@ filteredMainItems.map((item) => (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={() => client.auth.signOut()}
+                    onClick={async () => {
+                      await client.auth.signOut();
+                      router.push("/auth/login");
+                    }}
                     className={cn(
                       "w-9 h-9 rounded-lg bg-muted text-muted-foreground hover:bg-destructive hover:text-white hover:scale-105 transition-all duration-200 flex items-center justify-center",
                       "group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8",
