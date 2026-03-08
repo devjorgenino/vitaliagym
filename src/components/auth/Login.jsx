@@ -14,10 +14,12 @@ import { toast } from "sonner";
 import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { logoBlurDataURL } from "@/lib/imagePlaceholders";
 
 const Login = () => {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   
   const handleLogin = async (e) => {
@@ -42,8 +44,7 @@ const Login = () => {
         console.error('Login error:', error);
       } else if (data?.user) {
         toast.success("Inicio de sesión exitoso");
-        console.log('Login successful:', data.user);
-        // No redirigir aquí, dejar que AuthProvider y el layout manejen la redirección
+        router.push("/dashboard");
       } else {
         toast.error("Respuesta inesperada del servidor");
       }
@@ -97,6 +98,11 @@ const Login = () => {
                   Contraseña
                 </Label>
                 <Input id="password" type="password" placeholder="******" />
+                <div className="flex justify-end mt-1">
+                  <Link href="/auth/reset-password" className="text-xs text-primary hover:underline">
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (

@@ -41,7 +41,7 @@ const AuthProvider = ({ children }) => {
         if (event === 'SIGNED_OUT') {
           // Clear offline data for security
           import('@/lib/offline-db').then(mod => mod.clearAllMutations()).catch(console.error);
-          window.location.href = '/';
+          window.location.href = '/auth/login';
         }
       }
     );
