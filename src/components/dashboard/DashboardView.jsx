@@ -380,9 +380,23 @@ export function DashboardView() {
                 {selectedClient.email && (
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">Email</p>
-                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm truncate">{selectedClient.email}</span>
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm truncate">{selectedClient.email}</span>
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => copyToClipboard(selectedClient.email, "Email")}
+                            className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                            aria-label="Copiar email"
+                          >
+                            <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copiar</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 )}
