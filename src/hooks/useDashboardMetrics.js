@@ -36,6 +36,26 @@ export function useDashboardMetrics() {
         .lte('next_payment_date', new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
         .order('next_payment_date', { ascending: true }));
 
+      // Obtener último pago de cada cliente que expira
+      const expiringClientIds = expiringData?.map(c => c.id) || [];
+      let lastPaymentsMap = {};
+      
+      if (expiringClientIds.length > 0) {
+        const { data: lastPayments } = await client
+          .from('payments')
+          .select('client_id, payment_date')
+          .in('client_id', expiringClientIds)
+          .order('payment_date', { ascending: false });
+        
+        if (lastPayments) {
+          lastPayments.forEach(p => {
+            if (!lastPaymentsMap[p.client_id]) {
+              lastPaymentsMap[p.client_id] = p.payment_date;
+            }
+          });
+        }
+      }
+
       // 2. Cumpleaños del mes actual
       const today = new Date();
       const currentMonth = today.getMonth();
@@ -47,12 +67,18 @@ export function useDashboardMetrics() {
           id,
           first_name,
           last_name,
-          birth_date
+          birth_date,
+          phone
         `)
         .not('birth_date', 'is', null));
 
+      const parseLocalDate = (dateStr) => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
+
       const currentMonthBirthdays = birthdayData ? birthdayData.filter(client => {
-        const birthDate = new Date(client.birth_date);
+        const birthDate = parseLocalDate(client.birth_date);
         const birthMonth = birthDate.getMonth();
         const birthDay = birthDate.getDate();
         
@@ -61,9 +87,9 @@ export function useDashboardMetrics() {
         
         return isCurrentMonth && !hasPassed;
       }).sort((a, b) => {
-        const aDay = new Date(a.birth_date).getDate();
-        const bDay = new Date(b.birth_date).getDate();
-        return aDay - bDay;
+        const aDate = parseLocalDate(a.birth_date);
+        const bDate = parseLocalDate(b.birth_date);
+        return aDate.getDate() - bDate.getDate();
       }) : [];
 
       // 3. Clientes nuevos del mes actual
@@ -99,8 +125,14 @@ export function useDashboardMetrics() {
       // 5. Estadísticas de asistencia
       const attendanceStats = await getAttendanceStats();
 
+      // 6. Procesar último pago de cada cliente
+      const processedExpiring = expiringData ? expiringData.map(client => {
+        const lastPaymentDate = lastPaymentsMap[client.id] || null;
+        return { ...client, last_payment_date: lastPaymentDate };
+      }) : [];
+
       setMetrics({
-        expiringSoon: expiringData || [],
+        expiringSoon: processedExpiring,
         upcomingBirthdays: currentMonthBirthdays || [],
         newClients: newClientsData || [],
         weeklyRevenue,
