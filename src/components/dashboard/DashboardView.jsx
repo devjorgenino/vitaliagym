@@ -6,10 +6,33 @@ import { Skeleton } from "../ui/skeleton";
 import { StatCard, StatsGrid } from "../ui/stat-card";
 import { EmptyState } from "../ui/empty-state";
 import { ExchangeRateCard } from "./ExchangeRateCard";
-import { Clock, Cake, UserPlus, Activity, RefreshCw } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { toast } from "sonner";
+import { Clock, Cake, UserPlus, Activity, RefreshCw, Copy, Phone, Mail, IdCard } from "lucide-react";
 
 export function DashboardView() {
   const { metrics, loading, error, refetch } = useDashboardMetrics();
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const copyToClipboard = (text, label = "Texto") => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success(`${label} copiado`, { duration: 1500 });
+    }).catch(() => {
+      toast.error("Error al copiar", { duration: 1500 });
+    });
+  };
+
+  const handleClientClick = (client) => {
+    setSelectedClient(client);
+    setIsModalOpen(true);
+  };
 
   if (loading) {
     return (
@@ -174,8 +197,11 @@ export function DashboardView() {
                   return (
                     <div
                       key={client.id}
-                      className={`flex items-center justify-between p-2.5 sm:p-3 rounded-lg border gap-2 ${cardStyles}`}
+                      className={`flex items-center justify-between p-2.5 sm:p-3 rounded-lg border gap-2 ${cardStyles} cursor-pointer hover:opacity-90 transition-opacity`}
                       role="listitem"
+                      onClick={() => handleClientClick(client)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleClientClick(client)}
+                      tabIndex={0}
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm sm:text-base truncate">
@@ -184,6 +210,27 @@ export function DashboardView() {
                         <p className="text-xs sm:text-sm text-muted-foreground truncate">
                           {client.plans?.name || "Sin plan"}
                         </p>
+                        {client.phone && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{client.phone}</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(client.phone, "Teléfono");
+                                  }}
+                                  className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded"
+                                  aria-label="Copiar teléfono"
+                                >
+                                  <Copy className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Copiar</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        )}
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${textStyles}`}>
@@ -223,7 +270,12 @@ export function DashboardView() {
             {metrics.upcomingBirthdays?.length > 0 ? (
               <div className="space-y-2 sm:space-y-3">
                 {metrics.upcomingBirthdays.map((client, index) => {
-                  const birthDate = new Date(client.birth_date);
+                  const birthDateParts = client.birth_date.split('-');
+                  const birthDate = new Date(
+                    parseInt(birthDateParts[0], 10),
+                    parseInt(birthDateParts[1], 10) - 1,
+                    parseInt(birthDateParts[2], 10),
+                  );
                   const today = new Date();
                   const nextBirthday = new Date(
                     today.getFullYear(),
@@ -275,6 +327,114 @@ export function DashboardView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Client Details Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalles del Cliente</DialogTitle>
+          </DialogHeader>
+          {selectedClient && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-lg font-semibold">
+                    {selectedClient.first_name?.[0]}{selectedClient.last_name?.[0]}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-semibold text-lg">
+                    {selectedClient.first_name} {selectedClient.last_name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedClient.plans?.name || "Sin plan"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                {selectedClient.phone && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Teléfono</p>
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{selectedClient.phone}</span>
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => copyToClipboard(selectedClient.phone, "Teléfono")}
+                            className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                            aria-label="Copiar teléfono"
+                          >
+                            <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copiar</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+                )}
+
+                {selectedClient.email && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm truncate">{selectedClient.email}</span>
+                    </div>
+                  </div>
+                )}
+
+                {selectedClient.cedula && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Cédula</p>
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <IdCard className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{selectedClient.cedula}</span>
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => copyToClipboard(selectedClient.cedula, "Cédula")}
+                            className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                            aria-label="Copiar cédula"
+                          >
+                            <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copiar</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Último pago</p>
+                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">
+                      {selectedClient.last_payment_date
+                        ? new Date(
+                            parseInt(selectedClient.last_payment_date.split('-')[0], 10),
+                            parseInt(selectedClient.last_payment_date.split('-')[1], 10) - 1,
+                            parseInt(selectedClient.last_payment_date.split('-')[2], 10)
+                          ).toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })
+                        : 'Sin pagos registrados'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
