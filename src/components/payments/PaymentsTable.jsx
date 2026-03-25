@@ -11,6 +11,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 const INSCRIPTION_PRICE = 5;
 import {
   VENEZUELAN_BANKS,
+  getBanksWithFavorites,
+  getBanksWithFeatureFlag,
   PHONE_OPERATORS,
   formatPhone,
   parsePhone,
@@ -1356,7 +1358,7 @@ export function PaymentsTable({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los bancos</SelectItem>
-                  {VENEZUELAN_BANKS.map((bank) => (
+                  {getBanksWithFeatureFlag().map((bank) => (
                     <SelectItem
                       key={bank.code}
                       value={bank.name}
@@ -2192,7 +2194,7 @@ export function PaymentsTable({
                     {/* Banco */}
                     <div className="space-y-2">
                       <Label htmlFor="bank" className="text-sm font-medium">
-                        Banco Emisor
+                        Banco Receptor
                       </Label>
                       <Select
                         value={formData.bank}
@@ -2202,12 +2204,12 @@ export function PaymentsTable({
                       >
                         <SelectTrigger
                           id="bank"
-                          aria-label="Seleccionar banco emisor del pago"
+                          aria-label="Seleccionar banco receptor del pago"
                         >
                           <SelectValue placeholder="Seleccionar banco..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {VENEZUELAN_BANKS.map((bank) => (
+                          {getBanksWithFeatureFlag().map((bank) => (
                             <SelectItem key={bank.code} value={bank.name}>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
