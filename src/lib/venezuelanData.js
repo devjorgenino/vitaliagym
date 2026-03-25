@@ -93,14 +93,15 @@ export const BANK_ACCOUNT_TYPES = [
  * Incluye los principales operadores con sus prefijos
  */
 export const PHONE_OPERATORS = [
+  // Digitel
+  { code: "0412", operator: "Digitel", shortName: "0412" },
+  { code: "0422", operator: "Digitel", shortName: "0422" },
   // Movistar
   { code: "0414", operator: "Movistar", shortName: "0414" },
   { code: "0424", operator: "Movistar", shortName: "0424" },
   // Movilnet
   { code: "0416", operator: "Movilnet", shortName: "0416" },
   { code: "0426", operator: "Movilnet", shortName: "0426" },
-  // Digitel
-  { code: "0412", operator: "Digitel", shortName: "0412" },
 ];
 
 /**

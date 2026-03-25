@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAttendance } from "../../../hooks/useAttendance";
+import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -336,18 +337,6 @@ const Asistencia = () => {
     } finally {
       setIsDeleting(false);
     }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    // Parsear la fecha manualmente para evitar problemas de zona horaria
-    const parts = dateString.split("-");
-    const date = new Date(
-      parseInt(parts[0], 10),
-      parseInt(parts[1], 10) - 1,
-      parseInt(parts[2], 10),
-    );
-    return date.toLocaleDateString("es-ES");
   };
 
   const formatTime = (timeString) => {

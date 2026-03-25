@@ -196,7 +196,7 @@ export function UserSecuritySection({ userId, userName }) {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="p-4">
         <CardHeader>
           <Skeleton className="h-6 w-40" />
           <Skeleton className="h-4 w-60" />
@@ -211,7 +211,7 @@ export function UserSecuritySection({ userId, userName }) {
 
   if (error) {
     return (
-      <Card>
+      <Card className="p-4">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
@@ -232,7 +232,7 @@ export function UserSecuritySection({ userId, userName }) {
   }
 
   return (
-    <Card>
+    <Card className="p-4">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5" />

@@ -153,7 +153,57 @@ export const AppSidebar = () => {
                   ))}
                 </>
               ) : (
-filteredMainItems.map((item) => (
+                filteredMainItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton asChild>
+                          <Link
+                            href={item.url}
+                            onClick={handleMobileNavClick}
+                            className={cn(
+                              "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
+                              "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
+                              // Active state con colores del tema
+                              pathname === item.url ||
+                                pathname.startsWith(item.url + "/")
+                                ? "bg-primary text-primary-foreground hover:bg-primary"
+                                : "",
+                            )}
+                          >
+                            <item.icon className="!size-5 transition-colors" />
+                            <span className="group-data-[collapsible=icon]:hidden transition-colors">
+                              {item.title}
+                            </span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {state === "collapsed" && (
+                        <TooltipContent side="right" sideOffset={5}>
+                          <p>{item.title}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Separador y menú de configuración (solo si hay items) */}
+        {filteredConfigItems.length > 0 && (
+          <>
+            <SidebarSeparator className="mx-3" />
+            <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-2">
+              {state !== "collapsed" && (
+                <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">
+                  Configuración
+                </SidebarGroupLabel>
+              )}
+              <SidebarGroupContent>
+                <SidebarMenu className="group-data-[collapsible=icon]:items-center">
+                  {filteredConfigItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -164,7 +214,6 @@ filteredMainItems.map((item) => (
                               className={cn(
                                 "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
                                 "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
-                                // Active state con colores del tema
                                 pathname === item.url ||
                                   pathname.startsWith(item.url + "/")
                                   ? "bg-primary text-primary-foreground hover:bg-primary"
@@ -185,56 +234,7 @@ filteredMainItems.map((item) => (
                         )}
                       </Tooltip>
                     </SidebarMenuItem>
-                  ))
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Separador y menú de configuración (solo si hay items) */}
-        {filteredConfigItems.length > 0 && (
-          <>
-            <SidebarSeparator className="mx-3" />
-            <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-2">
-              {state !== "collapsed" && (
-                <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">
-                  Configuración
-                </SidebarGroupLabel>
-              )}
-              <SidebarGroupContent>
-                <SidebarMenu className="group-data-[collapsible=icon]:items-center">
-{filteredConfigItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <SidebarMenuButton asChild>
-                              <Link
-                                href={item.url}
-                                onClick={handleMobileNavClick}
-                                className={cn(
-                                  "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
-                                  "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
-                                  pathname === item.url ||
-                                    pathname.startsWith(item.url + "/")
-                                    ? "bg-primary text-primary-foreground hover:bg-primary"
-                                    : "",
-                                )}
-                              >
-                                <item.icon className="!size-5 transition-colors" />
-                                <span className="group-data-[collapsible=icon]:hidden transition-colors">
-                                  {item.title}
-                                </span>
-                              </Link>
-                            </SidebarMenuButton>
-                          </TooltipTrigger>
-                          {state === "collapsed" && (
-                            <TooltipContent side="right" sideOffset={5}>
-                              <p>{item.title}</p>
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      </SidebarMenuItem>
-                    ))}
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -245,8 +245,8 @@ filteredMainItems.map((item) => (
       {/* Install App Option */}
       {canShowInstall && (
         <>
-          <SidebarSeparator className="mx-3" />
           <SidebarGroup className="px-3 py-2">
+            <SidebarSeparator className="mx-3" />
             <SidebarGroupContent>
               <SidebarMenu className="group-data-[collapsible=icon]:items-center">
                 <SidebarMenuItem>

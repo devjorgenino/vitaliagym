@@ -26,7 +26,8 @@ export function usePayments({ onClientUpdate } = {}) {
             id,
             first_name,
             last_name,
-            cedula
+            cedula,
+            enrollment_paid
           ),
           plans (
             id,

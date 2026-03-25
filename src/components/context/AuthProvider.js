@@ -47,7 +47,9 @@ const AuthProvider = ({ children }) => {
     );
 
     return () => {
-      authListener.unsubscribe();
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
     };
   }, []);
 

@@ -11,6 +11,7 @@ import { authPost } from "@/lib/auth-fetch";
 import { toast } from "sonner";
 import { Shield, UserPlus, RefreshCw, Phone, User, Copy, CheckCircle, X, PhoneForwarded } from "lucide-react";
 import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
+import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -448,7 +449,7 @@ const openDeleteDialog = (user) => {
       month: "short",
       day: "numeric",
     });
-  };
+  }
 
   // Obtener rol(es) de un usuario
   const getUserRoles = (userId) => {
@@ -989,7 +990,7 @@ const openDeleteDialog = (user) => {
             )}
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
