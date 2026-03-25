@@ -194,6 +194,49 @@ export function getBankByCode(code) {
 }
 
 /**
+ * Bancos favoritos - se muestran primero en los selects
+ */
+export const FAVORITE_BANKS = [
+  "Banco de Venezuela",
+  "Banco del Tesoro",
+];
+
+/**
+ * Verifica si todos los bancos están habilitados
+ * @returns {boolean} true si el flag NEXT_PUBLIC_ENABLE_ALL_BANKS está activo
+ */
+export function areAllBanksEnabled() {
+  if (typeof window === 'undefined') return false;
+  return process.env.NEXT_PUBLIC_ENABLE_ALL_BANKS === 'true';
+}
+
+/**
+ * Obtiene la lista de bancos segun el flag de feature flag
+ * Si NEXT_PUBLIC_ENABLE_ALL_BANKS=false, retorna solo bancos favoritos
+ * @param {string[]} favorites - Lista de nombres de bancos favoritos (opcional)
+ * @returns {Array} Lista de bancos (todos o solo favoritos)
+ */
+export function getBanksWithFeatureFlag(favorites = FAVORITE_BANKS) {
+  const allBanks = getBanksWithFavorites(favorites);
+  if (areAllBanksEnabled()) {
+    return allBanks;
+  }
+  return allBanks.filter(bank => favorites.includes(bank.name));
+}
+
+/**
+ * Obtiene la lista de bancos con los favoritos primero
+ * @param {string[]} favorites - Lista de nombres de bancos favoritos (opcional)
+ * @returns {Array} Lista de bancos ordenada
+ */
+export function getBanksWithFavorites(favorites = FAVORITE_BANKS) {
+  const favoriteSet = new Set(favorites);
+  const favoritesList = VENEZUELAN_BANKS.filter(bank => favoriteSet.has(bank.name));
+  const otherBanks = VENEZUELAN_BANKS.filter(bank => !favoriteSet.has(bank.name));
+  return [...favoritesList, ...otherBanks];
+}
+
+/**
  * Obtener banco por nombre
  */
 export function getBankByName(name) {
