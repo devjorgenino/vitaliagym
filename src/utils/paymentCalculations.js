@@ -456,23 +456,34 @@ export async function fixAuditDiscrepancies(discrepancies) {
  * @param {string} nextPaymentDate - Fecha del próximo pago (YYYY-MM-DD)
  * @returns {number} - Días restantes (negativo si vencido)
  */
-export function calculateDaysUntilPayment(nextPaymentDate) {
+export function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
   if (!nextPaymentDate) return null;
 
   try {
-    const parts = nextPaymentDate.split('-');
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const day = parseInt(parts[2], 10);
-
-    const nextPayment = new Date(year, month, day);
-    nextPayment.setHours(0, 0, 0, 0);
-
+    const nextParts = nextPaymentDate.split('-');
+    const nextYear = parseInt(nextParts[0], 10);
+    const nextMonth = parseInt(nextParts[1], 10) - 1;
+    const nextDay = parseInt(nextParts[2], 10);
+    const nextPayment = new Date(nextYear, nextMonth, nextDay);
+    
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const diffTime = nextPayment - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    
+    // Si próximo pago = hoy, mostrar 0 días
+    if (nextPayment.getTime() === todayLocal.getTime()) {
+      return 0;
+    }
+    
+    // Si próximo pago < hoy (vencido), días negativos desde hoy
+    if (nextPayment < todayLocal) {
+      const diffTime = nextPayment - todayLocal;
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+    
+    // Próximo pago > hoy, calcular desde mañana
+    const diffTime = nextPayment - tomorrow;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     return diffDays;
   } catch (error) {
@@ -490,6 +501,7 @@ export function calculateDaysUntilPayment(nextPaymentDate) {
 export function getPaymentStatusColor(daysLeft) {
   if (daysLeft === null || daysLeft === undefined) return 'text-gray-500';
   if (daysLeft < 0) return 'text-red-500';      // Vencido
+  if (daysLeft === 0) return 'text-yellow-500';  // Hoy (0 días)
   if (daysLeft <= 7) return 'text-orange-500';  // Vence pronto (≤7 días)
   if (daysLeft <= 15) return 'text-yellow-500'; // Vence (≤15 días)
   return 'text-green-500';                      // Activo (>15 días)

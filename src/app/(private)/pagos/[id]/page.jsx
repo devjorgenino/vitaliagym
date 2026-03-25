@@ -16,6 +16,11 @@ const NuevoPagoCliente = () => {
   const remainingAmount = searchParams.get('remaining');
   const paymentId = searchParams.get('paymentId');
 
+  // Parameters for registration mode
+  const registerMode = searchParams.get('register') === 'true';
+  const amountParam = searchParams.get('amount');
+  const enrollmentParam = searchParams.get('enrollment');
+
   // Encontrar el cliente preseleccionado
   const preselectedClient = clients.find(client => client.id === clientId);
 
@@ -60,6 +65,9 @@ const NuevoPagoCliente = () => {
         payRemaining={payRemaining}
         remainingAmount={remainingAmount}
         paymentId={paymentId}
+        registerMode={registerMode}
+        amountParam={amountParam}
+        enrollmentParam={enrollmentParam}
       />
     </div>
   );

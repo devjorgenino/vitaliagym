@@ -65,7 +65,7 @@ export function useClientsPaginated({
     paymentDate.setHours(0, 0, 0, 0);
 
     const diffTime = paymentDate - today;
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     return diffDays;
   }, []);

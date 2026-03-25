@@ -394,3 +394,14 @@
     text-decoration: underline;
   }
 }
+
+/* Taller modals for payments and clients */
+.tall-modal {
+  max-height: 95vh;
+}
+
+@media (max-width: 768px) {
+  .tall-modal {
+    max-height: 98vh;
+  }
+}

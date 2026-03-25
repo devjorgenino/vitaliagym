@@ -3,6 +3,7 @@ import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Dumbbell } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -170,28 +171,7 @@ export function PlansTable() {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    let date;
-    if (dateString.length === 10 && dateString.includes("-")) {
-      const parts = dateString.split("-");
-      date = new Date(
-        parseInt(parts[0], 10),
-        parseInt(parts[1], 10) - 1,
-        parseInt(parts[2], 10),
-      );
-    } else {
-      date = new Date(dateString);
-    }
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
+  // Obtener precio formateado
   if (loading) {
     return (
       <Card>
@@ -475,7 +455,7 @@ export function PlansTable() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
