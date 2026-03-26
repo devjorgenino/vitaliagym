@@ -6,15 +6,20 @@ import { Skeleton } from "../ui/skeleton";
 import { StatCard, StatsGrid } from "../ui/stat-card";
 import { EmptyState } from "../ui/empty-state";
 import { ExchangeRateCard } from "./ExchangeRateCard";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { toast } from "sonner";
-import { Clock, Cake, UserPlus, Activity, RefreshCw, Copy, Phone, Mail, IdCard } from "lucide-react";
+import {
+  Clock,
+  Cake,
+  UserPlus,
+  Activity,
+  RefreshCw,
+  Copy,
+  Phone,
+  Mail,
+  IdCard,
+} from "lucide-react";
 
 export function DashboardView() {
   const { metrics, loading, error, refetch } = useDashboardMetrics();
@@ -22,11 +27,14 @@ export function DashboardView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const copyToClipboard = (text, label = "Texto") => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast.success(`${label} copiado`, { duration: 1500 });
-    }).catch(() => {
-      toast.error("Error al copiar", { duration: 1500 });
-    });
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        toast.success(`${label} copiado`, { duration: 1500 });
+      })
+      .catch(() => {
+        toast.error("Error al copiar", { duration: 1500 });
+      });
   };
 
   const handleClientClick = (client) => {
@@ -36,7 +44,11 @@ export function DashboardView() {
 
   if (loading) {
     return (
-      <div className="space-y-4 sm:space-y-6" role="status" aria-label="Cargando dashboard">
+      <div
+        className="space-y-4 sm:space-y-6"
+        role="status"
+        aria-label="Cargando dashboard"
+      >
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <Skeleton className="h-10 sm:h-12 flex-1" />
           <Skeleton className="h-10 sm:h-12 w-full sm:w-32" />
@@ -82,8 +94,12 @@ export function DashboardView() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 shrink-0">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">Dashboard</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Vista general del gimnasio</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">
+            Dashboard
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            Vista general del gimnasio
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <ExchangeRateCard compact={true} />
@@ -94,7 +110,10 @@ export function DashboardView() {
             className="gap-1.5 sm:gap-2 text-xs sm:text-sm"
             aria-label="Actualizar datos del dashboard"
           >
-            <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true" />
+            <RefreshCw
+              className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+              aria-hidden="true"
+            />
             <span className="hidden xs:inline">Actualizar</span>
           </Button>
         </div>
@@ -146,19 +165,23 @@ export function DashboardView() {
           <CardHeader className="pb-3 sm:pb-4 shrink-0">
             <CardTitle className="flex items-center justify-between gap-2 text-base sm:text-lg">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0" aria-hidden="true" />
+                <Clock
+                  className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0"
+                  aria-hidden="true"
+                />
                 <span className="truncate">Clientes Proximos a Vencer</span>
               </div>
               {metrics.expiringSoon?.length > 0 && (
                 <span className="text-xs sm:text-sm font-normal bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-full">
-                  {metrics.expiringSoon.length} cliente{metrics.expiringSoon.length !== 1 ? 's' : ''}
+                  {metrics.expiringSoon.length} cliente
+                  {metrics.expiringSoon.length !== 1 ? "s" : ""}
                 </span>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 flex-1 min-h-0 overflow-y-auto">
             {metrics.expiringSoon?.length > 0 ? (
-              <div 
+              <div
                 className="space-y-2 sm:space-y-3 pr-1"
                 role="list"
                 aria-label={`Lista de ${metrics.expiringSoon.length} clientes proximos a vencer`}
@@ -178,19 +201,19 @@ export function DashboardView() {
                   const daysUntil = Math.round(
                     (paymentDate - today) / (1000 * 60 * 60 * 24),
                   );
-                  
+
                   const isExpired = daysUntil <= 0;
                   const isUrgent = daysUntil <= 2 && daysUntil > 0;
-                  
-                  const cardStyles = isExpired 
+
+                  const cardStyles = isExpired
                     ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
-                    : isUrgent 
+                    : isUrgent
                       ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800"
                       : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800";
-                  
-                  const textStyles = isExpired 
+
+                  const textStyles = isExpired
                     ? "text-red-600 dark:text-red-400"
-                    : isUrgent 
+                    : isUrgent
                       ? "text-orange-600 dark:text-orange-400"
                       : "text-amber-600 dark:text-amber-400";
 
@@ -200,7 +223,9 @@ export function DashboardView() {
                       className={`flex items-center justify-between p-2.5 sm:p-3 rounded-lg border gap-2 ${cardStyles} cursor-pointer hover:opacity-90 transition-opacity`}
                       role="listitem"
                       onClick={() => handleClientClick(client)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleClientClick(client)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleClientClick(client)
+                      }
                       tabIndex={0}
                     >
                       <div className="min-w-0 flex-1">
@@ -213,7 +238,9 @@ export function DashboardView() {
                         {client.phone && (
                           <div className="flex items-center gap-1 mt-1">
                             <Phone className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">{client.phone}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {client.phone}
+                            </span>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
@@ -233,12 +260,14 @@ export function DashboardView() {
                         )}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${textStyles}`}>
+                        <span
+                          className={`text-xs sm:text-sm font-medium whitespace-nowrap ${textStyles}`}
+                        >
                           {isExpired
-                            ? daysUntil === 0 
+                            ? daysUntil === 0
                               ? "Vence hoy"
-                              : `${Math.abs(daysUntil)} dia${Math.abs(daysUntil) !== 1 ? 's' : ''} vencido`
-                            : `${daysUntil} dia${daysUntil !== 1 ? 's' : ''}`}
+                              : `${Math.abs(daysUntil)} dia${Math.abs(daysUntil) !== 1 ? "s" : ""} vencido`
+                            : `${daysUntil} dia${daysUntil !== 1 ? "s" : ""}`}
                         </span>
                         <p className="text-[10px] sm:text-xs text-muted-foreground">
                           {paymentDate.toLocaleDateString("es-ES")}
@@ -262,7 +291,10 @@ export function DashboardView() {
         <Card className="overflow-hidden flex flex-col min-h-0">
           <CardHeader className="pb-3 sm:pb-4 shrink-0">
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Cake className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" aria-hidden="true" />
+              <Cake
+                className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0"
+                aria-hidden="true"
+              />
               <span className="truncate">Cumpleanos del Mes</span>
             </CardTitle>
           </CardHeader>
@@ -270,7 +302,7 @@ export function DashboardView() {
             {metrics.upcomingBirthdays?.length > 0 ? (
               <div className="space-y-2 sm:space-y-3">
                 {metrics.upcomingBirthdays.map((client, index) => {
-                  const birthDateParts = client.birth_date.split('-');
+                  const birthDateParts = client.birth_date.split("-");
                   const birthDate = new Date(
                     parseInt(birthDateParts[0], 10),
                     parseInt(birthDateParts[1], 10) - 1,
@@ -335,11 +367,12 @@ export function DashboardView() {
             <DialogTitle>Detalles del Cliente</DialogTitle>
           </DialogHeader>
           {selectedClient && (
-            <div className="space-y-4">
+            <div className="space-y-4 mt-5">
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                   <span className="text-lg font-semibold">
-                    {selectedClient.first_name?.[0]}{selectedClient.last_name?.[0]}
+                    {selectedClient.first_name?.[0]}
+                    {selectedClient.last_name?.[0]}
                   </span>
                 </div>
                 <div>
@@ -364,7 +397,9 @@ export function DashboardView() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
-                            onClick={() => copyToClipboard(selectedClient.phone, "Teléfono")}
+                            onClick={() =>
+                              copyToClipboard(selectedClient.phone, "Teléfono")
+                            }
                             className="p-1.5 hover:bg-muted rounded-md transition-colors"
                             aria-label="Copiar teléfono"
                           >
@@ -383,12 +418,16 @@ export function DashboardView() {
                     <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm truncate">{selectedClient.email}</span>
+                        <span className="text-sm truncate">
+                          {selectedClient.email}
+                        </span>
                       </div>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
-                            onClick={() => copyToClipboard(selectedClient.email, "Email")}
+                            onClick={() =>
+                              copyToClipboard(selectedClient.email, "Email")
+                            }
                             className="p-1.5 hover:bg-muted rounded-md transition-colors"
                             aria-label="Copiar email"
                           >
@@ -412,7 +451,9 @@ export function DashboardView() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
-                            onClick={() => copyToClipboard(selectedClient.cedula, "Cédula")}
+                            onClick={() =>
+                              copyToClipboard(selectedClient.cedula, "Cédula")
+                            }
                             className="p-1.5 hover:bg-muted rounded-md transition-colors"
                             aria-label="Copiar cédula"
                           >
@@ -432,15 +473,24 @@ export function DashboardView() {
                     <span className="text-sm">
                       {selectedClient.last_payment_date
                         ? new Date(
-                            parseInt(selectedClient.last_payment_date.split('-')[0], 10),
-                            parseInt(selectedClient.last_payment_date.split('-')[1], 10) - 1,
-                            parseInt(selectedClient.last_payment_date.split('-')[2], 10)
-                          ).toLocaleDateString('es-ES', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
+                            parseInt(
+                              selectedClient.last_payment_date.split("-")[0],
+                              10,
+                            ),
+                            parseInt(
+                              selectedClient.last_payment_date.split("-")[1],
+                              10,
+                            ) - 1,
+                            parseInt(
+                              selectedClient.last_payment_date.split("-")[2],
+                              10,
+                            ),
+                          ).toLocaleDateString("es-ES", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
                           })
-                        : 'Sin pagos registrados'}
+                        : "Sin pagos registrados"}
                     </span>
                   </div>
                 </div>

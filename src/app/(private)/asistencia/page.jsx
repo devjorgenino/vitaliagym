@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAttendance } from "../../../hooks/useAttendance";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -63,6 +64,17 @@ import {
 import { Pagination, usePagination } from "../../../components/ui/pagination";
 
 const Asistencia = () => {
+  const router = useRouter();
+
+  // TODO: Remove this guard when attendance feature is ready to be permanently enabled
+  // Feature flag: Redirect if attendance module is disabled
+  useEffect(() => {
+    const isAttendanceEnabled = process.env.NEXT_PUBLIC_ENABLE_ATTENDANCE === 'true';
+    if (!isAttendanceEnabled) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   const {
     attendance,
     loading,
