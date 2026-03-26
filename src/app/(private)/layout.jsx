@@ -8,6 +8,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
   SidebarInset,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/auth/SidebarApp";
 import { AccessDeniedMessage } from "@/components/auth/PermissionGate";
@@ -24,6 +25,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { items as sidebarItems, configItems } from "@/lib/sidebarData";
 import { User, Settings, ShieldUser } from "lucide-react";
 
@@ -111,6 +113,41 @@ const PrivatePagesLayout = ({ children }) => {
   };
 
   const breadcrumbs = getBreadcrumbs();
+
+  // Componente para ajustar el contenido según el estado del sidebar
+  const AdaptiveSidebarContent = ({ children }) => {
+    const { state } = useSidebar();
+    const isExpanded = state === "expanded";
+
+    return (
+      <div 
+        id="main-content"
+        className={cn(
+          "flex flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 overflow-y-auto min-h-0",
+          // Agregar padding-left cuando el sidebar está expandido
+          isExpanded && "lg:pl-4"
+        )}
+        role="main"
+      >
+        {/* Verificar acceso a la ruta */}
+        {!hasRouteAccess ? (
+          <AccessDeniedMessage
+            title="Acceso Restringido"
+            message="No tienes los permisos necesarios para acceder a esta sección. Contacta con un administrador si crees que deberías tener acceso."
+          />
+        ) : permissionsLoading ? (
+          <div className="w-full space-y-4" role="status" aria-label="Cargando contenido">
+            <Skeleton className="h-8 w-48 sm:w-64" />
+            <Skeleton className="h-[300px] sm:h-[400px] w-full" />
+          </div>
+        ) : (
+          <div className="animate-fade-in flex flex-col flex-1 min-h-0">
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="h-screen overflow-hidden flex flex-col">
@@ -219,28 +256,9 @@ const PrivatePagesLayout = ({ children }) => {
             </div>
           </header>
           
-          <main 
-            id="main-content"
-            className="flex flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 overflow-y-auto min-h-0"
-            role="main"
-          >
-            {/* Verificar acceso a la ruta */}
-            {!hasRouteAccess ? (
-              <AccessDeniedMessage
-                title="Acceso Restringido"
-                message="No tienes los permisos necesarios para acceder a esta sección. Contacta con un administrador si crees que deberías tener acceso."
-              />
-            ) : permissionsLoading ? (
-              <div className="w-full space-y-4" role="status" aria-label="Cargando contenido">
-                <Skeleton className="h-8 w-48 sm:w-64" />
-                <Skeleton className="h-[300px] sm:h-[400px] w-full" />
-              </div>
-            ) : (
-              <div className="animate-fade-in flex flex-col flex-1 min-h-0">
-                {children}
-              </div>
-            )}
-          </main>
+          <AdaptiveSidebarContent>
+            {children}
+          </AdaptiveSidebarContent>
         </SidebarInset>
       </SidebarProvider>
     </div>

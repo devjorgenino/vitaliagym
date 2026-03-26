@@ -113,7 +113,11 @@ export function PlansTable() {
 
   // Submit del formulario (crear o actualizar)
   const handleSubmit = async () => {
-    if (!formData.name.trim() || !formData.price || parseFloat(formData.price) <= 0) {
+    if (
+      !formData.name.trim() ||
+      !formData.price ||
+      parseFloat(formData.price) <= 0
+    ) {
       toast.error("El nombre y el precio del plan son obligatorios");
       return;
     }
@@ -121,7 +125,7 @@ export function PlansTable() {
     setIsSubmitting(true);
     try {
       let result;
-      
+
       if (isEditing && selectedPlan) {
         result = await updatePlan(selectedPlan.id, formData);
         if (result.success) {
@@ -141,7 +145,9 @@ export function PlansTable() {
       }
     } catch (err) {
       console.error("Error:", err);
-      toast.error(`Error al ${isEditing ? "actualizar" : "crear"} plan: ` + err.message);
+      toast.error(
+        `Error al ${isEditing ? "actualizar" : "crear"} plan: ` + err.message,
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -176,7 +182,13 @@ export function PlansTable() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Planes</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+            <Dumbbell
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Planes</span>
+          </CardTitle>
           <CardDescription>
             Gestiona los planes de membresía del gimnasio
           </CardDescription>
@@ -195,9 +207,13 @@ export function PlansTable() {
   if (error) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Planes</CardTitle>
-        </CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+          <Dumbbell
+            className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+            aria-hidden="true"
+          />
+          <span>Planes</span>
+        </CardTitle>
         <CardContent>
           <div className="text-center py-8" role="alert">
             <p className="text-destructive mb-4">Error: {error}</p>
@@ -216,7 +232,13 @@ export function PlansTable() {
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
           <div>
-            <CardTitle>Planes ({plans.length})</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+              <Dumbbell
+                className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+                aria-hidden="true"
+              />
+              <span>Planes ({plans.length})</span>
+            </CardTitle>
             <CardDescription>
               Configura los planes de membresía disponibles para tus clientes
             </CardDescription>
@@ -442,7 +464,9 @@ export function PlansTable() {
             <div className="space-y-2">
               <Label htmlFor="plan-description">
                 Descripción{" "}
-                <span className="text-muted-foreground text-xs">(opcional)</span>
+                <span className="text-muted-foreground text-xs">
+                  (opcional)
+                </span>
               </Label>
               <Textarea
                 id="plan-description"

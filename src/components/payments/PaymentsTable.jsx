@@ -118,7 +118,11 @@ export function PaymentsTable({
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { clients, loading: clientsLoading, refetch: refetchClients } = useClients();
+  const {
+    clients,
+    loading: clientsLoading,
+    refetch: refetchClients,
+  } = useClients();
   const { plans, loading: plansLoading } = usePlans();
   const {
     rate,
@@ -128,9 +132,12 @@ export function PaymentsTable({
   } = useExchangeRate();
 
   // Parameters from URL or props for registration
-  const isRegisterMode = registerMode === true || registerMode === 'true' || searchParams.get('register') === 'true';
-  const enrollmentAmount = enrollmentParam || searchParams.get('enrollment');
-  const initialAmount = amountParam || searchParams.get('amount');
+  const isRegisterMode =
+    registerMode === true ||
+    registerMode === "true" ||
+    searchParams.get("register") === "true";
+  const enrollmentAmount = enrollmentParam || searchParams.get("enrollment");
+  const initialAmount = amountParam || searchParams.get("amount");
 
   // State for inscription fee
   const [includeInscription, setIncludeInscription] = useState(false);
@@ -211,7 +218,7 @@ export function PaymentsTable({
   useEffect(() => {
     // Solo procesar si hay un cliente preseleccionado y los planes ya cargaron
     if (!preselectedClient || plansLoading || plans.length === 0) return;
-    
+
     // Solo ejecutar una vez
     if (initialLoadDone) return;
     setInitialLoadDone(true);
@@ -270,20 +277,35 @@ export function PaymentsTable({
         setIncludeInscription(false);
       }
 
-      console.log('[DEBUG] isRegisterMode:', isRegisterMode, 'initialAmount:', initialAmount, 'enrollmentAmount:', enrollmentAmount);
+      console.log(
+        "[DEBUG] isRegisterMode:",
+        isRegisterMode,
+        "initialAmount:",
+        initialAmount,
+        "enrollmentAmount:",
+        enrollmentAmount,
+      );
 
       // Si es modo registro y tiene amount en URL, usarlo (incluye inscripción)
       if (isRegisterMode && initialAmount) {
         planPrice = parseFloat(initialAmount);
         setIncludeInscription(true);
-        console.log('[DEBUG] Using initialAmount, planPrice:', planPrice);
+        console.log("[DEBUG] Using initialAmount, planPrice:", planPrice);
       }
 
       // Si es modo registro y tiene amount en URL, usar ese monto
       const amountUSD = planPrice > 0 ? planPrice.toFixed(2) : "";
-      const amountBS = planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "";
+      const amountBS =
+        planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "";
 
-      console.log('[DEBUG] Setting formData FIRST TIME, amountUSD:', amountUSD, 'amountBS:', amountBS, 'includeInscription:', true);
+      console.log(
+        "[DEBUG] Setting formData FIRST TIME, amountUSD:",
+        amountUSD,
+        "amountBS:",
+        amountBS,
+        "includeInscription:",
+        true,
+      );
 
       setFormData({
         client_id: preselectedClient.id,
@@ -382,10 +404,11 @@ export function PaymentsTable({
 
       // Para un pago nuevo sin cliente seleccionado, o si el plan no tiene precio.
       // En modo registro con inscripción, incluir el precio de inscripción
-      const initialPrice = (isRegisterMode && includeInscription) 
-        ? planPrice + INSCRIPTION_PRICE 
-        : planPrice;
-        
+      const initialPrice =
+        isRegisterMode && includeInscription
+          ? planPrice + INSCRIPTION_PRICE
+          : planPrice;
+
       return {
         planPrice: initialPrice,
         totalPaid: 0,
@@ -522,7 +545,7 @@ export function PaymentsTable({
   // Calcular pago restante EXCLUYENDO el pago actual (para el botón "Pagar Restante")
   const calculateRemainingForNewPayment = (payment) => {
     const planPrice = getPlanPrice(payment.plan_id);
-    
+
     // Obtener el estado de inscripción del cliente
     const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
     const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
@@ -618,12 +641,12 @@ export function PaymentsTable({
   useEffect(() => {
     if (paymentMode === "partial" && formData.plan_id && formData.amount_usd) {
       let planPrice = getPlanPrice(formData.plan_id);
-      
+
       // En modo registro con inscripción, el precio máximo incluye la inscripción
       if (isRegisterMode && includeInscription) {
         planPrice = planPrice + INSCRIPTION_PRICE;
       }
-      
+
       const amount = parseFloat(formData.amount_usd);
 
       if (amount > planPrice) {
@@ -640,68 +663,78 @@ export function PaymentsTable({
     } else {
       setPartialValidationError("");
     }
-  }, [formData.amount_usd, formData.plan_id, paymentMode, isRegisterMode, includeInscription]);
+  }, [
+    formData.amount_usd,
+    formData.plan_id,
+    paymentMode,
+    isRegisterMode,
+    includeInscription,
+  ]);
 
   // Lógica de filtrado local memorizada para evitar ciclo infinito
   const filteredPayments = useMemo(() => {
-    return payments.filter((payment) => {
-      // Filtrar por término de búsqueda (nombre, apellido o cédula del cliente)
-      const matchesSearch =
-        searchTerm === "" ||
-        payment.clients?.first_name
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        payment.clients?.last_name
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        payment.clients?.cedula
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase());
+    return payments
+      .filter((payment) => {
+        // Filtrar por término de búsqueda (nombre, apellido o cédula del cliente)
+        const matchesSearch =
+          searchTerm === "" ||
+          payment.clients?.first_name
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          payment.clients?.last_name
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          payment.clients?.cedula
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase());
 
-      // Filtrar por plan
-      const matchesPlan =
-        selectedPlan === "" || payment.plan_id === selectedPlan;
+        // Filtrar por plan
+        const matchesPlan =
+          selectedPlan === "" || payment.plan_id === selectedPlan;
 
-      // Filtrar por tipo de pago
-      const matchesPaymentType =
-        selectedPaymentType === "" ||
-        payment.payment_type === selectedPaymentType;
+        // Filtrar por tipo de pago
+        const matchesPaymentType =
+          selectedPaymentType === "" ||
+          payment.payment_type === selectedPaymentType;
 
-      // Filtrar por banco
-      const matchesBank = selectedBank === "" || payment.bank === selectedBank;
+        // Filtrar por banco
+        const matchesBank =
+          selectedBank === "" || payment.bank === selectedBank;
 
-      // Filtrar por fecha desde
-      let matchesDateFrom = true;
-      if (dateFrom) {
-        matchesDateFrom = new Date(payment.payment_date) >= new Date(dateFrom);
-      }
+        // Filtrar por fecha desde
+        let matchesDateFrom = true;
+        if (dateFrom) {
+          matchesDateFrom =
+            new Date(payment.payment_date) >= new Date(dateFrom);
+        }
 
-      // Filtrar por fecha hasta
-      let matchesDateTo = true;
-      if (dateTo) {
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        matchesDateTo = new Date(payment.payment_date) <= toDate;
-      }
+        // Filtrar por fecha hasta
+        let matchesDateTo = true;
+        if (dateTo) {
+          const toDate = new Date(dateTo);
+          toDate.setHours(23, 59, 59, 999);
+          matchesDateTo = new Date(payment.payment_date) <= toDate;
+        }
 
-      return (
-        matchesSearch &&
-        matchesPlan &&
-        matchesPaymentType &&
-        matchesBank &&
-        matchesDateFrom &&
-        matchesDateTo
-      );
-    }).sort((a, b) => {
-      const aValue = new Date(a.payment_date).getTime();
-      const bValue = new Date(b.payment_date).getTime();
-      
-      if (sortDirection === "asc") {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
+        return (
+          matchesSearch &&
+          matchesPlan &&
+          matchesPaymentType &&
+          matchesBank &&
+          matchesDateFrom &&
+          matchesDateTo
+        );
+      })
+      .sort((a, b) => {
+        const aValue = new Date(a.payment_date).getTime();
+        const bValue = new Date(b.payment_date).getTime();
+
+        if (sortDirection === "asc") {
+          return aValue > bValue ? 1 : -1;
+        } else {
+          return aValue < bValue ? 1 : -1;
+        }
+      });
   }, [
     payments,
     searchTerm,
@@ -732,11 +765,11 @@ export function PaymentsTable({
         0,
       );
       const planPrice = getPlanPrice(formData.plan_id);
-      
+
       // Encontrar cliente y plan de forma segura para evitar re-renders
       const selectedClient = clients.find((c) => c.id === formData.client_id);
       const selectedPlanData = plans.find((p) => p.id === formData.plan_id);
-      
+
       // Incluir inscripción en el cálculo si aplica
       const hasEnrollmentPaid = selectedClient?.enrollment_paid === true;
       const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
@@ -757,13 +790,35 @@ export function PaymentsTable({
       // Si el modo es "full" (pagar completo), cargar el monto del plan automáticamente
       // Solo si no hay un monto ya establecido por el usuario (para no sobreescribir)
       // Y no estamos en modo registro con inscripción incluida
-      console.log('[DEBUG2] running, paymentMode:', paymentMode, 'formData.amount_usd:', formData.amount_usd, 'isRegisterMode:', isRegisterMode, 'includeInscription:', includeInscription);
-      
+      console.log(
+        "[DEBUG2] running, paymentMode:",
+        paymentMode,
+        "formData.amount_usd:",
+        formData.amount_usd,
+        "isRegisterMode:",
+        isRegisterMode,
+        "includeInscription:",
+        includeInscription,
+      );
+
       // NO sobrescribir si: (estamos en modo registro con inscripción) O (ya hay un monto establecido)
-      const shouldOverride = !(isRegisterMode && includeInscription) && (!formData.amount_usd || formData.amount_usd === "0" || formData.amount_usd === "0.00");
-      
-      console.log('[DEBUG2] shouldOverride:', shouldOverride, 'calculated from: isRegisterMode=', isRegisterMode, 'includeInscription=', includeInscription, 'amount_usd empty?', !formData.amount_usd);
-      
+      const shouldOverride =
+        !(isRegisterMode && includeInscription) &&
+        (!formData.amount_usd ||
+          formData.amount_usd === "0" ||
+          formData.amount_usd === "0.00");
+
+      console.log(
+        "[DEBUG2] shouldOverride:",
+        shouldOverride,
+        "calculated from: isRegisterMode=",
+        isRegisterMode,
+        "includeInscription=",
+        includeInscription,
+        "amount_usd empty?",
+        !formData.amount_usd,
+      );
+
       if (paymentMode === "full" && shouldOverride) {
         setFormData((prev) => ({
           ...prev,
@@ -892,27 +947,28 @@ export function PaymentsTable({
 
     if (mode === "partial" && formData.plan_id) {
       let amountToSuggest = currentPaymentInfo.remainingAmount;
-      
+
       // En modo registro con inscripción, agregar el monto de inscripción
       if (isRegisterMode && includeInscription) {
         const planPrice = getPlanPrice(formData.plan_id);
         amountToSuggest = planPrice + INSCRIPTION_PRICE;
       }
-      
+
       setFormData((prev) => ({
         ...prev,
         amount_usd: amountToSuggest > 0 ? amountToSuggest.toString() : "",
-        amount_bs: amountToSuggest > 0 ? (amountToSuggest * (rate || 1)).toFixed(2) : "",
+        amount_bs:
+          amountToSuggest > 0 ? (amountToSuggest * (rate || 1)).toFixed(2) : "",
       }));
     } else if (mode === "full" && formData.plan_id) {
       // Resetear al monto completo (plan + inscripción si aplica)
       let fullAmount = currentPaymentInfo.remainingAmount;
-      
+
       if (isRegisterMode && includeInscription) {
         const planPrice = getPlanPrice(formData.plan_id);
         fullAmount = planPrice + INSCRIPTION_PRICE;
       }
-      
+
       setFormData((prev) => ({
         ...prev,
         amount_usd: fullAmount > 0 ? fullAmount.toString() : "",
@@ -959,7 +1015,10 @@ export function PaymentsTable({
         phone_payment: formData.phone_payment
           ? formatPhone(formData.phone_operator, formData.phone_payment)
           : "",
-        payment_detail: formData.payment_type === "otro" ? formData.payment_detail?.trim() : "",
+        payment_detail:
+          formData.payment_type === "otro"
+            ? formData.payment_detail?.trim()
+            : "",
       };
       // Remove phone_operator from payload as it's only for UI
       delete paymentData.phone_operator;
@@ -976,18 +1035,23 @@ export function PaymentsTable({
         if (isRegisterMode && preselectedClient && !isEditing) {
           try {
             const clientUpdateResult = await client
-              .from('clients')
-              .update({ 
-                status: 'activo',
-                enrollment_paid: includeInscription ? true : preselectedClient.enrollment_paid
+              .from("clients")
+              .update({
+                status: "activo",
+                enrollment_paid: includeInscription
+                  ? true
+                  : preselectedClient.enrollment_paid,
               })
-              .eq('id', preselectedClient.id);
-            
+              .eq("id", preselectedClient.id);
+
             if (clientUpdateResult.error) {
-              console.error('Error updating client status:', clientUpdateResult.error);
+              console.error(
+                "Error updating client status:",
+                clientUpdateResult.error,
+              );
             }
           } catch (err) {
-            console.error('Error updating client status:', err);
+            console.error("Error updating client status:", err);
           }
         }
 
@@ -1044,7 +1108,7 @@ export function PaymentsTable({
       0,
     );
     const planPrice = getPlanPrice(payment.plan_id);
-    
+
     // Incluir inscripción en el cálculo si aplica
     const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
     const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
@@ -1183,7 +1247,13 @@ export function PaymentsTable({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Pagos</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+            <CreditCard
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Pagos</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
@@ -1200,7 +1270,13 @@ export function PaymentsTable({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Pagos</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+            <CreditCard
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Pagos</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
@@ -1469,18 +1545,22 @@ export function PaymentsTable({
                       Banco
                     </TableHead>
                     <TableHead className="hidden sm:table-cell">Tipo</TableHead>
-                    <TableHead 
+                    <TableHead
                       className="cursor-pointer hover:text-foreground"
                       onClick={() => {
                         if (sortField === "payment_date") {
-                          setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+                          setSortDirection(
+                            sortDirection === "asc" ? "desc" : "asc",
+                          );
                         } else {
                           setSortField("payment_date");
                           setSortDirection("desc");
                         }
                       }}
                     >
-                      Fecha {sortField === "payment_date" && (sortDirection === "asc" ? "↑" : "↓")}
+                      Fecha{" "}
+                      {sortField === "payment_date" &&
+                        (sortDirection === "asc" ? "↑" : "↓")}
                     </TableHead>
                     <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
@@ -1506,9 +1586,12 @@ export function PaymentsTable({
                         </TableCell>
                         <TableCell>
                           <TruncatedCell
-                            value={payment.clients?.enrollment_paid === true && payment.plans?.name
-                              ? `${payment.plans.name} + Inscripción`
-                              : payment.plans?.name || "N/A"}
+                            value={
+                              payment.clients?.enrollment_paid === true &&
+                              payment.plans?.name
+                                ? `${payment.plans.name} + Inscripción`
+                                : payment.plans?.name || "N/A"
+                            }
                             maxWidth="100px"
                             className="font-medium"
                           />
@@ -1552,7 +1635,9 @@ export function PaymentsTable({
                                 size="icon-sm"
                                 className="h-6 w-6"
                                 onClick={() => {
-                                  navigator.clipboard.writeText(payment.reference);
+                                  navigator.clipboard.writeText(
+                                    payment.reference,
+                                  );
                                   toast.success("Referencia copiada");
                                 }}
                               >
@@ -1694,230 +1779,370 @@ export function PaymentsTable({
           </DialogHeader>
 
           <div className="flex-1 py-3 space-y-4">
-              {/* Resumen de pago restante */}
-              {isPayingRemaining && remainingPaymentData && (
-                <div
-                  className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    Resumen del Plan
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-blue-600 dark:text-blue-300">
-                        Precio Plan
-                      </p>
-                      <p className="font-bold text-blue-900 dark:text-blue-100">
-                        ${remainingPaymentData.plan_price?.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-green-600 dark:text-green-300">
-                        Ya Pagado
-                      </p>
-                      <p className="font-bold text-green-700 dark:text-green-100">
-                        ${remainingPaymentData.total_paid?.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-orange-600 dark:text-orange-300">
-                        Restante
-                      </p>
-                      <p className="font-bold text-orange-700 dark:text-orange-100">
-                        ${remainingPaymentData.remaining_amount?.toFixed(2)}
-                      </p>
-                    </div>
+            {/* Resumen de pago restante */}
+            {isPayingRemaining && remainingPaymentData && (
+              <div
+                className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
+                role="status"
+                aria-live="polite"
+              >
+                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  Resumen del Plan
+                </h4>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
+                    <p className="text-xs text-blue-600 dark:text-blue-300">
+                      Precio Plan
+                    </p>
+                    <p className="font-bold text-blue-900 dark:text-blue-100">
+                      ${remainingPaymentData.plan_price?.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
+                    <p className="text-xs text-green-600 dark:text-green-300">
+                      Ya Pagado
+                    </p>
+                    <p className="font-bold text-green-700 dark:text-green-100">
+                      ${remainingPaymentData.total_paid?.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
+                    <p className="text-xs text-orange-600 dark:text-orange-300">
+                      Restante
+                    </p>
+                    <p className="font-bold text-orange-700 dark:text-orange-100">
+                      ${remainingPaymentData.remaining_amount?.toFixed(2)}
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
-                  Información del Cliente
-                </legend>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                  1
+                </span>
+                Información del Cliente
+              </legend>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="client_id" className="text-sm font-medium">
-                      Cliente{" "}
-                      <span className="text-destructive" aria-hidden="true">
-                        *
-                      </span>
-                      <span className="sr-only">(requerido)</span>
-                    </Label>
-                    {!!preselectedClient || isPayingRemaining || isEditing ? (
-                      // Select deshabilitado para clientes preseleccionados
-                      <Select value={formData.client_id} disabled={true}>
-                        <SelectTrigger id="client_id" className="bg-muted">
-                          <SelectValue placeholder="Seleccionar cliente..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clients.map((client) => (
-                            <SelectItem key={client.id} value={client.id}>
-                              {client.first_name} {client.last_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      // SearchableSelect para búsqueda de clientes
-                      <SearchableSelect
-                        id="client_id"
-                        options={clients.map((client) => ({
-                          value: client.id,
-                          label: `${client.first_name} ${client.last_name}`,
-                          searchTerms: [
-                            client.first_name,
-                            client.last_name,
-                            client.cedula,
-                            `${client.first_name} ${client.last_name}`,
-                          ],
-                          cedula: client.cedula,
-                          plan_id: client.plan_id,
-                        }))}
-                        value={formData.client_id}
-                        onValueChange={(value) => {
-                          // Buscar el cliente seleccionado para obtener su plan
-                          const selectedClient = clients.find(c => c.id === value);
-                          const clientPlanId = selectedClient?.plan_id || "";
-                          const clientPlan = plans.find(p => p.id === clientPlanId);
-                          const planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
-                          
-                          setFormData((prev) => ({
-                            ...prev,
-                            client_id: value,
-                            plan_id: clientPlanId,
-                            amount_usd: planPrice > 0 ? planPrice.toFixed(2) : "",
-                            amount_bs: planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "",
-                          }));
-                        }}
-                        placeholder="Buscar cliente..."
-                        searchPlaceholder="Nombre o cédula..."
-                        emptyMessage="No se encontró ningún cliente"
-                        aria-required="true"
-                        renderOption={(option) => (
-                          <div className="flex flex-col">
-                            <span className="font-medium">{option.label}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {option.cedula}
-                            </span>
-                          </div>
-                        )}
-                        renderValue={(option) => <span>{option.label}</span>}
-                      />
-                    )}
-                  </div>
-
-                  {/* Plan */}
-                  <div className="space-y-2">
-                    <Label htmlFor="plan_id" className="text-sm font-medium">
-                      Plan{" "}
-                      <span className="text-destructive" aria-hidden="true">
-                        *
-                      </span>
-                      <span className="sr-only">(requerido)</span>
-                    </Label>
-                    <Select
-                      value={formData.plan_id}
-                      onValueChange={(value) => {
-                        const selectedPlan = plans.find(p => p.id === value);
-                        const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0;
-                        
-                        // En modo registro con inscripción, sumar el precio de inscripción
-                        let totalAmount = planPrice;
-                        if (isRegisterMode && includeInscription) {
-                          totalAmount = planPrice + INSCRIPTION_PRICE;
-                        }
-                        
-                        setFormData((prev) => ({ 
-                          ...prev, 
-                          plan_id: value,
-                          amount_usd: totalAmount > 0 ? totalAmount.toFixed(2) : "",
-                          amount_bs: totalAmount > 0 ? (totalAmount * (rate || 1)).toFixed(2) : ""
-                        }));
-                        
-                        // Update URL with new amount
-                        if (isRegisterMode && includeInscription) {
-                          const newUrl = new URL(window.location.href);
-                          newUrl.searchParams.set('amount', totalAmount.toString());
-                          window.history.replaceState({}, '', newUrl.toString());
-                        }
-                      }}
-                      disabled={isPayingRemaining}
-                    >
-                      <SelectTrigger
-                        id="plan_id"
-                        aria-required="true"
-                        className={
-                          isPayingRemaining ? "bg-muted" : ""
-                        }
-                      >
-                        <SelectValue placeholder="Seleccionar plan..." />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="client_id" className="text-sm font-medium">
+                    Cliente{" "}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only">(requerido)</span>
+                  </Label>
+                  {!!preselectedClient || isPayingRemaining || isEditing ? (
+                    // Select deshabilitado para clientes preseleccionados
+                    <Select value={formData.client_id} disabled={true}>
+                      <SelectTrigger id="client_id" className="bg-muted">
+                        <SelectValue placeholder="Seleccionar cliente..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {plans.map((plan) => (
-                          <SelectItem key={plan.id} value={plan.id}>
-                            <span className="font-medium">{plan.name}</span>
-                            <span className="text-primary font-semibold ml-2">
-                              ${plan.price}
-                            </span>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.first_name} {client.last_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                  ) : (
+                    // SearchableSelect para búsqueda de clientes
+                    <SearchableSelect
+                      id="client_id"
+                      options={clients.map((client) => ({
+                        value: client.id,
+                        label: `${client.first_name} ${client.last_name}`,
+                        searchTerms: [
+                          client.first_name,
+                          client.last_name,
+                          client.cedula,
+                          `${client.first_name} ${client.last_name}`,
+                        ],
+                        cedula: client.cedula,
+                        plan_id: client.plan_id,
+                      }))}
+                      value={formData.client_id}
+                      onValueChange={(value) => {
+                        // Buscar el cliente seleccionado para obtener su plan
+                        const selectedClient = clients.find(
+                          (c) => c.id === value,
+                        );
+                        const clientPlanId = selectedClient?.plan_id || "";
+                        const clientPlan = plans.find(
+                          (p) => p.id === clientPlanId,
+                        );
+                        const planPrice = clientPlan
+                          ? parseFloat(clientPlan.price) || 0
+                          : 0;
+
+                        setFormData((prev) => ({
+                          ...prev,
+                          client_id: value,
+                          plan_id: clientPlanId,
+                          amount_usd: planPrice > 0 ? planPrice.toFixed(2) : "",
+                          amount_bs:
+                            planPrice > 0
+                              ? (planPrice * (rate || 1)).toFixed(2)
+                              : "",
+                        }));
+                      }}
+                      placeholder="Buscar cliente..."
+                      searchPlaceholder="Nombre o cédula..."
+                      emptyMessage="No se encontró ningún cliente"
+                      aria-required="true"
+                      renderOption={(option) => (
+                        <div className="flex flex-col">
+                          <span className="font-medium">{option.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {option.cedula}
+                          </span>
+                        </div>
+                      )}
+                      renderValue={(option) => <span>{option.label}</span>}
+                    />
+                  )}
+                </div>
+
+                {/* Plan */}
+                <div className="space-y-2">
+                  <Label htmlFor="plan_id" className="text-sm font-medium">
+                    Plan{" "}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only">(requerido)</span>
+                  </Label>
+                  <Select
+                    value={formData.plan_id}
+                    onValueChange={(value) => {
+                      const selectedPlan = plans.find((p) => p.id === value);
+                      const planPrice = selectedPlan
+                        ? parseFloat(selectedPlan.price) || 0
+                        : 0;
+
+                      // En modo registro con inscripción, sumar el precio de inscripción
+                      let totalAmount = planPrice;
+                      if (isRegisterMode && includeInscription) {
+                        totalAmount = planPrice + INSCRIPTION_PRICE;
+                      }
+
+                      setFormData((prev) => ({
+                        ...prev,
+                        plan_id: value,
+                        amount_usd:
+                          totalAmount > 0 ? totalAmount.toFixed(2) : "",
+                        amount_bs:
+                          totalAmount > 0
+                            ? (totalAmount * (rate || 1)).toFixed(2)
+                            : "",
+                      }));
+
+                      // Update URL with new amount
+                      if (isRegisterMode && includeInscription) {
+                        const newUrl = new URL(window.location.href);
+                        newUrl.searchParams.set(
+                          "amount",
+                          totalAmount.toString(),
+                        );
+                        window.history.replaceState({}, "", newUrl.toString());
+                      }
+                    }}
+                    disabled={isPayingRemaining}
+                  >
+                    <SelectTrigger
+                      id="plan_id"
+                      aria-required="true"
+                      className={isPayingRemaining ? "bg-muted" : ""}
+                    >
+                      <SelectValue placeholder="Seleccionar plan..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          <span className="font-medium">{plan.name}</span>
+                          <span className="text-primary font-semibold ml-2">
+                            ${plan.price}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                  2
+                </span>
+                Detalles del Pago
+              </legend>
+
+              {formData.plan_id && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Modo de Pago</Label>
+                  <div
+                    className="flex gap-2"
+                    role="radiogroup"
+                    aria-label="Seleccionar modo de pago"
+                  >
+                    <label
+                      className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${paymentMode === "full" ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-input hover:border-primary/50"}`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment_mode"
+                        value="full"
+                        checked={paymentMode === "full"}
+                        onChange={() => handlePaymentModeChange("full")}
+                        className="sr-only"
+                      />
+                      <div
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMode === "full" ? "border-primary" : "border-muted-foreground"}`}
+                      >
+                        {paymentMode === "full" && (
+                          <div className="w-2 h-2 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Pago Completo</p>
+                        <p className="text-xs text-muted-foreground">
+                          $
+                          {(() => {
+                            const selectedPlan = plans.find(
+                              (p) => p.id === formData.plan_id,
+                            );
+                            const planPrice = selectedPlan
+                              ? parseFloat(selectedPlan.price) || 0
+                              : 0;
+                            const total =
+                              isRegisterMode && includeInscription
+                                ? planPrice + INSCRIPTION_PRICE
+                                : currentPaymentInfo.remainingAmount;
+                            return total > 0 ? total.toFixed(2) : "0.00";
+                          })()}
+                        </p>
+                      </div>
+                    </label>
+                    <label
+                      className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${paymentMode === "partial" ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-input hover:border-primary/50"}`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment_mode"
+                        value="partial"
+                        checked={paymentMode === "partial"}
+                        onChange={() => handlePaymentModeChange("partial")}
+                        className="sr-only"
+                      />
+                      <div
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMode === "partial" ? "border-primary" : "border-muted-foreground"}`}
+                      >
+                        {paymentMode === "partial" && (
+                          <div className="w-2 h-2 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Pago Parcial</p>
+                        <p className="text-xs text-muted-foreground">
+                          Monto personalizado
+                        </p>
+                      </div>
+                    </label>
                   </div>
                 </div>
-              </fieldset>
+              )}
 
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
-                  Detalles del Pago
-                </legend>
-
-                {formData.plan_id && (
+              {formData.payment_type === "efectivo_dolares" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Monto USD */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Modo de Pago</Label>
-                    <div className="flex gap-2" role="radiogroup" aria-label="Seleccionar modo de pago">
-                      <label className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${paymentMode === "full" ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-input hover:border-primary/50"}`}>
-                        <input type="radio" name="payment_mode" value="full" checked={paymentMode === "full"} onChange={() => handlePaymentModeChange("full")} className="sr-only" />
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMode === "full" ? "border-primary" : "border-muted-foreground"}`}>
-                          {paymentMode === "full" && <div className="w-2 h-2 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">Pago Completo</p>
-                          <p className="text-xs text-muted-foreground">${(() => { const selectedPlan = plans.find(p => p.id === formData.plan_id); const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0; const total = isRegisterMode && includeInscription ? planPrice + INSCRIPTION_PRICE : currentPaymentInfo.remainingAmount; return total > 0 ? total.toFixed(2) : "0.00"; })()}</p>
-                        </div>
-                      </label>
-                      <label className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${paymentMode === "partial" ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-input hover:border-primary/50"}`}>
-                        <input type="radio" name="payment_mode" value="partial" checked={paymentMode === "partial"} onChange={() => handlePaymentModeChange("partial")} className="sr-only" />
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMode === "partial" ? "border-primary" : "border-muted-foreground"}`}>
-                          {paymentMode === "partial" && <div className="w-2 h-2 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">Pago Parcial</p>
-                          <p className="text-xs text-muted-foreground">Monto personalizado</p>
-                        </div>
-                      </label>
+                    <Label htmlFor="amount_usd" className="text-sm font-medium">
+                      Monto en USD{" "}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                        $
+                      </span>
+                      <Input
+                        id="amount_usd"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        name="amount_usd"
+                        value={formData.amount_usd}
+                        onChange={handleInputChange}
+                        placeholder="0.00"
+                        disabled={
+                          paymentMode === "full" &&
+                          formData.plan_id &&
+                          !isEditing
+                        }
+                        className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
+                          paymentMode === "full" &&
+                          formData.plan_id &&
+                          !isEditing
+                            ? "bg-muted"
+                            : ""
+                        }`}
+                        aria-invalid={!!partialValidationError}
+                        aria-describedby={
+                          partialValidationError ? "amount-error" : undefined
+                        }
+                      />
                     </div>
+                    {partialValidationError && (
+                      <p
+                        id="amount-error"
+                        className="text-destructive text-xs flex items-center gap-1"
+                        role="alert"
+                      >
+                        <span aria-hidden="true">!</span>{" "}
+                        {partialValidationError}
+                      </p>
+                    )}
                   </div>
-                )}
 
-                {formData.payment_type === "efectivo_dolares" ? (
+                  {/* Fecha de pago */}
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="payment_date"
+                      className="text-sm font-medium"
+                    >
+                      Fecha de Pago{" "}
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
+                    </Label>
+                    <DatePicker
+                      value={formData.payment_date}
+                      onChange={(value) =>
+                        handleInputChange({
+                          target: { name: "payment_date", value },
+                        })
+                      }
+                      placeholder="Seleccionar fecha"
+                      size="sm"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Monto USD */}
                     <div className="space-y-2">
                       <Label
                         htmlFor="amount_usd"
                         className="text-sm font-medium"
                       >
-                        Monto en USD{" "}
-                        <span className="text-destructive" aria-hidden="true">
-                          *
-                        </span>
+                        Monto en USD <span className="text-destructive">*</span>
                       </Label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
@@ -1937,130 +2162,97 @@ export function PaymentsTable({
                             formData.plan_id &&
                             !isEditing
                           }
-                          className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
-                            paymentMode === "full" &&
-                            formData.plan_id &&
-                            !isEditing
-                              ? "bg-muted"
-                              : ""
-                          }`}
+                          className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""}`}
                           aria-invalid={!!partialValidationError}
-                          aria-describedby={
-                            partialValidationError ? "amount-error" : undefined
-                          }
                         />
                       </div>
                       {partialValidationError && (
                         <p
                           id="amount-error"
-                          className="text-destructive text-xs flex items-center gap-1"
+                          className="text-destructive text-xs"
                           role="alert"
                         >
-                          <span aria-hidden="true">!</span>{" "}
                           {partialValidationError}
                         </p>
                       )}
                     </div>
 
-                    {/* Fecha de pago */}
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="amount_bs"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        Monto en Bs <span className="text-xs">(calculado)</span>
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                          Bs
+                        </span>
+                        <Input
+                          id="amount_bs"
+                          type="text"
+                          value={
+                            formData.amount_bs
+                              ? parseFloat(formData.amount_bs).toLocaleString(
+                                  "es-VE",
+                                )
+                              : ""
+                          }
+                          readOnly
+                          disabled
+                          className="pl-10 bg-muted"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label
                         htmlFor="payment_date"
                         className="text-sm font-medium"
                       >
                         Fecha de Pago{" "}
-                        <span className="text-destructive" aria-hidden="true">
-                          *
-                        </span>
+                        <span className="text-destructive">*</span>
                       </Label>
                       <DatePicker
                         value={formData.payment_date}
-                        onChange={(value) => handleInputChange({ target: { name: "payment_date", value } })}
+                        onChange={(value) =>
+                          handleInputChange({
+                            target: { name: "payment_date", value },
+                          })
+                        }
                         placeholder="Seleccionar fecha"
-                        size="sm"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="exchange_rate"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        Tasa de Cambio <span className="text-xs">(Bs/$)</span>
+                      </Label>
+                      <Input
+                        id="exchange_rate"
+                        type="number"
+                        step="0.0001"
+                        name="exchange_rate"
+                        value={formData.exchange_rate}
+                        onChange={handleInputChange}
+                        disabled={!isEditing}
+                        className={!isEditing ? "bg-muted" : ""}
                       />
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="amount_usd" className="text-sm font-medium">
-                          Monto en USD{" "}
-                          <span className="text-destructive">*</span>
-                        </Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
-                          <Input
-                            id="amount_usd"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            name="amount_usd"
-                            value={formData.amount_usd}
-                            onChange={handleInputChange}
-                            placeholder="0.00"
-                            disabled={paymentMode === "full" && formData.plan_id && !isEditing}
-                            className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""}`}
-                            aria-invalid={!!partialValidationError}
-                          />
-                        </div>
-                        {partialValidationError && (
-                          <p id="amount-error" className="text-destructive text-xs" role="alert">{partialValidationError}</p>
-                        )}
-                      </div>
+                </>
+              )}
 
-                      <div className="space-y-2">
-                        <Label htmlFor="amount_bs" className="text-sm font-medium text-muted-foreground">
-                          Monto en Bs <span className="text-xs">(calculado)</span>
-                        </Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
-                          <Input
-                            id="amount_bs"
-                            type="text"
-                            value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString("es-VE") : ""}
-                            readOnly
-                            disabled
-                            className="pl-10 bg-muted"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="payment_date" className="text-sm font-medium">
-                          Fecha de Pago <span className="text-destructive">*</span>
-                        </Label>
-                        <DatePicker
-                          value={formData.payment_date}
-                          onChange={(value) => handleInputChange({ target: { name: "payment_date", value } })}
-                          placeholder="Seleccionar fecha"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="exchange_rate" className="text-sm font-medium text-muted-foreground">
-                          Tasa de Cambio <span className="text-xs">(Bs/$)</span>
-                        </Label>
-                        <Input
-                          id="exchange_rate"
-                          type="number"
-                          step="0.0001"
-                          name="exchange_rate"
-                          value={formData.exchange_rate}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className={!isEditing ? "bg-muted" : ""}
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Resumen de inscripción si aplica - solo en pago completo */}
-                {isRegisterMode && includeInscription && formData.plan_id && paymentMode === "full" && (
+              {/* Resumen de inscripción si aplica - solo en pago completo */}
+              {isRegisterMode &&
+                includeInscription &&
+                formData.plan_id &&
+                paymentMode === "full" && (
                   <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <p className="text-sm text-blue-800 dark:text-blue-200">
                       <span className="font-medium">Desglose del pago:</span>
@@ -2069,265 +2261,276 @@ export function PaymentsTable({
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Plan:</span>
                         <span className="font-medium">
-                          ${(() => {
-                            const selectedPlan = plans.find(p => p.id === formData.plan_id);
-                            const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0;
-                            return (planPrice).toFixed(2);
+                          $
+                          {(() => {
+                            const selectedPlan = plans.find(
+                              (p) => p.id === formData.plan_id,
+                            );
+                            const planPrice = selectedPlan
+                              ? parseFloat(selectedPlan.price) || 0
+                              : 0;
+                            return planPrice.toFixed(2);
                           })()}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Inscripción:</span>
-                        <span className="font-medium">${INSCRIPTION_PRICE.toFixed(2)}</span>
+                        <span className="text-muted-foreground">
+                          Inscripción:
+                        </span>
+                        <span className="font-medium">
+                          ${INSCRIPTION_PRICE.toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between border-t border-blue-200 pt-1 mt-1">
                         <span className="font-medium">Total:</span>
-                        <span className="font-bold">${formData.amount_usd || "0.00"}</span>
+                        <span className="font-bold">
+                          ${formData.amount_usd || "0.00"}
+                        </span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Restante después del pago */}
-                {paymentMode === "partial" &&
-                  formData.plan_id &&
-                  formData.amount_usd &&
-                  !partialValidationError && (
-                    <div
-                      className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg"
-                      role="status"
+              {/* Restante después del pago */}
+              {paymentMode === "partial" &&
+                formData.plan_id &&
+                formData.amount_usd &&
+                !partialValidationError && (
+                  <div
+                    className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg"
+                    role="status"
+                  >
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      <span className="font-medium">
+                        Restante después de este pago:
+                      </span>{" "}
+                      <span className="font-bold">
+                        $
+                        {
+                          calculateRemainingAfterCurrentAmount(
+                            formData.plan_id,
+                            formData.amount_usd,
+                          ).formattedAmount
+                        }
+                      </span>
+                    </p>
+                  </div>
+                )}
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                  3
+                </span>
+                Método de Pago
+              </legend>
+
+              <div className="space-y-2">
+                <Label htmlFor="payment_type" className="text-sm font-medium">
+                  Tipo de Pago{" "}
+                  <span className="text-destructive" aria-hidden="true">
+                    *
+                  </span>
+                </Label>
+                <Select
+                  value={formData.payment_type}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, payment_type: value }))
+                  }
+                >
+                  <SelectTrigger id="payment_type" aria-required="true">
+                    <SelectValue placeholder="Seleccionar tipo de pago..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pago_movil">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4" aria-hidden="true" />
+                        <span>Pago Móvil</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="transferencia">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" aria-hidden="true" />
+                        <span>Transferencia Bancaria</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="punto_de_venta">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" aria-hidden="true" />
+                        <span>Punto de Venta</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="efectivo_dolares">
+                      <div className="flex items-center gap-2">
+                        <DollarSignIcon
+                          className="h-4 w-4"
+                          aria-hidden="true"
+                        />
+                        <span>Efectivo en Dólares</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="efectivo_bolivares">
+                      <div className="flex items-center gap-2">
+                        <DollarSignIcon
+                          className="h-4 w-4"
+                          aria-hidden="true"
+                        />
+                        <span>Efectivo en Bolívares</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="otro">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" aria-hidden="true" />
+                        <span>Otro</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Campos adicionales según tipo de pago */}
+              {(formData.payment_type === "pago_movil" ||
+                formData.payment_type === "transferencia") && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {/* Banco */}
+                  <div className="space-y-2">
+                    <Label htmlFor="bank" className="text-sm font-medium">
+                      Banco Receptor
+                    </Label>
+                    <Select
+                      value={formData.bank}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, bank: value }))
+                      }
                     >
-                      <p className="text-sm text-amber-800 dark:text-amber-200">
-                        <span className="font-medium">
-                          Restante después de este pago:
-                        </span>{" "}
-                        <span className="font-bold">
-                          $
-                          {
-                            calculateRemainingAfterCurrentAmount(
-                              formData.plan_id,
-                              formData.amount_usd,
-                            ).formattedAmount
-                          }
-                        </span>
-                      </p>
-                    </div>
-                  )}
-              </fieldset>
+                      <SelectTrigger
+                        id="bank"
+                        aria-label="Seleccionar banco receptor del pago"
+                      >
+                        <SelectValue placeholder="Seleccionar banco..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getBanksWithFeatureFlag().map((bank) => (
+                          <SelectItem key={bank.code} value={bank.name}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                {bank.code}
+                              </span>
+                              <span>{bank.shortName}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">3</span>
-                  Método de Pago
-                </legend>
+                  {/* Referencia */}
+                  <div className="space-y-2">
+                    <Label htmlFor="reference" className="text-sm font-medium">
+                      N° de Referencia
+                    </Label>
+                    <Input
+                      id="reference"
+                      type="text"
+                      name="reference"
+                      value={formData.reference}
+                      onChange={handleInputChange}
+                      placeholder="Ej: 123456789"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              )}
 
+              {/* Teléfono - solo para pago móvil */}
+              {formData.payment_type === "pago_movil" && (
                 <div className="space-y-2">
-                  <Label htmlFor="payment_type" className="text-sm font-medium">
-                    Tipo de Pago{" "}
+                  <Label
+                    htmlFor="phone_payment"
+                    className="text-sm font-medium"
+                  >
+                    Teléfono del Pago Móvil
+                  </Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={formData.phone_operator}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          phone_operator: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger
+                        className="w-24 flex-shrink-0"
+                        aria-label="Código de operador telefónico"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_OPERATORS.map((op) => (
+                          <SelectItem key={op.code} value={op.code}>
+                            <span className="font-mono font-medium">
+                              {op.code}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="phone_payment"
+                      type="tel"
+                      name="phone_payment"
+                      value={formData.phone_payment}
+                      onChange={handleInputChange}
+                      placeholder="1234567"
+                      maxLength={7}
+                      className="flex-1 font-mono"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Número de teléfono asociado al pago móvil (7 dígitos)
+                  </p>
+                </div>
+              )}
+
+              {/* Campo de detalle - solo para tipo "otro" */}
+              {formData.payment_type === "otro" && (
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="payment_detail"
+                    className="text-sm font-medium"
+                  >
+                    Detalle del Pago{" "}
                     <span className="text-destructive" aria-hidden="true">
                       *
                     </span>
+                    <span className="sr-only">(requerido)</span>
                   </Label>
-                  <Select
-                    value={formData.payment_type}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, payment_type: value }))
-                    }
+                  <Input
+                    id="payment_detail"
+                    type="text"
+                    name="payment_detail"
+                    value={formData.payment_detail}
+                    onChange={handleInputChange}
+                    placeholder="Describe el método de pago utilizado..."
+                    aria-required="true"
+                    aria-describedby="payment-detail-help"
+                  />
+                  <p
+                    id="payment-detail-help"
+                    className="text-xs text-muted-foreground"
                   >
-                    <SelectTrigger id="payment_type" aria-required="true">
-                      <SelectValue placeholder="Seleccionar tipo de pago..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pago_movil">
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4" aria-hidden="true" />
-                          <span>Pago Móvil</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="transferencia">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="h-4 w-4" aria-hidden="true" />
-                          <span>Transferencia Bancaria</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="punto_de_venta">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="h-4 w-4" aria-hidden="true" />
-                          <span>Punto de Venta</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="efectivo_dolares">
-                        <div className="flex items-center gap-2">
-                          <DollarSignIcon
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
-                          <span>Efectivo en Dólares</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="efectivo_bolivares">
-                        <div className="flex items-center gap-2">
-                          <DollarSignIcon
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
-                          <span>Efectivo en Bolívares</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="otro">
-                        <div className="flex items-center gap-2">
-                          <FileText
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
-                          <span>Otro</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                    Especifica el tipo de pago o método utilizado (ej: Zelle,
+                    PayPal, Criptomoneda, Intercambio, etc.)
+                  </p>
                 </div>
-
-                {/* Campos adicionales según tipo de pago */}
-                {(formData.payment_type === "pago_movil" ||
-                  formData.payment_type === "transferencia") && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    {/* Banco */}
-                    <div className="space-y-2">
-                      <Label htmlFor="bank" className="text-sm font-medium">
-                        Banco Receptor
-                      </Label>
-                      <Select
-                        value={formData.bank}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, bank: value }))
-                        }
-                      >
-                        <SelectTrigger
-                          id="bank"
-                          aria-label="Seleccionar banco receptor del pago"
-                        >
-                          <SelectValue placeholder="Seleccionar banco..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {getBanksWithFeatureFlag().map((bank) => (
-                            <SelectItem key={bank.code} value={bank.name}>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                  {bank.code}
-                                </span>
-                                <span>{bank.shortName}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Referencia */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="reference"
-                        className="text-sm font-medium"
-                      >
-                        N° de Referencia
-                      </Label>
-                      <Input
-                        id="reference"
-                        type="text"
-                        name="reference"
-                        value={formData.reference}
-                        onChange={handleInputChange}
-                        placeholder="Ej: 123456789"
-                        autoComplete="off"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Teléfono - solo para pago móvil */}
-                {formData.payment_type === "pago_movil" && (
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="phone_payment"
-                      className="text-sm font-medium"
-                    >
-                      Teléfono del Pago Móvil
-                    </Label>
-                    <div className="flex gap-2">
-                      <Select
-                        value={formData.phone_operator}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            phone_operator: value,
-                          }))
-                        }
-                      >
-                        <SelectTrigger
-                          className="w-24 flex-shrink-0"
-                          aria-label="Código de operador telefónico"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PHONE_OPERATORS.map((op) => (
-                            <SelectItem key={op.code} value={op.code}>
-                              <span className="font-mono font-medium">
-                                {op.code}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        id="phone_payment"
-                        type="tel"
-                        name="phone_payment"
-                        value={formData.phone_payment}
-                        onChange={handleInputChange}
-                        placeholder="1234567"
-                        maxLength={7}
-                        className="flex-1 font-mono"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Número de teléfono asociado al pago móvil (7 dígitos)
-                    </p>
-                  </div>
-                )}
-
-                {/* Campo de detalle - solo para tipo "otro" */}
-                {formData.payment_type === "otro" && (
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="payment_detail"
-                      className="text-sm font-medium"
-                    >
-                      Detalle del Pago{" "}
-                      <span className="text-destructive" aria-hidden="true">
-                        *
-                      </span>
-                      <span className="sr-only">(requerido)</span>
-                    </Label>
-                    <Input
-                      id="payment_detail"
-                      type="text"
-                      name="payment_detail"
-                      value={formData.payment_detail}
-                      onChange={handleInputChange}
-                      placeholder="Describe el método de pago utilizado..."
-                      aria-required="true"
-                      aria-describedby="payment-detail-help"
-                    />
-                    <p id="payment-detail-help" className="text-xs text-muted-foreground">
-                      Especifica el tipo de pago o método utilizado (ej: Zelle, PayPal, Criptomoneda, Intercambio, etc.)
-                    </p>
-                  </div>
-                )}
-              </fieldset>
+              )}
+            </fieldset>
           </div>
 
           {/* Footer fijo */}
@@ -2388,24 +2591,30 @@ export function PaymentsTable({
                 <div>
                   <p className="text-muted-foreground">Cliente</p>
                   <p className="font-medium">
-                    {detailsPayment.clients?.first_name} {detailsPayment.clients?.last_name}
+                    {detailsPayment.clients?.first_name}{" "}
+                    {detailsPayment.clients?.last_name}
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Cédula</p>
-                  <p className="font-medium">{detailsPayment.clients?.cedula || "N/A"}</p>
+                  <p className="font-medium">
+                    {detailsPayment.clients?.cedula || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Plan</p>
                   <p className="font-medium">
-                    {detailsPayment.clients?.enrollment_paid === true && detailsPayment.plans?.name
+                    {detailsPayment.clients?.enrollment_paid === true &&
+                    detailsPayment.plans?.name
                       ? `${detailsPayment.plans.name} + Inscripción`
                       : detailsPayment.plans?.name || "N/A"}
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Fecha de Pago</p>
-                  <p className="font-medium">{formatDate(detailsPayment.payment_date)}</p>
+                  <p className="font-medium">
+                    {formatDate(detailsPayment.payment_date)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Monto (USD)</p>
@@ -2421,12 +2630,15 @@ export function PaymentsTable({
                 </div>
                 <div>
                   <p className="text-muted-foreground">Tipo de Pago</p>
-                  <p className="font-medium">{formatPaymentType(detailsPayment.payment_type)}</p>
+                  <p className="font-medium">
+                    {formatPaymentType(detailsPayment.payment_type)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Tasa de Cambio</p>
                   <p className="font-medium">
-                    {parseFloat(detailsPayment.exchange_rate || 1).toFixed(2)} BS/USD
+                    {parseFloat(detailsPayment.exchange_rate || 1).toFixed(2)}{" "}
+                    BS/USD
                   </p>
                 </div>
                 {detailsPayment.bank && (
@@ -2444,7 +2656,9 @@ export function PaymentsTable({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => {
-                          navigator.clipboard.writeText(detailsPayment.reference);
+                          navigator.clipboard.writeText(
+                            detailsPayment.reference,
+                          );
                           toast.success("Referencia copiada al portapapeles");
                         }}
                       >
@@ -2457,12 +2671,16 @@ export function PaymentsTable({
                   <div>
                     <p className="text-muted-foreground">Teléfono</p>
                     <div className="flex items-center gap-2">
-                      <p className="font-medium">{detailsPayment.phone_payment}</p>
+                      <p className="font-medium">
+                        {detailsPayment.phone_payment}
+                      </p>
                       <Button
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => {
-                          navigator.clipboard.writeText(detailsPayment.phone_payment);
+                          navigator.clipboard.writeText(
+                            detailsPayment.phone_payment,
+                          );
                           toast.success("Teléfono copiado al portapapeles");
                         }}
                       >
@@ -2474,12 +2692,16 @@ export function PaymentsTable({
                 {detailsPayment.payment_detail && (
                   <div className="col-span-2">
                     <p className="text-muted-foreground">Detalle</p>
-                    <p className="font-medium">{detailsPayment.payment_detail}</p>
+                    <p className="font-medium">
+                      {detailsPayment.payment_detail}
+                    </p>
                   </div>
                 )}
                 <div>
                   <p className="text-muted-foreground">Creado</p>
-                  <p className="font-medium">{formatDate(detailsPayment.created_at)}</p>
+                  <p className="font-medium">
+                    {formatDate(detailsPayment.created_at)}
+                  </p>
                 </div>
               </div>
             </div>

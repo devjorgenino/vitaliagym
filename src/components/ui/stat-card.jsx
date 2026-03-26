@@ -137,11 +137,17 @@ export function StatCard({
 /**
  * Grid de estadisticas responsive
  */
-export function StatsGrid({ children, className }) {
+export function StatsGrid({ children, className, columns = 4 }) {
+  const gridCols = {
+    2: "grid-cols-2",
+    3: "grid-cols-2 md:grid-cols-3",
+    4: "grid-cols-2 lg:grid-cols-4",
+  };
+  
   return (
     <div className={cn(
       "grid gap-3 sm:gap-4 md:gap-6",
-      "grid-cols-2 lg:grid-cols-4",
+      gridCols[columns] || gridCols[4],
       className
     )}>
       {children}

@@ -243,8 +243,8 @@ export function ClientsTable() {
 
     // El precio total incluye la inscripción si está marcada
     const hasEnrollmentPaid = client.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid 
-      ? planPrice + INSCRIPTION_PRICE 
+    const totalPrice = hasEnrollmentPaid
+      ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
     // Si el pago total es mayor o igual al precio total, está pagado
@@ -282,8 +282,8 @@ export function ClientsTable() {
 
     // El precio total incluye la inscripción si está marcada
     const hasEnrollmentPaid = client.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid 
-      ? planPrice + INSCRIPTION_PRICE 
+    const totalPrice = hasEnrollmentPaid
+      ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
     // Si el pago total es mayor o igual al precio total, no hay restante
@@ -475,16 +475,18 @@ export function ClientsTable() {
 
       if (result.success) {
         handleCloseDialog();
-        
+
         if (!isEditing) {
           // New client created with pending status
           const newClient = result.data;
           toast.success("Cliente creado. Complete el pago para activar.");
-          
+
           // Redirect to payments page
           if (formData.enrollment_paid) {
             // Include inscription + plan price
-            router.push(`/pagos/${newClient.id}?amount=${planPrice}&enrollment=${INSCRIPTION_PRICE}&register=true`);
+            router.push(
+              `/pagos/${newClient.id}?amount=${planPrice}&enrollment=${INSCRIPTION_PRICE}&register=true`,
+            );
           } else {
             router.push(`/pagos/${newClient.id}?register=true`);
           }
@@ -652,7 +654,14 @@ export function ClientsTable() {
   // Resetear página cuando cambian los filtros
   useEffect(() => {
     resetPage();
-  }, [searchTerm, selectedPlan, paymentFilter, statusFilter, dateSort, resetPage]);
+  }, [
+    searchTerm,
+    selectedPlan,
+    paymentFilter,
+    statusFilter,
+    dateSort,
+    resetPage,
+  ]);
 
   // Datos paginados
   const paginatedClients = useMemo(() => {
@@ -687,7 +696,13 @@ export function ClientsTable() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Clientes</CardTitle>
+          <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
+            <Users
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Clientes</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
@@ -704,7 +719,13 @@ export function ClientsTable() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Clientes</CardTitle>
+          <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
+            <Users
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Clientes</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
@@ -724,7 +745,7 @@ export function ClientsTable() {
             className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
             aria-hidden="true"
           />
-            <span>
+          <span>
             Clientes ({sortedClients.length}
             {sortedClients.length !== clients.length
               ? ` de ${clients.length}`
@@ -882,7 +903,9 @@ export function ClientsTable() {
             {/* Filtro por mes específico */}
             <Select
               value={dateSort || "all"}
-              onValueChange={(value) => setDateSort(value === "all" ? "" : value)}
+              onValueChange={(value) =>
+                setDateSort(value === "all" ? "" : value)
+              }
             >
               <SelectTrigger className="w-[100px] sm:w-[120px] h-8 text-xs">
                 <SelectValue placeholder="Mes" />
@@ -968,44 +991,58 @@ export function ClientsTable() {
                 <TableBody>
                   {paginatedClients.map((client, index) => {
                     const paymentStatus = calculatePaymentStatus(client);
-                    const paymentWithRemaining = getPaymentWithRemaining(client);
-                    
+                    const paymentWithRemaining =
+                      getPaymentWithRemaining(client);
+
                     // Calcular días hasta el próximo pago
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const nextPaymentDate = client.next_payment_date ? new Date(client.next_payment_date) : null;
-                    
+                    const nextPaymentDate = client.next_payment_date
+                      ? new Date(client.next_payment_date)
+                      : null;
+
                     let daysUntilPayment = null;
                     if (nextPaymentDate) {
-                      const diffTime = nextPaymentDate.getTime() - today.getTime();
-                      daysUntilPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      const diffTime =
+                        nextPaymentDate.getTime() - today.getTime();
+                      daysUntilPayment = Math.ceil(
+                        diffTime / (1000 * 60 * 60 * 24),
+                      );
                     }
-                    
-                    const isOverdue = daysUntilPayment !== null && daysUntilPayment < 0;
-                    
+
+                    const isOverdue =
+                      daysUntilPayment !== null && daysUntilPayment < 0;
+
                     // Verificar si hay pago este mes
                     const currentYear = today.getFullYear();
                     const currentMonth = today.getMonth();
-                    const clientPaymentsThisMonth = payments.filter(p => {
-                      if (p.client_id !== client.id || p.plan_id !== client.plan_id) return false;
+                    const clientPaymentsThisMonth = payments.filter((p) => {
+                      if (
+                        p.client_id !== client.id ||
+                        p.plan_id !== client.plan_id
+                      )
+                        return false;
                       const paymentDate = new Date(p.payment_date);
-                      return paymentDate.getFullYear() === currentYear && paymentDate.getMonth() === currentMonth;
+                      return (
+                        paymentDate.getFullYear() === currentYear &&
+                        paymentDate.getMonth() === currentMonth
+                      );
                     });
-                    const hasPaymentThisMonth = clientPaymentsThisMonth.length > 0;
-                    
-                    // Opción C: Status + Vencimiento + Pago del mes
-                    // Habilitar botón cuando:
-                    // - Cliente inactivo (siempre)
-                    // - Cliente pendiente (siempre)
-                    // - Cliente activo + vencido
-                    // - Cliente activo + sin pagar este mes
+                    const hasPaymentThisMonth =
+                      clientPaymentsThisMonth.length > 0;
+
+                    // Nueva lógica: Habilitar cuando:
+                    // - Cliente inactivo o pendiente
+                    // - Y (tiene pago restante O faltan <= 5 días para vencimiento)
                     // Deshabilitar cuando:
-                    // - Cliente activo + NO vencido + YA pagó este mes
-                    const shouldDisableButton = 
-                      client.status === "activo" && 
-                      !isOverdue && 
-                      hasPaymentThisMonth;
-                    
+                    // - Cliente activo (siempre)
+                    // - Cliente inactivo/pendiente SIN pago restante Y faltan > 5 días
+                    const shouldDisableButton =
+                      client.status === "activo" ||
+                      (client.status !== "activo" &&
+                        !paymentWithRemaining &&
+                        daysUntilPayment > 5);
+
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
                     // Calcular el status del cliente
@@ -1107,8 +1144,8 @@ export function ClientsTable() {
                               clientStatus.status === "activo"
                                 ? "bg-green-100 text-green-800"
                                 : clientStatus.status === "pendiente"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
                             }`}
                           >
                             {clientStatus.label}
@@ -1140,11 +1177,14 @@ export function ClientsTable() {
                             <Tooltip>
                               <TooltipContent>
                                 <p>
-                                  {shouldDisableButton
+                                  {client.status === "activo"
                                     ? "Pago al día"
                                     : paymentWithRemaining
                                       ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
-                                      : "Registrar pago"}
+                                      : daysUntilPayment <= 5 &&
+                                          daysUntilPayment !== null
+                                        ? "Registrar pago"
+                                        : "Esperando vencimiento"}
                                 </p>
                               </TooltipContent>
                               <TooltipTrigger asChild>
@@ -1327,7 +1367,9 @@ export function ClientsTable() {
               </Label>
               <DatePicker
                 value={formData.birth_date}
-                onChange={(value) => handleInputChange({ target: { name: "birth_date", value } })}
+                onChange={(value) =>
+                  handleInputChange({ target: { name: "birth_date", value } })
+                }
                 placeholder="Seleccionar fecha"
                 size="sm"
               />
@@ -1433,7 +1475,9 @@ export function ClientsTable() {
               </Label>
               <DatePicker
                 value={formData.join_date}
-                onChange={(value) => handleInputChange({ target: { name: "join_date", value } })}
+                onChange={(value) =>
+                  handleInputChange({ target: { name: "join_date", value } })
+                }
                 placeholder="Seleccionar fecha"
                 size="sm"
               />
@@ -1446,10 +1490,9 @@ export function ClientsTable() {
                 disabled={isEditing && formData.enrollment_paid}
               />
               <Label htmlFor="enrollment_paid" className="text-sm font-normal">
-                {isEditing 
-                  ? "Inscripción pagada" 
-                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`
-                }
+                {isEditing
+                  ? "Inscripción pagada"
+                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
               </Label>
             </div>
           </div>

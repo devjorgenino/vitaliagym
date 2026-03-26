@@ -121,7 +121,7 @@ export function DashboardView() {
 
       {/* Metricas Principales - Grid responsive */}
       <div className="shrink-0">
-        <StatsGrid>
+        <StatsGrid columns={3}>
           <StatCard
             title="Clientes por Vencer"
             value={metrics.expiringSoon?.length || 0}
@@ -144,16 +144,6 @@ export function DashboardView() {
             subtitle="Este mes"
             icon={UserPlus}
             color="green"
-          />
-
-          <StatCard
-            title="Asistencia Semanal"
-            value={metrics.weeklyAttendance || 0}
-            subtitle={`${metrics.weeklyUniqueClients || 0} clientes unicos (${(
-              metrics.weeklyPercentage || 0
-            ).toFixed(1)}%)`}
-            icon={Activity}
-            color="blue"
           />
         </StatsGrid>
       </div>
