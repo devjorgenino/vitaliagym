@@ -493,16 +493,35 @@ export function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
 }
 
 /**
+ * Calcula la duración real del plan en días.
+ * @param {string} joinDate - Fecha de ingreso del cliente (YYYY-MM-DD)
+ * @param {string} nextPaymentDate - Fecha del próximo pago (YYYY-MM-DD)
+ * @returns {number} - Días de duración del plan
+ */
+export function calculatePlanDuration(joinDate, nextPaymentDate) {
+  if (!joinDate || !nextPaymentDate) return 30;
+
+  const join = new Date(joinDate);
+  const next = new Date(nextPaymentDate);
+  const diffTime = next - join;
+  const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return days > 0 ? days : 30;
+}
+
+/**
  * Obtiene el color del estado de pago según días restantes.
  * 
  * @param {number} daysLeft - Días restantes
+ * @param {boolean} isInGracePeriod - Si está en período de gracia (pago reciente)
  * @returns {string} - Clase CSS de color
  */
-export function getPaymentStatusColor(daysLeft) {
+export function getPaymentStatusColor(daysLeft, isInGracePeriod = false) {
+  if (isInGracePeriod) return 'bg-blue-100 text-blue-800';
   if (daysLeft === null || daysLeft === undefined) return 'text-gray-500';
-  if (daysLeft < 0) return 'text-red-500';      // Vencido
-  if (daysLeft === 0) return 'text-yellow-500';  // Hoy (0 días)
-  if (daysLeft <= 7) return 'text-orange-500';  // Vence pronto (≤7 días)
-  if (daysLeft <= 15) return 'text-yellow-500'; // Vence (≤15 días)
-  return 'text-green-500';                      // Activo (>15 días)
+  if (daysLeft < 0) return 'text-red-500';
+  if (daysLeft === 0) return 'text-yellow-500';
+  if (daysLeft <= 7) return 'text-orange-500';
+  if (daysLeft <= 15) return 'text-yellow-500';
+  return 'text-green-500';
 }

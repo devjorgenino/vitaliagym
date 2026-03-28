@@ -19,6 +19,8 @@ import {
 import {
   auditNextPaymentDates,
   recalculateNextPaymentDate,
+  calculatePlanDuration,
+  getPaymentStatusColor,
 } from "../../utils/paymentCalculations";
 import { toast } from "sonner";
 import {
@@ -1031,22 +1033,64 @@ export function ClientsTable() {
                     const hasPaymentThisMonth =
                       clientPaymentsThisMonth.length > 0;
 
+                    // Calcular período de gracia (entre último pago y vencimiento anterior)
+                    const clientPaymentsList = payments
+                      .filter(
+                        (p) =>
+                          p.client_id === client.id &&
+                          p.plan_id === client.plan_id,
+                      )
+                      .sort(
+                        (a, b) =>
+                          new Date(b.payment_date) - new Date(a.payment_date),
+                      );
+
+                    const lastPayment = clientPaymentsList[0];
+
+                    // Calcular vencimiento anterior (next_payment_date - 1 mes)
+                    let previousDueDate = null;
+                    if (client.next_payment_date) {
+                      const nextDate = new Date(client.next_payment_date);
+                      previousDueDate = new Date(
+                        nextDate.setMonth(nextDate.getMonth() - 1),
+                      );
+                    }
+
+                    // Calcular duración real del plan
+                    const planDuration =
+                      client.join_date && client.next_payment_date
+                        ? calculatePlanDuration(
+                            client.join_date,
+                            client.next_payment_date,
+                          )
+                        : 30;
+
+                    // Verificar si está en período de gracia
+                    const isInGracePeriod =
+                      lastPayment &&
+                      previousDueDate &&
+                      today >= new Date(lastPayment.payment_date) &&
+                      today <= previousDueDate;
+
                     // Nueva lógica: Habilitar cuando:
-                    // - Cliente inactivo o pendiente
-                    // - Y (tiene pago restante O faltan <= 5 días para vencimiento)
+                    // - Cliente activo Y faltan <= 5 días
+                    // - Cliente inactivo o pendiente Y (tiene pago restante O faltan <= 5 días)
                     // Deshabilitar cuando:
-                    // - Cliente activo (siempre)
+                    // - Cliente activo Y faltan > 5 días
                     // - Cliente inactivo/pendiente SIN pago restante Y faltan > 5 días
+                    // Calcular el status del cliente
+                    const clientStatus = getClientStatus(client);
+
+                    const days = client.daysUntilPayment;
+
                     const shouldDisableButton =
-                      client.status === "activo" ||
-                      (client.status !== "activo" &&
+                      (clientStatus.status === "activo" && days > 5) ||
+                      (clientStatus.status !== "activo" &&
                         !paymentWithRemaining &&
-                        daysUntilPayment > 5);
+                        days > 5);
 
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
-                    // Calcular el status del cliente
-                    const clientStatus = getClientStatus(client);
 
                     return (
                       <TableRow key={client.id}>
@@ -1161,11 +1205,18 @@ export function ClientsTable() {
                                 {formatDate(client.next_payment_date)}
                               </span>
                               <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${client.paymentStatusColor}`}
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getPaymentStatusColor(
+                                  isInGracePeriod
+                                    ? planDuration
+                                    : client.daysUntilPayment,
+                                  isInGracePeriod,
+                                )}`}
                               >
                                 {client.daysUntilPayment < 0
                                   ? `${Math.abs(client.daysUntilPayment)}d vencido`
-                                  : `${client.daysUntilPayment}d`}
+                                  : isInGracePeriod
+                                    ? `${planDuration}d`
+                                    : `${client.daysUntilPayment}d`}
                               </span>
                             </div>
                           ) : (
