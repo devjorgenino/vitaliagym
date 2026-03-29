@@ -11,19 +11,23 @@ export function InstallPWA() {
   useEffect(() => {
     // Si ya está ejecutándose como app (standalone), no mostrar nada
     if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstallable(false);
       return;
     }
 
     const handler = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setIsInstallable(true);
+      // Usar requestAnimationFrame para evitar setState síncrono
+      requestAnimationFrame(() => {
+        setIsInstallable(true);
+      });
     };
 
     const installedHandler = () => {
-      setIsInstallable(false);
-      setDeferredPrompt(null);
+      requestAnimationFrame(() => {
+        setIsInstallable(false);
+        setDeferredPrompt(null);
+      });
     };
 
     window.addEventListener("beforeinstallprompt", handler);

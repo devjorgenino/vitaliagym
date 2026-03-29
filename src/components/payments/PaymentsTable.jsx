@@ -270,20 +270,15 @@ export function PaymentsTable({
         setIncludeInscription(false);
       }
 
-      console.log('[DEBUG] isRegisterMode:', isRegisterMode, 'initialAmount:', initialAmount, 'enrollmentAmount:', enrollmentAmount);
-
       // Si es modo registro y tiene amount en URL, usarlo (incluye inscripción)
       if (isRegisterMode && initialAmount) {
         planPrice = parseFloat(initialAmount);
         setIncludeInscription(true);
-        console.log('[DEBUG] Using initialAmount, planPrice:', planPrice);
       }
 
       // Si es modo registro y tiene amount en URL, usar ese monto
       const amountUSD = planPrice > 0 ? planPrice.toFixed(2) : "";
       const amountBS = planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "";
-
-      console.log('[DEBUG] Setting formData FIRST TIME, amountUSD:', amountUSD, 'amountBS:', amountBS, 'includeInscription:', true);
 
       setFormData({
         client_id: preselectedClient.id,
@@ -757,12 +752,8 @@ export function PaymentsTable({
       // Si el modo es "full" (pagar completo), cargar el monto del plan automáticamente
       // Solo si no hay un monto ya establecido por el usuario (para no sobreescribir)
       // Y no estamos en modo registro con inscripción incluida
-      console.log('[DEBUG2] running, paymentMode:', paymentMode, 'formData.amount_usd:', formData.amount_usd, 'isRegisterMode:', isRegisterMode, 'includeInscription:', includeInscription);
-      
       // NO sobrescribir si: (estamos en modo registro con inscripción) O (ya hay un monto establecido)
       const shouldOverride = !(isRegisterMode && includeInscription) && (!formData.amount_usd || formData.amount_usd === "0" || formData.amount_usd === "0.00");
-      
-      console.log('[DEBUG2] shouldOverride:', shouldOverride, 'calculated from: isRegisterMode=', isRegisterMode, 'includeInscription=', includeInscription, 'amount_usd empty?', !formData.amount_usd);
       
       if (paymentMode === "full" && shouldOverride) {
         setFormData((prev) => ({

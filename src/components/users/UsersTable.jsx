@@ -111,52 +111,37 @@ export function UsersTable() {
       let skipped = 0;
       let errors = 0;
 
-      console.log("Usuarios a procesar:", users.length);
-
       for (const user of users) {
         const phone = user.phone || "";
-        console.log(`Usuario ${user.email}: teléfono actual = "${phone}"`);
         
         if (!phone || phone === "N/A") {
           skipped++;
           continue;
         }
 
-        // Parsear y reformatear el teléfono
         const { operator, number } = parsePhone(phone);
-        console.log(`  Parseado: operator="${operator}", number="${number}"`);
         
-        // Si el número tiene dígitos, formatearlo
         if (number && number.length > 0) {
           const formattedPhone = formatPhone(operator, number);
-          console.log(`  Formateado: "${formattedPhone}"`);
           
-          // Solo actualizar si el formato cambió
           if (formattedPhone !== phone) {
-            console.log(`  Actualizando de "${phone}" a "${formattedPhone}"...`);
             try {
-              // Usar API route para bypasear RLS
               const response = await authPost("/api/admin/users", {
                 _action: "patch",
                 userId: user.id,
                 phone: formattedPhone,
               });
 
-              console.log(`  Resultado API:`, response);
-
               if (response.ok) {
                 updated++;
-                console.log(`  OK! Actualizado correctamente`);
               } else {
-                console.log(`  Error API:`, response.error);
                 errors++;
               }
             } catch (updateErr) {
-              console.error(`  Excepción en update:`, updateErr);
+              console.error(`Error actualizando teléfono:`, updateErr);
               errors++;
             }
           } else {
-            console.log(`  Sin cambios (ya tiene formato correcto)`);
             skipped++;
           }
         } else {

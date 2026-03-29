@@ -798,7 +798,7 @@ const Asistencia = () => {
                           </h3>
                           <p className="text-sm text-red-700 dark:text-red-300 mt-1">
                             No se encontró ningún cliente con la cédula o nombre
-                            "{searchTerm}"
+                            &quot;{searchTerm}&quot;
                           </p>
                         </div>
                       </div>

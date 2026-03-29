@@ -33,7 +33,6 @@ const AuthProvider = ({ children }) => {
 
     const { data: authListener } = client.auth.onAuthStateChange(
       (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
         setUser(session?.user || null);
         
         // Si el usuario inicia sesión, el layout manejará la redirección

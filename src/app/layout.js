@@ -12,21 +12,53 @@ const poppinsFont = Poppins({
 });
 
 export const metadata = {
-  title: "VitaliaGym",
+  title: {
+    default: "VitaliaGym",
+    template: "%s | VitaliaGym",
+  },
   description:
     "Somos la energía vital en movimiento. Un lugar para entrenar de forma eficiente e inteligente",
-  keywords: "VitaliaGym, Gym, Fitness, Entrenamiento",
-  author: "Jorge Niño",
+  keywords: "VitaliaGym, Gym, Fitness, Entrenamiento, Venezuela",
+  authors: [{ name: "Jorge Niño" }],
   creator: "Jorge Niño",
-  publisher: "Jorge Niño",
+  publisher: "VitaliaGym",
   manifest: "/manifest.webmanifest",
+  openGraph: {
+    type: "website",
+    locale: "es_VE",
+    url: "https://vitaliagym.com",
+    siteName: "VitaliaGym",
+    title: "VitaliaGym",
+    description: "Somos la energía vital en movimiento. Un lugar para entrenar de forma eficiente e inteligente",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "VitaliaGym",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VitaliaGym",
+    description: "Somos la energía vital en movimiento",
+    images: ["/og-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export const viewport = {
-  themeColor: "#000000",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#626D21" },
+    { media: "(prefers-color-scheme: dark)", color: "#0E120D" },
+  ],
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({ children }) {
