@@ -254,35 +254,40 @@ export default function ExpensesTable() {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-72" />
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+            <Skeleton className="h-9 w-36" />
+          </div>
+        </div>
+        <div className="px-4 sm:px-6">
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
     <>
-      <Card>
-        <CardHeader>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <CardTitle className="flex items-center gap-2">
+              <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
                 <Receipt className="h-5 w-5" />
                 Gastos Operativos
-              </CardTitle>
-              <CardDescription>
+              </h2>
+              <p className="text-sm text-muted-foreground">
                 Registra y gestiona todos los gastos del gimnasio.
-              </CardDescription>
+              </p>
             </div>
             <PermissionGate permission={PERMISSIONS.ADMIN_EXPENSES_CREATE}>
               <Button onClick={() => handleOpenDialog()} className="gap-2">
@@ -291,8 +296,8 @@ export default function ExpensesTable() {
               </Button>
             </PermissionGate>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="px-4 sm:px-6">
           {/* Estadísticas rápidas */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-muted/50 rounded-lg p-4">
@@ -483,7 +488,7 @@ export default function ExpensesTable() {
               </Table>
             </div>
           )}
-        </CardContent>
+        </div>
       </Card>
 
       {/* Dialog para crear/editar */}

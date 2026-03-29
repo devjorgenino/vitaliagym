@@ -26,7 +26,7 @@ const NuevoPagoCliente = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-64 mb-4"></div>
           <div className="h-4 bg-gray-200 rounded w-96"></div>
@@ -37,7 +37,7 @@ const NuevoPagoCliente = () => {
 
   if (!preselectedClient) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-red-600 mb-4">Cliente no encontrado</h1>
           <p className="text-gray-600 mb-6">El cliente que buscas no existe o ha sido eliminado.</p>
@@ -53,7 +53,7 @@ const NuevoPagoCliente = () => {
   }
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Nuevo Pago</h1>
         <p className="text-muted-foreground">

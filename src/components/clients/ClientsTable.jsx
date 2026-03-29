@@ -243,8 +243,8 @@ export function ClientsTable() {
 
     // El precio total incluye la inscripción si está marcada
     const hasEnrollmentPaid = client.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid 
-      ? planPrice + INSCRIPTION_PRICE 
+    const totalPrice = hasEnrollmentPaid
+      ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
     // Si el pago total es mayor o igual al precio total, está pagado
@@ -282,8 +282,8 @@ export function ClientsTable() {
 
     // El precio total incluye la inscripción si está marcada
     const hasEnrollmentPaid = client.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid 
-      ? planPrice + INSCRIPTION_PRICE 
+    const totalPrice = hasEnrollmentPaid
+      ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
     // Si el pago total es mayor o igual al precio total, no hay restante
@@ -475,16 +475,18 @@ export function ClientsTable() {
 
       if (result.success) {
         handleCloseDialog();
-        
+
         if (!isEditing) {
           // New client created with pending status
           const newClient = result.data;
           toast.success("Cliente creado. Complete el pago para activar.");
-          
+
           // Redirect to payments page
           if (formData.enrollment_paid) {
             // Include inscription + plan price
-            router.push(`/pagos/${newClient.id}?amount=${planPrice}&enrollment=${INSCRIPTION_PRICE}&register=true`);
+            router.push(
+              `/pagos/${newClient.id}?amount=${planPrice}&enrollment=${INSCRIPTION_PRICE}&register=true`,
+            );
           } else {
             router.push(`/pagos/${newClient.id}?register=true`);
           }
@@ -652,7 +654,14 @@ export function ClientsTable() {
   // Resetear página cuando cambian los filtros
   useEffect(() => {
     resetPage();
-  }, [searchTerm, selectedPlan, paymentFilter, statusFilter, dateSort, resetPage]);
+  }, [
+    searchTerm,
+    selectedPlan,
+    paymentFilter,
+    statusFilter,
+    dateSort,
+    resetPage,
+  ]);
 
   // Datos paginados
   const paginatedClients = useMemo(() => {
@@ -685,46 +694,62 @@ export function ClientsTable() {
 
   if (loading || paymentsLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Clientes</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
+            <Users
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Clientes</span>
+          </h2>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+        <div className="p-2 sm:p-3 pt-0">
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Clientes</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
+            <Users
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Clientes</span>
+          </h2>
+        </div>
+        <div className="p-2 sm:p-3 pt-0">
           <div className="text-center py-8">
             <p className="text-red-500 mb-4">Error: {error}</p>
             <Button onClick={refetch}>Reintentar</Button>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
-        <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
+    <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
           <Users
             className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
             aria-hidden="true"
           />
-            <span>
+          <span>
             Clientes ({sortedClients.length}
             {sortedClients.length !== clients.length
               ? ` de ${clients.length}`
@@ -737,7 +762,7 @@ export function ClientsTable() {
               {duplicateCedulas.length !== 1 ? "s" : ""}
             </span>
           )}
-        </CardTitle>
+        </h2>
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleOpenCreateDialog}
@@ -783,10 +808,10 @@ export function ClientsTable() {
             </TooltipContent>
           </Tooltip>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="p-3 sm:p-4 pb-0 -mt-6">
         {/* Barra de busqueda y filtros */}
-        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+        <div className="mb-3 sm:mb-4 space-y-3 sm:space-y-4">
           {/* Barra de busqueda */}
           <div className="relative">
             <SearchIcon
@@ -882,7 +907,9 @@ export function ClientsTable() {
             {/* Filtro por mes específico */}
             <Select
               value={dateSort || "all"}
-              onValueChange={(value) => setDateSort(value === "all" ? "" : value)}
+              onValueChange={(value) =>
+                setDateSort(value === "all" ? "" : value)
+              }
             >
               <SelectTrigger className="w-[100px] sm:w-[120px] h-8 text-xs">
                 <SelectValue placeholder="Mes" />
@@ -918,7 +945,8 @@ export function ClientsTable() {
           )}
         </div>
 
-        {clients.length === 0 ? (
+        <div className="mt-4 sm:mt-5">
+          {clients.length === 0 ? (
           <GettingStartedState
             title="No hay clientes registrados"
             steps={[
@@ -968,31 +996,46 @@ export function ClientsTable() {
                 <TableBody>
                   {paginatedClients.map((client, index) => {
                     const paymentStatus = calculatePaymentStatus(client);
-                    const paymentWithRemaining = getPaymentWithRemaining(client);
-                    
+                    const paymentWithRemaining =
+                      getPaymentWithRemaining(client);
+
                     // Calcular días hasta el próximo pago
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const nextPaymentDate = client.next_payment_date ? new Date(client.next_payment_date) : null;
-                    
+                    const nextPaymentDate = client.next_payment_date
+                      ? new Date(client.next_payment_date)
+                      : null;
+
                     let daysUntilPayment = null;
                     if (nextPaymentDate) {
-                      const diffTime = nextPaymentDate.getTime() - today.getTime();
-                      daysUntilPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      const diffTime =
+                        nextPaymentDate.getTime() - today.getTime();
+                      daysUntilPayment = Math.ceil(
+                        diffTime / (1000 * 60 * 60 * 24),
+                      );
                     }
-                    
-                    const isOverdue = daysUntilPayment !== null && daysUntilPayment < 0;
-                    
+
+                    const isOverdue =
+                      daysUntilPayment !== null && daysUntilPayment < 0;
+
                     // Verificar si hay pago este mes
                     const currentYear = today.getFullYear();
                     const currentMonth = today.getMonth();
-                    const clientPaymentsThisMonth = payments.filter(p => {
-                      if (p.client_id !== client.id || p.plan_id !== client.plan_id) return false;
+                    const clientPaymentsThisMonth = payments.filter((p) => {
+                      if (
+                        p.client_id !== client.id ||
+                        p.plan_id !== client.plan_id
+                      )
+                        return false;
                       const paymentDate = new Date(p.payment_date);
-                      return paymentDate.getFullYear() === currentYear && paymentDate.getMonth() === currentMonth;
+                      return (
+                        paymentDate.getFullYear() === currentYear &&
+                        paymentDate.getMonth() === currentMonth
+                      );
                     });
-                    const hasPaymentThisMonth = clientPaymentsThisMonth.length > 0;
-                    
+                    const hasPaymentThisMonth =
+                      clientPaymentsThisMonth.length > 0;
+
                     // Opción C: Status + Vencimiento + Pago del mes
                     // Habilitar botón cuando:
                     // - Cliente inactivo (siempre)
@@ -1001,11 +1044,11 @@ export function ClientsTable() {
                     // - Cliente activo + sin pagar este mes
                     // Deshabilitar cuando:
                     // - Cliente activo + NO vencido + YA pagó este mes
-                    const shouldDisableButton = 
-                      client.status === "activo" && 
-                      !isOverdue && 
+                    const shouldDisableButton =
+                      client.status === "activo" &&
+                      !isOverdue &&
                       hasPaymentThisMonth;
-                    
+
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
                     // Calcular el status del cliente
@@ -1107,8 +1150,8 @@ export function ClientsTable() {
                               clientStatus.status === "activo"
                                 ? "bg-green-100 text-green-800"
                                 : clientStatus.status === "pendiente"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
                             }`}
                           >
                             {clientStatus.label}
@@ -1218,7 +1261,8 @@ export function ClientsTable() {
             />
           </>
         )}
-      </CardContent>
+        </div>
+      </div>
 
       {/* Dialog de confirmación de eliminación */}
       <ConfirmDialog
@@ -1327,7 +1371,9 @@ export function ClientsTable() {
               </Label>
               <DatePicker
                 value={formData.birth_date}
-                onChange={(value) => handleInputChange({ target: { name: "birth_date", value } })}
+                onChange={(value) =>
+                  handleInputChange({ target: { name: "birth_date", value } })
+                }
                 placeholder="Seleccionar fecha"
                 size="sm"
               />
@@ -1433,7 +1479,9 @@ export function ClientsTable() {
               </Label>
               <DatePicker
                 value={formData.join_date}
-                onChange={(value) => handleInputChange({ target: { name: "join_date", value } })}
+                onChange={(value) =>
+                  handleInputChange({ target: { name: "join_date", value } })
+                }
                 placeholder="Seleccionar fecha"
                 size="sm"
               />
@@ -1446,10 +1494,9 @@ export function ClientsTable() {
                 disabled={isEditing && formData.enrollment_paid}
               />
               <Label htmlFor="enrollment_paid" className="text-sm font-normal">
-                {isEditing 
-                  ? "Inscripción pagada" 
-                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`
-                }
+                {isEditing
+                  ? "Inscripción pagada"
+                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
               </Label>
             </div>
           </div>

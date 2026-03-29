@@ -1172,41 +1172,60 @@ export function PaymentsTable({
 
   if (loading && displayPayments.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Pagos</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+          <h2 className="flex items-center gap-2 text-base sm:text-lg md:text-xl font-semibold">
+            <CreditCard
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Pagos</span>
+          </h2>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+        <div className="p-3 sm:p-4 pb-0 -mt-6">
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Pagos</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+          <h2 className="flex items-center gap-2 text-base sm:text-lg md:text-xl font-semibold">
+            <CreditCard
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Pagos</span>
+          </h2>
+          <Button onClick={refetch} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Reintentar
+          </Button>
+        </div>
+        <div className="p-3 sm:p-4 pb-0 -mt-6">
           <div className="text-center py-8">
-            <p className="text-red-500 mb-4">Error: {error}</p>
-            <Button onClick={refetch}>Reintentar</Button>
+            <p className="text-red-500">Error: {error}</p>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
-        <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+    <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+        <h2 className="flex items-center gap-2 text-base sm:text-lg md:text-xl font-semibold">
           <CreditCard
             className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
             aria-hidden="true"
@@ -1215,7 +1234,7 @@ export function PaymentsTable({
             Pagos ({displayPayments.length}
             {activeFiltersCount > 0 ? ` de ${payments.length}` : ""})
           </span>
-        </CardTitle>
+        </h2>
         <div className="flex gap-2">
           <Button
             onClick={handleOpenCreateDialog}
@@ -1269,10 +1288,10 @@ export function PaymentsTable({
             </DropdownMenuContent>
           </DropdownMenu> */}
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="p-3 sm:p-4 pb-0 -mt-6">
         {/* Barra de búsqueda y filtros */}
-        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+        <div className="mb-3 sm:mb-4 space-y-3 sm:space-y-4">
           {/* Barra de búsqueda */}
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -1438,8 +1457,9 @@ export function PaymentsTable({
               </ol>
             </div>
           </div>
-        ) : (
+          ) : (
           <>
+            <div className="mt-4 sm:mt-5">
             <div className="overflow-x-auto">
               <Table aria-label="Lista de pagos del gimnasio">
                 <TableHeader>
@@ -1653,9 +1673,10 @@ export function PaymentsTable({
               onPageChange={setCurrentPage}
               onPageSizeChange={setPageSize}
             />
+            </div>
           </>
         )}
-      </CardContent>
+      </div>
 
       {/* Modal para crear/editar pago */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

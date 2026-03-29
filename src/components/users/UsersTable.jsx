@@ -9,7 +9,17 @@ import { PERMISSIONS } from "@/components/context/PermissionsProvider";
 import client from "@/api/client";
 import { authPost } from "@/lib/auth-fetch";
 import { toast } from "sonner";
-import { Shield, UserPlus, RefreshCw, Phone, User, Copy, CheckCircle, X, PhoneForwarded } from "lucide-react";
+import {
+  Shield,
+  UserPlus,
+  RefreshCw,
+  Phone,
+  User,
+  Copy,
+  CheckCircle,
+  X,
+  PhoneForwarded,
+} from "lucide-react";
 import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -113,17 +123,17 @@ export function UsersTable() {
 
       for (const user of users) {
         const phone = user.phone || "";
-        
+
         if (!phone || phone === "N/A") {
           skipped++;
           continue;
         }
 
         const { operator, number } = parsePhone(phone);
-        
+
         if (number && number.length > 0) {
           const formattedPhone = formatPhone(operator, number);
-          
+
           if (formattedPhone !== phone) {
             try {
               const response = await authPost("/api/admin/users", {
@@ -151,11 +161,17 @@ export function UsersTable() {
 
       await refetch();
       if (updated > 0) {
-        toast.success(`Teléfonos corregidos: ${updated}${errors > 0 ? `, errores: ${errors}` : ""}`);
+        toast.success(
+          `Teléfonos corregidos: ${updated}${errors > 0 ? `, errores: ${errors}` : ""}`,
+        );
       } else if (errors > 0) {
-        toast.error(`No se pudieron corregir los teléfonos (${errors} errores)`);
+        toast.error(
+          `No se pudieron corregir los teléfonos (${errors} errores)`,
+        );
       } else {
-        toast.info(`Todos los teléfonos ya tienen el formato correcto (${skipped})`);
+        toast.info(
+          `Todos los teléfonos ya tienen el formato correcto (${skipped})`,
+        );
       }
     } catch (err) {
       console.error("Error normalizando teléfonos:", err);
@@ -333,7 +349,11 @@ export function UsersTable() {
         handleCloseDialog();
       } else {
         // Crear usuario usando API Route (no desloguea al admin)
-        const { ok, data: result, error: apiError } = await authPost("/api/admin/users", {
+        const {
+          ok,
+          data: result,
+          error: apiError,
+        } = await authPost("/api/admin/users", {
           email: formData.email,
           full_name: formData.full_name,
           phone: formData.phone
@@ -348,55 +368,64 @@ export function UsersTable() {
 
         await refetch();
         handleCloseDialog();
-        
+
         const tempPassword = result.tempPassword;
-        toast.custom((t) => (
-          <div className="flex items-center gap-3 bg-background border border-border rounded-lg px-4 py-3 shadow-lg">
-            <CheckCircle className="h-5 w-5 text-foreground shrink-0" />
-            <div className="flex-1 text-sm">
-              <p className="font-medium">Usuario creado exitosamente</p>
-              <p className="text-muted-foreground">
-                Contraseña temporal: <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono">{tempPassword}</code>
-              </p>
+        toast.custom(
+          (t) => (
+            <div className="flex items-center gap-3 bg-background border border-border rounded-lg px-4 py-3 shadow-lg">
+              <CheckCircle className="h-5 w-5 text-foreground shrink-0" />
+              <div className="flex-1 text-sm">
+                <p className="font-medium">Usuario creado exitosamente</p>
+                <p className="text-muted-foreground">
+                  Contraseña temporal:{" "}
+                  <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono">
+                    {tempPassword}
+                  </code>
+                </p>
+              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(tempPassword);
+                      toast.success("Copiado", { duration: 1500 });
+                    }}
+                    className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="z-[99999]">Copiar</TooltipContent>
+              </Tooltip>
+              <button
+                onClick={() => toast.dismiss(t)}
+                className="p-1 hover:bg-muted rounded-md transition-colors"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(tempPassword);
-                    toast.success("Copiado", { duration: 1500 });
-                  }}
-                  className="p-1.5 hover:bg-muted rounded-md transition-colors"
-                >
-                  <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent className="z-[99999]">Copiar</TooltipContent>
-            </Tooltip>
-            <button
-              onClick={() => toast.dismiss(t)}
-              className="p-1 hover:bg-muted rounded-md transition-colors"
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </div>
-        ), { duration: 20000 });
+          ),
+          { duration: 20000 },
+        );
       }
     } catch (err) {
       console.error("Error:", err);
-      toast.error(`Error al ${isEditing ? "actualizar" : "crear"} usuario: ` + err.message);
+      toast.error(
+        `Error al ${isEditing ? "actualizar" : "crear"} usuario: ` +
+          err.message,
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-const openDeleteDialog = (user) => {
+  const openDeleteDialog = (user) => {
     setDeleteDialog({ open: true, user });
   };
 
   const handleDeleteUser = async () => {
     if (!deleteDialog.user) return;
-    
+
     setDeletingId(deleteDialog.user.id);
     try {
       const result = await deleteUser(deleteDialog.user.id);
@@ -434,7 +463,7 @@ const openDeleteDialog = (user) => {
       month: "short",
       day: "numeric",
     });
-  }
+  };
 
   // Obtener rol(es) de un usuario
   const getUserRoles = (userId) => {
@@ -484,17 +513,27 @@ const openDeleteDialog = (user) => {
   // Renderizado de loading
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Usuarios</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
+            <User
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Usuarios</span>
+          </h2>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+        <div className="p-3 sm:p-4 pb-0 -mt-6">
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
@@ -502,72 +541,106 @@ const openDeleteDialog = (user) => {
   // Renderizado de error
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Usuarios</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
+            <User
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Usuarios</span>
+          </h2>
+          <Button
+            onClick={refetch}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Reintentar
+          </Button>
+        </div>
+        <div className="p-3 sm:p-4 pb-0 -mt-6">
           <div className="text-center py-8">
             <p className="text-red-500 mb-4">Error: {error}</p>
-            <Button onClick={refetch}>Reintentar</Button>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
-          <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
-            <User className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
-            <span>
-              Usuarios ({filteredUsers.length}
-              {filteredUsers.length !== users.length ? ` de ${users.length}` : ""})
-            </span>
-          </CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <PermissionGate permission={PERMISSIONS.USERS_CREATE} hide>
-              <Button
-                onClick={handleOpenCreateDialog}
-                variant="default"
-                size="sm"
-                className="text-xs sm:text-sm"
-              >
-                <UserPlus className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-                <span className="hidden sm:inline">Nuevo Usuario</span>
-              </Button>
-            </PermissionGate>
-            <Button onClick={refetch} variant="outline" size="sm" className="text-xs sm:text-sm" aria-label="Actualizar lista de usuarios">
-              <RefreshCw className="h-3.5 w-3.5 sm:mr-1" aria-hidden="true" />
-              <span className="hidden sm:inline">Actualizar</span>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
+          <User
+            className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+            aria-hidden="true"
+          />
+          <span>
+            Usuarios ({filteredUsers.length}
+            {filteredUsers.length !== users.length
+              ? ` de ${users.length}`
+              : ""}
+            )
+          </span>
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <PermissionGate permission={PERMISSIONS.USERS_CREATE} hide>
+            <Button
+              onClick={handleOpenCreateDialog}
+              variant="default"
+              size="sm"
+              className="text-xs sm:text-sm"
+            >
+              <UserPlus className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+              <span className="hidden sm:inline">Nuevo Usuario</span>
             </Button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  onClick={handleNormalizePhones} 
-                  variant="outline" 
-                  size="sm"
-                  disabled={isNormalizingPhones || users.length === 0}
-                  className="text-xs sm:text-sm"
-                  aria-label="Corregir formato de telefonos"
-                >
-                  <PhoneForwarded className={`h-3.5 w-3.5 sm:mr-1 ${isNormalizingPhones ? 'animate-pulse' : ''}`} aria-hidden="true" />
-                  <span className="hidden md:inline">{isNormalizingPhones ? 'Corrigiendo...' : 'Corregir Tel.'}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Corrige el formato de todos los telefonos (0414-1234567)</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Barra de busqueda y filtros */}
-          <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+          </PermissionGate>
+          <Button
+            onClick={refetch}
+            variant="outline"
+            size="sm"
+            className="text-xs sm:text-sm"
+            aria-label="Actualizar lista de usuarios"
+          >
+            <RefreshCw className="h-3.5 w-3.5 sm:mr-1" aria-hidden="true" />
+            <span className="hidden sm:inline">Actualizar</span>
+          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleNormalizePhones}
+                variant="outline"
+                size="sm"
+                disabled={isNormalizingPhones || users.length === 0}
+                className="text-xs sm:text-sm"
+                aria-label="Corregir formato de telefonos"
+              >
+                <PhoneForwarded
+                  className={`h-3.5 w-3.5 sm:mr-1 ${isNormalizingPhones ? "animate-pulse" : ""}`}
+                  aria-hidden="true"
+                />
+                <span className="hidden md:inline">
+                  {isNormalizingPhones ? "Corrigiendo..." : "Corregir Tel."}
+                </span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Corrige el formato de todos los telefonos (0414-1234567)</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+      <div className="p-3 sm:p-4 pb-0 -mt-6">
+        {/* Barra de busqueda y filtros */}
+        <div className="mb-3 sm:mb-4 space-y-3 sm:space-y-4">
             <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" aria-hidden="true" />
+              <SearchIcon
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4"
+                aria-hidden="true"
+              />
               <Input
                 type="text"
                 placeholder="Buscar por email, nombre o telefono..."
@@ -609,7 +682,10 @@ const openDeleteDialog = (user) => {
                   onClick={clearFilters}
                   className="text-xs h-8 text-muted-foreground hover:text-foreground"
                 >
-                  <FilterXIcon className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                  <FilterXIcon
+                    className="h-3.5 w-3.5 mr-1"
+                    aria-hidden="true"
+                  />
                   Limpiar ({activeFiltersCount})
                 </Button>
               )}
@@ -632,7 +708,7 @@ const openDeleteDialog = (user) => {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="mt-4 sm:mt-5 overflow-x-auto">
                 <Table aria-label="Lista de usuarios del sistema">
                   <TableHeader>
                     <TableRow>
@@ -802,7 +878,7 @@ const openDeleteDialog = (user) => {
               />
             </>
           )}
-        </CardContent>
+        </div>
       </Card>
 
       {/* Modal de seguridad */}
@@ -860,7 +936,8 @@ const openDeleteDialog = (user) => {
             {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="user-email">
-                Email {!isEditing && <span className="text-destructive">*</span>}
+                Email{" "}
+                {!isEditing && <span className="text-destructive">*</span>}
               </Label>
               <Input
                 id="user-email"
@@ -964,13 +1041,15 @@ const openDeleteDialog = (user) => {
             {/* Notas informativas */}
             {!isEditing && (
               <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
-                Se generara una contrasena temporal que se mostrara despues de crear el usuario.
+                Se generara una contrasena temporal que se mostrara despues de
+                crear el usuario.
               </p>
             )}
 
             {isEditing && (
               <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
-                Para modificar el rol del usuario, usa el botón de seguridad (escudo) en la tabla.
+                Para modificar el rol del usuario, usa el botón de seguridad
+                (escudo) en la tabla.
               </p>
             )}
           </div>

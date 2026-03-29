@@ -456,7 +456,7 @@ const Asistencia = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
         <div
           className="space-y-6"
           role="status"
@@ -475,7 +475,7 @@ const Asistencia = () => {
 
   if (error) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
         <Card>
           <CardHeader>
             <CardTitle>Asistencia</CardTitle>

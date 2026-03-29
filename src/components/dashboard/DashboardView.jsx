@@ -13,7 +13,6 @@ import {
   Clock,
   Cake,
   UserPlus,
-  Activity,
   RefreshCw,
   Copy,
   Phone,
@@ -94,9 +93,12 @@ export function DashboardView() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 shrink-0">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">
-            Dashboard
-          </h1>
+          <div className="relative inline-block">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Dashboard
+            </h1>
+            <span className="absolute -top-1 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
+          </div>
           <p className="text-sm sm:text-base text-muted-foreground">
             Vista general del gimnasio
           </p>
@@ -145,23 +147,13 @@ export function DashboardView() {
             icon={UserPlus}
             color="green"
           />
-
-          <StatCard
-            title="Asistencia Semanal"
-            value={metrics.weeklyAttendance || 0}
-            subtitle={`${metrics.weeklyUniqueClients || 0} clientes unicos (${(
-              metrics.weeklyPercentage || 0
-            ).toFixed(1)}%)`}
-            icon={Activity}
-            color="blue"
-          />
         </StatsGrid>
       </div>
 
       {/* Graficos y Listas — ocupa el espacio restante */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 flex-1 min-h-0">
         {/* Clientes proximos a vencer */}
-        <Card className="overflow-hidden flex flex-col min-h-0">
+        <Card className="overflow-hidden flex flex-col min-h-0 bg-gradient-to-br from-card to-card/80">
           <CardHeader className="pb-3 sm:pb-4 shrink-0">
             <CardTitle className="flex items-center justify-between gap-2 text-base sm:text-lg">
               <div className="flex items-center gap-2">
@@ -169,7 +161,15 @@ export function DashboardView() {
                   className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0"
                   aria-hidden="true"
                 />
-                <span className="truncate">Clientes Proximos a Vencer</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="truncate cursor-default md:hidden">Clientes Proximos a Vencer</span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="font-medium md:hidden">
+                    <p>Clientes Proximos a Vencer</p>
+                  </TooltipContent>
+                </Tooltip>
+                <span className="hidden md:inline truncate">Clientes Proximos a Vencer</span>
               </div>
               {metrics.expiringSoon?.length > 0 && (
                 <span className="text-xs sm:text-sm font-normal bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-full">
@@ -288,14 +288,22 @@ export function DashboardView() {
         </Card>
 
         {/* Proximos cumpleanos */}
-        <Card className="overflow-hidden flex flex-col min-h-0">
+        <Card className="overflow-hidden flex flex-col min-h-0 bg-gradient-to-br from-card to-card/80">
           <CardHeader className="pb-3 sm:pb-4 shrink-0">
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Cake
                 className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0"
                 aria-hidden="true"
               />
-              <span className="truncate">Cumpleanos del Mes</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="truncate cursor-default md:hidden">Cumpleanos del Mes</span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="font-medium md:hidden">
+                  <p>Cumpleanos del Mes</p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="hidden md:inline truncate">Cumpleanos del Mes</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 flex-1 min-h-0 overflow-y-auto">
