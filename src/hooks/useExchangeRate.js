@@ -13,7 +13,6 @@ export function useExchangeRate() {
       setError(null);
       localStorage.setItem('manualExchangeRate', newRate.toString());
       localStorage.setItem('isManualRate', 'true');
-      console.log("Using manual exchange rate:", newRate);
     }
   };
 
@@ -43,11 +42,9 @@ export function useExchangeRate() {
               const data = await response.json();
               if (data && data.promedio) {
                 bcvRate = parseFloat(data.promedio);
-                console.log("Rate from DolarAPI:", bcvRate);
               }
             }
           } catch (dolarApiErr) {
-            console.warn("DolarAPI failed:", dolarApiErr);
             fetchError = dolarApiErr;
           }
 
@@ -61,11 +58,10 @@ export function useExchangeRate() {
                 const data = await response.json();
                 if (data && data.USD && data.USD.sicad2) {
                   bcvRate = parseFloat(data.USD.sicad2);
-                  console.log("Rate from DolarToday:", bcvRate);
                 }
               }
             } catch (dolarTodayErr) {
-              console.warn("DolarToday API failed:", dolarTodayErr);
+              // Silently fail to next source
             }
           }
 
@@ -85,16 +81,13 @@ export function useExchangeRate() {
 
       if (cachedRate && cachedRate > 0) {
         setRate(cachedRate);
-        console.log("Exchange rate obtained:", cachedRate);
       } else {
         // Fallback a tasa fija si todo falla (incluso caché)
         const fallbackRate = 310.0;
         setRate(fallbackRate);
         setError("No se pudo obtener la tasa BCV (ni online ni caché), usando tasa de respaldo");
-        console.warn("Using fallback exchange rate:", fallbackRate);
       }
     } catch (err) {
-      console.error("Error fetching BCV rate:", err);
       // Fallback a tasa fija
       const fallbackRate = 310.0;
       setRate(fallbackRate);

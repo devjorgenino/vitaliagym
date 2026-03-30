@@ -28,14 +28,9 @@ import {
   Edit3,
   X,
   Save,
+  LogIn,
+  Fingerprint,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../../components/ui/card";
 import { Skeleton } from "../../../components/ui/skeleton";
 import {
   Avatar,
@@ -63,7 +58,6 @@ const Perfil = () => {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Cargar datos del usuario cuando el componente se monta
   useEffect(() => {
     if (user) {
       const phoneValue = user?.user_metadata?.phone || "";
@@ -120,7 +114,6 @@ const Perfil = () => {
   };
 
   const handleCancel = () => {
-    // Restaurar valores originales
     if (user) {
       const phoneValue = user?.user_metadata?.phone || "";
       const { operator, number } = parsePhone(phoneValue);
@@ -142,19 +135,16 @@ const Perfil = () => {
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validar el archivo
       if (!file.type.startsWith("image/")) {
         toast.error("Por favor selecciona una imagen válida");
         return;
       }
 
       if (file.size > 2 * 1024 * 1024) {
-        // 2MB
         toast.error("La imagen no debe superar los 2MB");
         return;
       }
 
-      // Crear preview
       const reader = new FileReader();
       reader.onload = (e) => {
         setAvatarPreview(e.target.result);
@@ -166,13 +156,10 @@ const Perfil = () => {
   const uploadAvatar = async (file) => {
     setAvatarLoading(true);
     try {
-      // Para simplificar, convertiremos la imagen a base64 y la guardaremos en metadata
-      // En producción, deberías usar un servicio de almacenamiento como S3, Cloudinary, etc.
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64Url = e.target.result;
 
-        // Actualizar el perfil con la URL base64 del avatar
         const result = await updateUserProfile({
           avatar_url: base64Url,
         });
@@ -204,8 +191,6 @@ const Perfil = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    // Si es solo fecha (YYYY-MM-DD), parsear manualmente para evitar desfase de zona horaria
-    // Si incluye hora (ISO timestamp), usar new Date() normalmente
     let date;
     if (dateString.length === 10 && dateString.includes("-")) {
       const parts = dateString.split("-");
@@ -237,141 +222,118 @@ const Perfil = () => {
 
   if (!user) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-        <div className="max-w-2xl mx-auto">
-          <Card>
-            <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg">Mi Perfil</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                Cargando información del usuario...
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6 pt-0">
-              <div
-                className="space-y-4"
-                role="status"
-                aria-label="Cargando perfil"
-              >
-                <div className="flex justify-center">
-                  <Skeleton className="h-20 w-20 sm:h-24 sm:w-24 rounded-full" />
-                </div>
-                <Skeleton className="h-10 sm:h-12 w-full" />
-                <Skeleton className="h-10 sm:h-12 w-full" />
-                <Skeleton className="h-10 sm:h-12 w-full" />
-              </div>
-            </CardContent>
-          </Card>
+      <div className="w-full space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton className="h-64 w-full" />
+          </div>
+          <div className="space-y-6">
+            <Skeleton className="h-48 w-full" />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-      <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Mi Perfil</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+    <div className="w-full space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Mi Perfil
+          </h1>
+          <p className="text-muted-foreground text-sm">
             Gestiona tu información personal y preferencias de cuenta
           </p>
         </div>
+        {!isEditing ? (
+          <Button
+            onClick={() => setIsEditing(true)}
+            variant="outline"
+            className="gap-2 w-fit"
+          >
+            <Edit3 className="h-4 w-4" />
+            Editar Perfil
+          </Button>
+        ) : (
+          <div className="flex gap-2">
+            <Button
+              onClick={handleCancel}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <X className="h-4 w-4" />
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={loading}
+              size="sm"
+              className="gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Guardar
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
 
-        {/* Card principal */}
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <User className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
-                Información Personal
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                {isEditing
-                  ? "Modifica tus datos y guarda los cambios"
-                  : "Haz clic en Editar para modificar tu información"}
-              </CardDescription>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-7 space-y-6">
+          <div className="bg-card border rounded-xl p-6 space-y-6">
+            <div className="flex items-center gap-2 text-lg font-semibold">
+              <User className="h-5 w-5 text-primary" />
+              Información Personal
             </div>
-            {!isEditing ? (
-              <Button
-                onClick={() => setIsEditing(true)}
-                variant="outline"
-                className="gap-2 w-fit text-xs sm:text-sm"
-                size="sm"
-              >
-                <Edit3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Editar Perfil</span>
-                <span className="sm:hidden">Editar</span>
-              </Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleCancel}
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 sm:gap-2 text-xs sm:text-sm"
-                >
-                  <X className="h-4 w-4" />
-                  <span className="hidden sm:inline">Cancelar</span>
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={loading}
-                  size="sm"
-                  className="gap-1 sm:gap-2 text-xs sm:text-sm"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="hidden sm:inline">Guardando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      <span className="hidden sm:inline">Guardar</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            <div className="space-y-4 sm:space-y-6">
-              {/* Avatar */}
-              <div className="flex flex-col items-center">
-                <div className="relative">
-                  <Avatar className="w-20 h-20 sm:w-24 sm:h-24">
-                    <AvatarImage
-                      src={
-                        avatarPreview ||
-                        user?.user_metadata?.avatar_url ||
-                        "/avatar.jpg"
-                      }
-                      alt={`Foto de perfil de ${formData.full_name || "Usuario"}`}
-                      loading="lazy"
-                    />
-                    <AvatarFallback className="text-lg bg-primary/10 text-primary">
-                      {getInitials(user?.user_metadata?.full_name || "Usuario")}
-                    </AvatarFallback>
-                  </Avatar>
-                  {isEditing && (
-                    <Button
-                      variant="default"
-                      size="icon"
-                      className="absolute bottom-0 right-0 h-8 w-8 rounded-full"
-                      onClick={handleAvatarClick}
-                      disabled={avatarLoading}
-                      aria-label="Cambiar foto de perfil"
-                    >
-                      {avatarLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Camera className="w-4 h-4" />
-                      )}
-                    </Button>
-                  )}
-                </div>
 
-                {/* Input de archivo accesible */}
+            <div className="flex flex-col sm:flex-row gap-6 items-start">
+              <div className="relative flex-shrink-0">
+                <Avatar className="w-24 h-24 sm:w-28 sm:h-28 ring-2 ring-border ring-offset-2 ring-offset-background">
+                  <AvatarImage
+                    src={
+                      avatarPreview ||
+                      user?.user_metadata?.avatar_url ||
+                      "/avatar.jpg"
+                    }
+                    alt={`Foto de perfil de ${formData.full_name || "Usuario"}`}
+                  />
+                  <AvatarFallback className="text-2xl bg-primary/10 text-primary">
+                    {getInitials(user?.user_metadata?.full_name || "Usuario")}
+                  </AvatarFallback>
+                </Avatar>
+                {isEditing && (
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="absolute bottom-0 right-0 h-8 w-8 rounded-full shadow-lg"
+                    onClick={handleAvatarClick}
+                    disabled={avatarLoading}
+                    aria-label="Cambiar foto de perfil"
+                  >
+                    {avatarLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Camera className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
+
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -381,220 +343,203 @@ const Perfil = () => {
                   id="avatar-upload"
                   aria-label="Subir foto de perfil"
                 />
+              </div>
 
-                {isEditing && !avatarPreview && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Haz clic en el icono de cámara para cambiar tu foto
-                  </p>
-                )}
-
+              <div className="flex-1 space-y-4 w-full">
                 {isEditing && avatarPreview && (
-                  <div className="mt-4 flex gap-2">
-                    <Button
-                      onClick={saveAvatar}
-                      disabled={avatarLoading}
-                      size="sm"
-                      className="gap-2"
-                    >
-                      {avatarLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4" />
-                          Guardar Avatar
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      onClick={() => setAvatarPreview(null)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Cancelar
-                    </Button>
+                  <div className="flex gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Nueva imagen seleccionada</p>
+                      <p className="text-xs text-muted-foreground">Preview disponible</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={saveAvatar}
+                        disabled={avatarLoading}
+                        size="sm"
+                        className="gap-1"
+                      >
+                        {avatarLoading ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Upload className="h-3 w-3" />
+                        )}
+                        Guardar
+                      </Button>
+                      <Button
+                        onClick={() => setAvatarPreview(null)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 )}
-              </div>
 
-              {/* Información de solo lectura */}
-              <div className="grid grid-cols-1 gap-3 sm:gap-4">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-muted-foreground text-xs sm:text-sm">
-                    <Mail className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                    Email
-                  </Label>
-                  <div className="px-3 py-2 bg-muted/50 border rounded-md text-xs sm:text-sm break-all">
-                    {user?.email || "N/A"}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs sm:text-sm">ID de Usuario</Label>
-                  <div className="px-3 py-2 bg-muted/50 border rounded-md font-mono text-xs break-all">
-                    {user?.id?.slice(0, 8) || "N/A"}...
-                  </div>
-                </div>
-              </div>
-
-              {/* Información editable */}
-              <div className="space-y-3 sm:space-y-4">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="full_name"
-                    className="flex items-center gap-2 text-xs sm:text-sm"
-                  >
-                    <User className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                    Nombre Completo
-                    {isEditing && <span className="text-destructive">*</span>}
-                  </Label>
-                  {isEditing ? (
-                    <Input
-                      id="full_name"
-                      type="text"
-                      name="full_name"
-                      value={formData.full_name}
-                      onChange={handleInputChange}
-                      placeholder="Ingresa tu nombre completo"
-                      disabled={loading}
-                      aria-required="true"
-                      className="text-sm"
-                    />
-                  ) : (
-                    <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
-                      {formData.full_name || (
-                        <span className="text-muted-foreground italic">
-                          No especificado
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="flex items-center gap-2 text-xs sm:text-sm">
-                    <Phone className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                    Teléfono
-                  </Label>
-                  {isEditing ? (
-                    <div className="flex gap-1">
-                      <Select
-                        value={formData.phone_operator}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            phone_operator: value,
-                          }))
-                        }
-                        disabled={loading}
-                      >
-                        <SelectTrigger
-                          className="w-[80px] sm:w-[90px] flex-shrink-0 text-xs sm:text-sm"
-                          aria-label="Operador telefónico"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PHONE_OPERATORS.map((op) => (
-                            <SelectItem key={op.code} value={op.code}>
-                              <span className="font-medium">{op.code}</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="full_name" className="text-sm font-medium">
+                      Nombre Completo
+                      {isEditing && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                    {isEditing ? (
                       <Input
-                        id="phone"
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
+                        id="full_name"
+                        type="text"
+                        name="full_name"
+                        value={formData.full_name}
                         onChange={handleInputChange}
-                        placeholder="1234567"
-                        maxLength={7}
+                        placeholder="Ingresa tu nombre completo"
                         disabled={loading}
-                        className="flex-1 text-sm"
+                        className="bg-background"
                       />
-                    </div>
-                  ) : (
-                    <div className="px-3 py-2 bg-muted/30 border rounded-md text-sm">
-                      {formData.phone ? (
-                        <span>
-                          {formData.phone_operator}-{formData.phone}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground italic">
-                          No especificado
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div className="px-3 py-2 text-sm">
+                        {formData.full_name || (
+                          <span className="text-muted-foreground italic">No especificado</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="role" className="flex items-center gap-2 text-xs sm:text-sm">
-                    <Shield className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                    Rol
-                  </Label>
-                  {isEditing ? (
-                    <Select
-                      value={formData.role}
-                      onValueChange={handleRoleChange}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="role" className="w-full">
-                        <SelectValue placeholder="Selecciona un rol" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">Usuario</SelectItem>
-                        <SelectItem value="admin">Administrador</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="px-3 py-2 bg-muted/30 border rounded-md">
-                      <Badge
-                        variant={
-                          formData.role === "admin" ? "default" : "secondary"
-                        }
-                      >
-                        {formData.role === "admin"
-                          ? "Administrador"
-                          : "Usuario"}
-                      </Badge>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Email</Label>
+                    <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                      <Mail className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{user?.email}</span>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Información de sesión */}
-        <Card>
-          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-4">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Clock className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" aria-hidden="true" />
-              Información de Sesión
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              Detalles sobre tu cuenta y actividad
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
               <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs sm:text-sm">Último Ingreso</Label>
-                <div className="px-3 py-2 bg-muted/30 border rounded-md text-xs sm:text-sm">
-                  {formatDateTime(user?.last_sign_in_at)}
+                <Label htmlFor="phone" className="text-sm font-medium flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  Teléfono
+                </Label>
+                {isEditing ? (
+                  <div className="flex gap-2">
+                    <Select
+                      value={formData.phone_operator}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          phone_operator: value,
+                        }))
+                      }
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="w-[90px] bg-background" aria-label="Operador telefónico">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_OPERATORS.map((op) => (
+                          <SelectItem key={op.code} value={op.code}>
+                            <span className="font-medium">{op.code}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      placeholder="1234567"
+                      maxLength={7}
+                      disabled={loading}
+                      className="flex-1 bg-background"
+                    />
+                  </div>
+                ) : (
+                  <div className="px-3 py-2 text-sm">
+                    {formData.phone ? (
+                      <span>{formData.phone_operator}-{formData.phone}</span>
+                    ) : (
+                      <span className="text-muted-foreground italic">No especificado</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="role" className="text-sm font-medium flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  Rol
+                </Label>
+                {isEditing ? (
+                  <Select
+                    value={formData.role}
+                    onValueChange={handleRoleChange}
+                    disabled={loading}
+                  >
+                    <SelectTrigger id="role" className="w-full bg-background">
+                      <SelectValue placeholder="Selecciona un rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">Usuario</SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge
+                    variant={formData.role === "admin" ? "default" : "secondary"}
+                    className="w-fit gap-1"
+                  >
+                    {formData.role === "admin" ? (
+                      <>
+                        <Shield className="h-3 w-3" />
+                        Administrador
+                      </>
+                    ) : (
+                      <>
+                        <User className="h-3 w-3" />
+                        Usuario
+                      </>
+                    )}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t">
+              <Label className="text-sm font-medium text-muted-foreground">ID de Usuario</Label>
+              <div className="px-3 py-2 font-mono text-xs text-muted-foreground bg-muted/50 rounded-lg">
+                {user?.id}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-5 space-y-6">
+          <div className="bg-card border rounded-xl p-6 space-y-6">
+            <div className="flex items-center gap-2 text-lg font-semibold">
+              <Clock className="h-5 w-5 text-primary" />
+              Información de Sesión
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                <LogIn className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Último Ingreso</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDateTime(user?.last_sign_in_at)}
+                  </p>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs sm:text-sm">
-                  Email Verificado
-                </Label>
-                <div className="px-3 py-2 bg-muted/30 border rounded-md">
+
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                <Fingerprint className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Estado del Email</p>
                   <Badge
                     variant={user?.email_confirmed_at ? "default" : "secondary"}
-                    className="gap-1 text-xs"
+                    className="gap-1"
                   >
                     {user?.email_confirmed_at ? (
                       <>
@@ -604,24 +549,36 @@ const Perfil = () => {
                     ) : (
                       <>
                         <Clock className="h-3 w-3" />
-                        Pendiente
+                        Pendiente de verificación
                       </>
                     )}
                   </Badge>
                 </div>
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label className="flex items-center gap-2 text-muted-foreground text-xs sm:text-sm">
-                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                  Miembro desde
-                </Label>
-                <div className="px-3 py-2 bg-muted/30 border rounded-md text-xs sm:text-sm">
-                  {formatDate(user?.created_at)}
+
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Miembro desde</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDate(user?.created_at)}
+                  </p>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          <div className="bg-gradient-to-br from-primary/10 to-secondary/30 border rounded-xl p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">
+                ¿Necesitas ayuda con tu cuenta?
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Contacta al administrador del sistema si tienes problemas con tu perfil o necesitas cambiar permisos.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ const Button = React.forwardRef(({
     {children}
   </button>
 ));
+Button.displayName = 'Button';
 
 // Mock Input component for testing
 const Input = React.forwardRef(({ 
@@ -40,6 +41,7 @@ const Input = React.forwardRef(({
     {...props}
   />
 ));
+Input.displayName = 'Input';
 
 // Mock FormMessage component
 const FormMessage = ({ children, variant = 'error', id }) => {

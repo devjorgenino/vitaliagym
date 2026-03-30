@@ -90,15 +90,18 @@ const comingSoonSections = [
 
 const Configuraciones = () => {
   return (
-    <div className="container mx-auto py-6">
-      <div className="space-y-6">
+    <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Settings className="h-8 w-8" aria-hidden="true" />
-            Configuraciones
-          </h1>
-          <p className="text-muted-foreground mt-1">
+          <div className="relative inline-block">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2 sm:gap-3">
+              <Settings className="h-6 w-6 sm:h-8 sm:w-8 text-foreground" aria-hidden="true" />
+              Configuraciones
+            </h1>
+            <span className="absolute -top-0.5 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
+          </div>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Gestiona la configuración del sistema, usuarios, roles y preferencias
           </p>
         </div>

@@ -82,8 +82,6 @@ export function PieChart({ data }) {
   const center = size / 2;
   const radius = size / 3;
 
-  let cumulativePercentage = 0;
-
   const createPath = (startAngle, endAngle) => {
     const x1 = center + radius * Math.cos(startAngle);
     const y1 = center + radius * Math.sin(startAngle);
@@ -95,26 +93,29 @@ export function PieChart({ data }) {
     return `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
   };
 
+  // Calcular ángulos acumulados de forma inmutable
+  const segments = data.reduce((acc, item) => {
+    const percentage = (item.value / total) * 100;
+    const startAngle = ((acc.cumulative / 100) * 2 * Math.PI) - Math.PI / 2;
+    const endAngle = startAngle + ((percentage / 100) * 2 * Math.PI);
+    return {
+      cumulative: acc.cumulative + percentage,
+      segments: [...acc.segments, { item, startAngle, endAngle }]
+    };
+  }, { cumulative: 0, segments: [] }).segments;
+
   return (
     <div className="flex items-center space-x-4">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {data.map((item, index) => {
-          const percentage = (item.value / total) * 100;
-          const startAngle = (cumulativePercentage / 100) * 2 * Math.PI - Math.PI / 2;
-          const endAngle = startAngle + (percentage / 100) * 2 * Math.PI;
-          
-          cumulativePercentage += percentage;
-
-          return (
-            <path
-              key={index}
-              d={createPath(startAngle, endAngle)}
-              fill={item.color}
-              stroke="white"
-              strokeWidth="2"
-            />
-          );
-        })}
+        {segments.map((segment, index) => (
+          <path
+            key={index}
+            d={createPath(segment.startAngle, segment.endAngle)}
+            fill={segment.item.color}
+            stroke="white"
+            strokeWidth="2"
+          />
+        ))}
       </svg>
       <div className="space-y-2">
         {data.map((item, index) => (

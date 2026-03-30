@@ -155,11 +155,11 @@ ON CONFLICT DO NOTHING;`;
             <CardContent>
               <div className="space-y-2 text-sm">
                 <div className="p-3 bg-red-50 rounded border-l-4 border-red-500">
-                  <strong>Error "relation does not exist":</strong>
+                  <strong>Error &quot;relation does not exist&quot;:</strong>
                   <p className="mt-1">Las tablas no están creadas. Ejecuta el script SQL.</p>
                 </div>
                 <div className="p-3 bg-yellow-50 rounded border-l-4 border-yellow-500">
-                  <strong>Error "Failed to fetch":</strong>
+                  <strong>Error &quot;Failed to fetch&quot;:</strong>
                   <p className="mt-1">Verifica tu conexión a internet y variables de entorno.</p>
                 </div>
                 <div className="p-3 bg-blue-50 rounded border-l-4 border-blue-500">

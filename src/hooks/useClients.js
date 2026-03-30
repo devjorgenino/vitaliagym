@@ -32,7 +32,7 @@ export function useClients() {
   }, []);
 
   const calculateDaysUntilPayment = useCallback((nextPaymentDate, joinDate) => {
-    return calcDaysUntilPayment(nextPaymentDate);
+    return calcDaysUntilPayment(nextPaymentDate, joinDate);
   }, []);
 
   const getPaymentStatusColor = useCallback((daysLeft) => {

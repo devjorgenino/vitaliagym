@@ -9,7 +9,9 @@ export function useInstallPWA() {
   useEffect(() => {
     // Check if already running as standalone app
     if (typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstallable(false);
+      requestAnimationFrame(() => {
+        setIsInstallable(false);
+      });
       return;
     }
 

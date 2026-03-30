@@ -25,8 +25,10 @@ export function ExchangeRateCard({ compact = false }) {
   // Activar automáticamente el modo edición si hay error y no está en modo manual
   useEffect(() => {
     if (error && !isManualRate && !isEditing) {
-      setTempRate(rate ? rate.toString() : "");
-      setIsEditing(true);
+      requestAnimationFrame(() => {
+        setTempRate(rate ? rate.toString() : "");
+        setIsEditing(true);
+      });
       toast.error(
         "Error al obtener tasa BCV. Por favor, ingrese una tasa manual."
       );

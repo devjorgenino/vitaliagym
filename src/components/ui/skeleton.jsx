@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 
 function Skeleton({
   className,
+  variant = "pulse",
   ...props
 }) {
   return (
@@ -11,7 +12,9 @@ function Skeleton({
       role="status"
       aria-label="Cargando..."
       className={cn(
-        "bg-muted/60 animate-pulse rounded-md",
+        "bg-muted/60 rounded-md overflow-hidden",
+        variant === "shimmer" && "animate-shimmer relative isolate",
+        variant === "pulse" && "animate-pulse",
         className
       )}
       {...props}

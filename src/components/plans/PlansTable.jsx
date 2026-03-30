@@ -3,6 +3,7 @@ import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Dumbbell } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -170,76 +171,66 @@ export function PlansTable() {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    let date;
-    if (dateString.length === 10 && dateString.includes("-")) {
-      const parts = dateString.split("-");
-      date = new Date(
-        parseInt(parts[0], 10),
-        parseInt(parts[1], 10) - 1,
-        parseInt(parts[2], 10),
-      );
-    } else {
-      date = new Date(dateString);
-    }
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
+  // Obtener precio formateado
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Planes</CardTitle>
-          <CardDescription>
-            Gestiona los planes de membresía del gimnasio
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2" role="status" aria-label="Cargando planes">
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4">
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+              <Dumbbell className="h-5 w-5" />
+              Planes
+            </h2>
+          </div>
+          <Skeleton className="h-9 w-32" />
+        </div>
+        <div className="p-3 sm:p-4 pt-0">
+          <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Planes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8" role="alert">
-            <p className="text-destructive mb-4">Error: {error}</p>
-            <Button onClick={refetch} variant="outline" className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Reintentar
-            </Button>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4">
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+              <Dumbbell className="h-5 w-5" />
+              Planes
+            </h2>
           </div>
-        </CardContent>
+          <Button onClick={refetch} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Reintentar
+          </Button>
+        </div>
+        <div className="p-3 sm:p-4 pt-0">
+          <div className="text-center py-8" role="alert">
+            <p className="text-destructive">Error: {error}</p>
+          </div>
+        </div>
       </Card>
     );
   }
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4">
           <div>
-            <CardTitle>Planes ({plans.length})</CardTitle>
-            <CardDescription>
+            <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+              <Dumbbell className="h-5 w-5" />
+              Planes ({plans.length})
+            </h2>
+            <p className="text-sm text-muted-foreground">
               Configura los planes de membresía disponibles para tus clientes
-            </CardDescription>
+            </p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -261,8 +252,8 @@ export function PlansTable() {
               <span className="hidden sm:inline">Actualizar</span>
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="p-3 sm:p-4 pt-0">
           {/* Estado vacío o tabla */}
           {plans.length === 0 ? (
             <EmptyState
@@ -393,10 +384,10 @@ export function PlansTable() {
                 pageSize={pageSize}
                 onPageChange={setCurrentPage}
                 onPageSizeChange={setPageSize}
-              />
-            </>
-          )}
-        </CardContent>
+            />
+          </>
+        )}
+        </div>
       </Card>
 
       {/* Modal para Crear/Editar Plan */}
@@ -475,7 +466,7 @@ export function PlansTable() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"

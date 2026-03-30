@@ -257,69 +257,75 @@ export default function StaffTable() {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-72" />
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4">
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Personal
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Gestiona el personal del gimnasio: entrenadores, recepcionistas, limpieza, etc.
+            </p>
+          </div>
+          <Skeleton className="h-9 w-36" />
+        </div>
+        <div className="p-3 sm:p-4 pt-0">
+          <div className="space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Personal
-              </CardTitle>
-              <CardDescription>
-                Gestiona el personal del gimnasio: entrenadores, recepcionistas, limpieza, etc.
-              </CardDescription>
-            </div>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4">
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Personal
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Gestiona el personal del gimnasio: entrenadores, recepcionistas, limpieza, etc.
+            </p>
+          </div>
             <PermissionGate permission={PERMISSIONS.ADMIN_STAFF_CREATE}>
               <Button onClick={() => handleOpenDialog()} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Nuevo Personal
               </Button>
             </PermissionGate>
-          </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="p-3 sm:p-4 pt-0">
           {/* Estadísticas rápidas */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-muted/50 rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-2">
+            <div className="bg-muted/50 rounded-lg p-3">
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <Users className="h-4 w-4" />
                 Total
               </div>
               <p className="text-2xl font-bold mt-1">{stats.total}</p>
             </div>
-            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
               <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm">
                 <UserCheck className="h-4 w-4" />
                 Activos
               </div>
               <p className="text-2xl font-bold mt-1 text-green-700 dark:text-green-300">{stats.active}</p>
             </div>
-            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3">
               <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-sm">
                 <Clock className="h-4 w-4" />
                 En Licencia
               </div>
               <p className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">{stats.onLeave}</p>
             </div>
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
               <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-sm">
                 <DollarSign className="h-4 w-4" />
                 Nómina Mensual
@@ -331,7 +337,7 @@ export default function StaffTable() {
           </div>
 
           {/* Filtros */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-1.5">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -489,7 +495,7 @@ export default function StaffTable() {
               </Table>
             </div>
           )}
-        </CardContent>
+        </div>
       </Card>
 
       {/* Dialog para crear/editar */}

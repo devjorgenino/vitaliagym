@@ -19,6 +19,7 @@ import {
  * - icon: Icono de Lucide
  * - permission: Permiso requerido para ver este item (opcional)
  * - children: Sub-items (opcional)
+ * - featureFlag: Variable de entorno para ocultar el item (opcional)
  */
 export const items = [
   {
@@ -38,6 +39,7 @@ export const items = [
     url: "/asistencia",
     icon: CalendarCheck2,
     permission: "attendance.view",
+    featureFlag: "NEXT_PUBLIC_ENABLE_ATTENDANCE",
   },
   {
     title: "Planes",
@@ -78,7 +80,7 @@ export const configItems = [
 ];
 
 /**
- * Función helper para filtrar items por permisos
+ * Función helper para filtrar items por permisos y feature flags
  * 
  * @param {Array} menuItems - Items del menú
  * @param {Function} hasPermission - Función que verifica si tiene un permiso
@@ -86,6 +88,12 @@ export const configItems = [
  */
 export const filterItemsByPermission = (menuItems, hasPermission) => {
   return menuItems.filter(item => {
+    // Si tiene featureFlag, verificar que esté habilitado
+    if (item.featureFlag) {
+      const isEnabled = process.env[item.featureFlag] === 'true';
+      if (!isEnabled) return false;
+    }
+
     // Si no tiene permission definido, siempre mostrar
     if (!item.permission) return true;
     

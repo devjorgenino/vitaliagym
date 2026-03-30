@@ -13,7 +13,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -96,7 +95,7 @@ export const AppSidebar = () => {
   };
 
   return (
-    <Sidebar collapsible="icon" id="sidebar">
+    <Sidebar collapsible="icon" id="sidebar" className="border-r border-[--border]/20 bg-gradient-to-b from-[--background]/80 to-[--background]/40 backdrop-blur-xl">
       <SidebarGroup>
         <SidebarHeader className="flex justify-center items-center m-auto">
           {state === "collapsed" ? (
@@ -153,24 +152,73 @@ export const AppSidebar = () => {
                   ))}
                 </>
               ) : (
-filteredMainItems.map((item) => (
+                filteredMainItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton asChild>
+                          <Link
+                            href={item.url}
+                            onClick={handleMobileNavClick}
+                            className={cn(
+                              "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-xl hover:bg-[--primary]/5 hover:text-foreground",
+                              "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
+                              // Active state con colores del tema
+                              pathname === item.url ||
+                                pathname.startsWith(item.url + "/")
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                : "",
+                            )}
+                          >
+                            <item.icon className="!size-5 transition-colors" />
+                            <span className="group-data-[collapsible=icon]:hidden transition-colors">
+                              {item.title}
+                            </span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {state === "collapsed" && (
+                        <TooltipContent side="right" sideOffset={5}>
+                          <p>{item.title}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Separador y menú de configuración (solo si hay items) */}
+        {filteredConfigItems.length > 0 && (
+          <>
+            <hr className="mx-3 border-t border-[--border] my-2" />
+            <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-2">
+              {state !== "collapsed" && (
+                <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">
+                  Configuración
+                </SidebarGroupLabel>
+              )}
+              <SidebarGroupContent>
+                <SidebarMenu className="group-data-[collapsible=icon]:items-center">
+                  {filteredConfigItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton asChild>
-                            <Link
-                              href={item.url}
-                              onClick={handleMobileNavClick}
-                              className={cn(
-                                "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
-                                "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
-                                // Active state con colores del tema
-                                pathname === item.url ||
-                                  pathname.startsWith(item.url + "/")
-                                  ? "bg-primary text-primary-foreground hover:bg-primary"
-                                  : "",
-                              )}
-                            >
+                          <Link
+                            href={item.url}
+                            onClick={handleMobileNavClick}
+                            className={cn(
+                              "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-xl hover:bg-[--primary]/5 hover:text-foreground",
+                              "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
+                              pathname === item.url ||
+                                pathname.startsWith(item.url + "/")
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                : "",
+                            )}
+                          >
                               <item.icon className="!size-5 transition-colors" />
                               <span className="group-data-[collapsible=icon]:hidden transition-colors">
                                 {item.title}
@@ -185,56 +233,7 @@ filteredMainItems.map((item) => (
                         )}
                       </Tooltip>
                     </SidebarMenuItem>
-                  ))
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Separador y menú de configuración (solo si hay items) */}
-        {filteredConfigItems.length > 0 && (
-          <>
-            <SidebarSeparator className="mx-3" />
-            <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-2">
-              {state !== "collapsed" && (
-                <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">
-                  Configuración
-                </SidebarGroupLabel>
-              )}
-              <SidebarGroupContent>
-                <SidebarMenu className="group-data-[collapsible=icon]:items-center">
-{filteredConfigItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <SidebarMenuButton asChild>
-                              <Link
-                                href={item.url}
-                                onClick={handleMobileNavClick}
-                                className={cn(
-                                  "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
-                                  "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
-                                  pathname === item.url ||
-                                    pathname.startsWith(item.url + "/")
-                                    ? "bg-primary text-primary-foreground hover:bg-primary"
-                                    : "",
-                                )}
-                              >
-                                <item.icon className="!size-5 transition-colors" />
-                                <span className="group-data-[collapsible=icon]:hidden transition-colors">
-                                  {item.title}
-                                </span>
-                              </Link>
-                            </SidebarMenuButton>
-                          </TooltipTrigger>
-                          {state === "collapsed" && (
-                            <TooltipContent side="right" sideOffset={5}>
-                              <p>{item.title}</p>
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      </SidebarMenuItem>
-                    ))}
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -245,18 +244,23 @@ filteredMainItems.map((item) => (
       {/* Install App Option */}
       {canShowInstall && (
         <>
-          <SidebarSeparator className="mx-3" />
-          <SidebarGroup className="px-3 py-2">
+          <hr className="mx-3 border-t border-[--border] my-2" />
+          <SidebarGroup className="flex flex-col gap-1.5 items-center px-3 py-2">
             <SidebarGroupContent>
               <SidebarMenu className="group-data-[collapsible=icon]:items-center">
                 <SidebarMenuItem>
-                  <div className="flex items-center w-full">
+                  <div 
+                    className={cn(
+                      "flex items-center w-full text-sm font-medium text-muted-foreground",
+                      "group-data-[collapsible=icon]:justify-center",
+                    )}
+                  >
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           onClick={install}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2.5 flex-1 text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-lg hover:bg-muted",
+                            "flex items-center gap-3 px-3 py-2.5 w-full text-left rounded-xl transition-all duration-200 hover:bg-[--primary]/5 hover:text-foreground",
                             "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",
                           )}
                         >
@@ -300,8 +304,8 @@ filteredMainItems.map((item) => (
         <SidebarFooter className="px-3 py-3">
           <div
             className={cn(
-              "flex flex-row justify-between items-center gap-3",
-              "group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-2",
+              "flex flex-row justify-between items-center gap-3 p-2 rounded-xl bg-[--primary]/5",
+              "group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:p-1.5",
             )}
           >
             <div>
@@ -313,7 +317,7 @@ filteredMainItems.map((item) => (
                     className="hover:opacity-80 transition-opacity"
                   >
                     <div className="flex items-center justify-center gap-2">
-                      <Avatar className="w-9 h-9 border-2 border-blue-100">
+                      <Avatar className="w-9 h-9 border-2 border-primary/20 shadow-sm">
                         <AvatarImage
                           src={
                             user?.user_metadata?.avatar_url
@@ -323,7 +327,7 @@ filteredMainItems.map((item) => (
                           alt="Avatar"
                           loading="lazy"
                         />
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
+                        <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70 text-primary-foreground text-sm font-medium">
                           {getInitials(username)}
                         </AvatarFallback>
                       </Avatar>
@@ -383,7 +387,7 @@ filteredMainItems.map((item) => (
                       router.push("/auth/login");
                     }}
                     className={cn(
-                      "w-9 h-9 rounded-lg bg-muted text-muted-foreground hover:bg-destructive hover:text-white hover:scale-105 transition-all duration-200 flex items-center justify-center",
+                      "w-9 h-9 rounded-lg bg-background/50 text-muted-foreground hover:bg-destructive hover:text-white hover:scale-105 transition-all duration-200 flex items-center justify-center",
                       "group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8",
                     )}
                   >

@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAttendance } from "../../../hooks/useAttendance";
+import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -62,6 +64,17 @@ import {
 import { Pagination, usePagination } from "../../../components/ui/pagination";
 
 const Asistencia = () => {
+  const router = useRouter();
+
+  // TODO: Remove this guard when attendance feature is ready to be permanently enabled
+  // Feature flag: Redirect if attendance module is disabled
+  useEffect(() => {
+    const isAttendanceEnabled = process.env.NEXT_PUBLIC_ENABLE_ATTENDANCE === 'true';
+    if (!isAttendanceEnabled) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   const {
     attendance,
     loading,
@@ -338,18 +351,6 @@ const Asistencia = () => {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    // Parsear la fecha manualmente para evitar problemas de zona horaria
-    const parts = dateString.split("-");
-    const date = new Date(
-      parseInt(parts[0], 10),
-      parseInt(parts[1], 10) - 1,
-      parseInt(parts[2], 10),
-    );
-    return date.toLocaleDateString("es-ES");
-  };
-
   const formatTime = (timeString) => {
     if (!timeString) return "N/A";
     const [hours, minutes] = timeString.split(":");
@@ -455,7 +456,7 @@ const Asistencia = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
         <div
           className="space-y-6"
           role="status"
@@ -474,7 +475,7 @@ const Asistencia = () => {
 
   if (error) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
         <Card>
           <CardHeader>
             <CardTitle>Asistencia</CardTitle>
@@ -797,7 +798,7 @@ const Asistencia = () => {
                           </h3>
                           <p className="text-sm text-red-700 dark:text-red-300 mt-1">
                             No se encontró ningún cliente con la cédula o nombre
-                            "{searchTerm}"
+                            &quot;{searchTerm}&quot;
                           </p>
                         </div>
                       </div>

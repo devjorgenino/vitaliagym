@@ -4,6 +4,10 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
+import { formatDate } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
+
+const INSCRIPTION_PRICE = 5;
 import {
   DOCUMENT_TYPES,
   PHONE_OPERATORS,
@@ -12,6 +16,10 @@ import {
   formatPhone,
   parsePhone,
 } from "../../lib/venezuelanData";
+import {
+  auditNextPaymentDates,
+  recalculateNextPaymentDate,
+} from "../../utils/paymentCalculations";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -19,6 +27,9 @@ import {
   Phone,
   Users,
   RefreshCw,
+  Wrench,
+  Copy,
+  Mail,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -28,6 +39,7 @@ import { TruncatedCell } from "../ui/truncated-cell";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
+import { Switch } from "../ui/switch";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import {
   Dialog,
@@ -102,6 +114,7 @@ export function ClientsTable() {
     observations: "",
     plan_id: "",
     join_date: new Date().toISOString().split("T")[0],
+    enrollment_paid: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -110,11 +123,15 @@ export function ClientsTable() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
 
+  // Estado para reparación de fechas de pago
+  const [isRepairing, setIsRepairing] = useState(false);
+
   // Estados para búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateSort, setDateSort] = useState("");
 
   // Refrescar clientes al volver a la pestaña (p. ej. después de registrar un pago en /pagos)
   useEffect(() => {
@@ -124,7 +141,8 @@ export function ClientsTable() {
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [refetch]);
 
   // Estados para paginación
@@ -148,6 +166,11 @@ export function ClientsTable() {
   const getClientStatus = (client) => {
     if (!client || !client.plan_id) {
       return { status: "inactivo", label: "Inactivo" };
+    }
+
+    // Usar el status de la base de datos si está disponible
+    if (client.status === "pendiente") {
+      return { status: "pendiente", label: "Pendiente" };
     }
 
     // REGLA PRINCIPAL: Si tiene días hasta el próximo pago negativos, está vencido (inactivo)
@@ -218,13 +241,18 @@ export function ClientsTable() {
       0,
     );
 
-    let paidForCurrentCycle = totalPaidSoFar % planPrice;
+    // El precio total incluye la inscripción si está marcada
+    const hasEnrollmentPaid = client.enrollment_paid === true;
+    const totalPrice = hasEnrollmentPaid
+      ? planPrice + INSCRIPTION_PRICE
+      : planPrice;
 
-    if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
-      paidForCurrentCycle = planPrice;
+    // Si el pago total es mayor o igual al precio total, está pagado
+    if (totalPaidSoFar >= totalPrice - 0.001) {
+      return { isFullyPaid: true, remainingFormatted: "0.00" };
     }
 
-    const currentRemaining = planPrice - paidForCurrentCycle;
+    const currentRemaining = totalPrice - totalPaidSoFar;
     const isFullyPaid = currentRemaining < 0.001;
 
     return {
@@ -252,7 +280,18 @@ export function ClientsTable() {
       0,
     );
 
-    const remainingAmount = Math.max(0, planPrice - totalPaid);
+    // El precio total incluye la inscripción si está marcada
+    const hasEnrollmentPaid = client.enrollment_paid === true;
+    const totalPrice = hasEnrollmentPaid
+      ? planPrice + INSCRIPTION_PRICE
+      : planPrice;
+
+    // Si el pago total es mayor o igual al precio total, no hay restante
+    if (totalPaid >= totalPrice - 0.001) {
+      return null;
+    }
+
+    const remainingAmount = totalPrice - totalPaid;
 
     if (remainingAmount > 0) {
       // Encontrar el último pago para asociarlo con el saldo restante
@@ -299,6 +338,7 @@ export function ClientsTable() {
       observations: "",
       plan_id: "",
       join_date: new Date().toISOString().split("T")[0],
+      enrollment_paid: false,
     });
     setSelectedClient(null);
     setIsEditing(false);
@@ -330,6 +370,7 @@ export function ClientsTable() {
       observations: client.observations || "",
       plan_id: client.plan_id || "",
       join_date: client.join_date || "",
+      enrollment_paid: client.enrollment_paid || false,
     });
     setIsEditing(true);
     setIsDialogOpen(true);
@@ -360,6 +401,13 @@ export function ClientsTable() {
     }));
   };
 
+  const handleEnrollmentPaidChange = (checked) => {
+    setFormData((prev) => ({
+      ...prev,
+      enrollment_paid: checked,
+    }));
+  };
+
   // Enviar formulario (crear o editar)
   const handleSubmit = async () => {
     if (
@@ -376,12 +424,35 @@ export function ClientsTable() {
 
     setIsSubmitting(true);
     try {
+      const formattedCedula = formatCedula(
+        formData.cedula_type,
+        formData.cedula,
+      );
+
+      if (!isEditing) {
+        const existingClient = clients.find(
+          (c) => c.cedula === formattedCedula,
+        );
+        if (existingClient) {
+          toast.error(
+            `La cédula ${formattedCedula} ya está registrada en el sistema para el cliente ${existingClient.first_name} ${existingClient.last_name}. Intenta con una cédula diferente.`,
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // Format cedula with type prefix before saving
       // Format phone with operator prefix before saving
+      let planPrice = getPlanPrice(formData.plan_id);
+      if (!isEditing && formData.enrollment_paid) {
+        planPrice = planPrice + INSCRIPTION_PRICE;
+      }
+
       const dataToSave = {
         first_name: formData.first_name,
         last_name: formData.last_name,
-        cedula: formatCedula(formData.cedula_type, formData.cedula),
+        cedula: formattedCedula,
         birth_date: formData.birth_date,
         email: formData.email,
         phone: formData.phone
@@ -391,6 +462,8 @@ export function ClientsTable() {
         observations: formData.observations,
         plan_id: formData.plan_id,
         join_date: formData.join_date,
+        enrollment_paid: formData.enrollment_paid,
+        status: isEditing ? undefined : "pendiente",
       };
 
       let result;
@@ -402,11 +475,30 @@ export function ClientsTable() {
 
       if (result.success) {
         handleCloseDialog();
-        toast.success(
-          isEditing
-            ? "Cliente actualizado exitosamente"
-            : "Cliente creado exitosamente",
-        );
+
+        if (!isEditing) {
+          // New client created with pending status
+          const newClient = result.data;
+          toast.success("Cliente creado. Complete el pago para activar.");
+
+          // Redirect to payments page
+          if (formData.enrollment_paid) {
+            // Include inscription + plan price
+            router.push(
+              `/pagos/${newClient.id}?amount=${planPrice}&enrollment=${INSCRIPTION_PRICE}&register=true`,
+            );
+          } else {
+            router.push(`/pagos/${newClient.id}?register=true`);
+          }
+        } else {
+          // Edit mode - check if enrollment was just added
+          const previouslyPaid = selectedClient?.enrollment_paid;
+          if (formData.enrollment_paid && !previouslyPaid) {
+            toast.success("Cliente actualizado. ¿Desea pagar la inscripción?");
+          } else {
+            toast.success("Cliente actualizado exitosamente");
+          }
+        }
       } else {
         toast.error(
           `Error al ${isEditing ? "actualizar" : "crear"} cliente: ` +
@@ -453,17 +545,27 @@ export function ClientsTable() {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    // Parsear la fecha manualmente para evitar problemas de zona horaria
-    // new Date("YYYY-MM-DD") se interpreta como UTC, causando desfase de 1 día
-    const parts = dateString.split("-");
-    const date = new Date(
-      parseInt(parts[0], 10),
-      parseInt(parts[1], 10) - 1,
-      parseInt(parts[2], 10),
-    );
-    return date.toLocaleDateString("es-ES");
+  // Reparar fechas de próximo pago de todos los clientes
+  const handleRepairPaymentDates = async () => {
+    setIsRepairing(true);
+    try {
+      const result = await recalculateAllNextPaymentDates();
+      if (result.success) {
+        toast.success(
+          `Fechas de pago actualizadas. ${result.updated} clientes actualizados.`,
+        );
+        if (result.errors && result.errors.length > 0) {
+          console.warn("Repair errors:", result.errors);
+        }
+      } else {
+        toast.error("Error al reparar fechas: " + result.error);
+      }
+    } catch (err) {
+      console.error("Error repairing payment dates:", err);
+      toast.error("Error al reparar fechas de pago");
+    } finally {
+      setIsRepairing(false);
+    }
   };
 
   // Lógica de filtrado
@@ -505,24 +607,66 @@ export function ClientsTable() {
     return matchesSearch && matchesPlan && matchesPayment && matchesStatus;
   });
 
+  // Filtrar por mes
+  const sortedClients = useMemo(() => {
+    if (!dateSort) return filteredClients;
+
+    const sorted = [...filteredClients];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    if (dateSort === "this_month") {
+      return sorted.filter((client) => {
+        if (!client.next_payment_date) return false;
+        const paymentDate = new Date(client.next_payment_date);
+        return (
+          paymentDate.getFullYear() === currentYear &&
+          paymentDate.getMonth() === currentMonth
+        );
+      });
+    } else if (dateSort.includes("-")) {
+      // Formato YYYY-MM para mes específico
+      const [year, month] = dateSort.split("-").map(Number);
+      return sorted.filter((client) => {
+        if (!client.next_payment_date) return false;
+        const paymentDate = new Date(client.next_payment_date);
+        return (
+          paymentDate.getFullYear() === year &&
+          paymentDate.getMonth() === month - 1 // Los meses en JS son 0-indexados
+        );
+      });
+    }
+
+    return sorted;
+  }, [filteredClients, dateSort]);
+
   // Función para limpiar todos los filtros
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedPlan("");
     setPaymentFilter("");
     setStatusFilter("");
+    setDateSort("");
     resetPage();
   };
 
   // Resetear página cuando cambian los filtros
   useEffect(() => {
     resetPage();
-  }, [searchTerm, selectedPlan, paymentFilter, statusFilter, resetPage]);
+  }, [
+    searchTerm,
+    selectedPlan,
+    paymentFilter,
+    statusFilter,
+    dateSort,
+    resetPage,
+  ]);
 
   // Datos paginados
   const paginatedClients = useMemo(() => {
-    return paginateData(filteredClients);
-  }, [filteredClients, paginateData]);
+    return paginateData(sortedClients);
+  }, [sortedClients, paginateData]);
 
   // Contar filtros activos
   const activeFiltersCount = [
@@ -530,57 +674,95 @@ export function ClientsTable() {
     selectedPlan,
     paymentFilter,
     statusFilter,
+    dateSort,
   ].filter((filter) => filter !== "").length;
+
+  // Detectar clientes duplicados por cédula
+  const duplicateCedulas = useMemo(() => {
+    const cedulaCount = {};
+    clients.forEach((client) => {
+      if (client.cedula) {
+        cedulaCount[client.cedula] = (cedulaCount[client.cedula] || 0) + 1;
+      }
+    });
+    return Object.entries(cedulaCount)
+      .filter(([, count]) => count > 1)
+      .map(([cedula]) => cedula);
+  }, [clients]);
+
+  const hasDuplicates = duplicateCedulas.length > 0;
 
   if (loading || paymentsLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Clientes</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
+            <Users
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Clientes</span>
+          </h2>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+        <div className="p-2 sm:p-3 pt-0">
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Clientes</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
+            <Users
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Clientes</span>
+          </h2>
+        </div>
+        <div className="p-2 sm:p-3 pt-0">
           <div className="text-center py-8">
             <p className="text-red-500 mb-4">Error: {error}</p>
             <Button onClick={refetch}>Reintentar</Button>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
-        <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
+    <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-2">
           <Users
             className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
             aria-hidden="true"
           />
           <span>
-            Clientes ({filteredClients.length}
-            {filteredClients.length !== clients.length
+            Clientes ({sortedClients.length}
+            {sortedClients.length !== clients.length
               ? ` de ${clients.length}`
               : ""}
             )
           </span>
-        </CardTitle>
+          {hasDuplicates && (
+            <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+              {duplicateCedulas.length} duplicado
+              {duplicateCedulas.length !== 1 ? "s" : ""}
+            </span>
+          )}
+        </h2>
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleOpenCreateDialog}
@@ -600,11 +782,36 @@ export function ClientsTable() {
             <RefreshCw className="h-3.5 w-3.5 sm:mr-1.5" aria-hidden="true" />
             <span className="hidden sm:inline">Actualizar</span>
           </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleRepairPaymentDates}
+                variant="outline"
+                size="sm"
+                className="text-xs sm:text-sm hidden"
+                disabled={isRepairing}
+                aria-label="Reparar fechas de pago"
+              >
+                {isRepairing ? (
+                  <Loader2 className="h-3.5 w-3.5 sm:mr-1.5 animate-spin" />
+                ) : (
+                  <Wrench
+                    className="h-3.5 w-3.5 sm:mr-1.5"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="hidden sm:inline">Reparar</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Reparar fechas de próximo pago de clientes</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="p-3 sm:p-4 pb-0 -mt-6">
         {/* Barra de busqueda y filtros */}
-        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+        <div className="mb-3 sm:mb-4 space-y-3 sm:space-y-4">
           {/* Barra de busqueda */}
           <div className="relative">
             <SearchIcon
@@ -634,7 +841,7 @@ export function ClientsTable() {
                 setSelectedPlan(value === "all" ? "" : value)
               }
             >
-              <SelectTrigger className="w-[140px] sm:w-[180px] h-8 text-xs sm:text-sm">
+              <SelectTrigger className="w-[130px] sm:w-[160px] h-8 text-xs sm:text-sm">
                 <SelectValue placeholder="Todos los planes" />
               </SelectTrigger>
               <SelectContent>
@@ -651,7 +858,7 @@ export function ClientsTable() {
             <Button
               variant={paymentFilter === "5days" ? "default" : "outline"}
               size="sm"
-              className="text-xs h-8"
+              className="text-xs h-8 px-2"
               onClick={() =>
                 setPaymentFilter(paymentFilter === "5days" ? "" : "5days")
               }
@@ -661,7 +868,7 @@ export function ClientsTable() {
             <Button
               variant={paymentFilter === "10days" ? "default" : "outline"}
               size="sm"
-              className="text-xs h-8"
+              className="text-xs h-8 px-2"
               onClick={() =>
                 setPaymentFilter(paymentFilter === "10days" ? "" : "10days")
               }
@@ -686,13 +893,33 @@ export function ClientsTable() {
                 setStatusFilter(value === "all" ? "" : value)
               }
             >
-              <SelectTrigger className="w-[120px] sm:w-[140px] h-8 text-xs sm:text-sm">
+              <SelectTrigger className="w-[100px] sm:w-[120px] h-8 text-xs sm:text-sm">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pendiente">Pendiente</SelectItem>
                 <SelectItem value="activo">Activo</SelectItem>
                 <SelectItem value="inactivo">Inactivo</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Filtro por mes específico */}
+            <Select
+              value={dateSort || "all"}
+              onValueChange={(value) =>
+                setDateSort(value === "all" ? "" : value)
+              }
+            >
+              <SelectTrigger className="w-[100px] sm:w-[120px] h-8 text-xs">
+                <SelectValue placeholder="Mes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="this_month">Este mes</SelectItem>
+                <SelectItem value="2026-01">Ene 2026</SelectItem>
+                <SelectItem value="2026-02">Feb 2026</SelectItem>
+                <SelectItem value="2026-03">Mar 2026</SelectItem>
               </SelectContent>
             </Select>
 
@@ -705,20 +932,21 @@ export function ClientsTable() {
                 className="text-xs h-8 text-muted-foreground hover:text-foreground"
               >
                 <FilterXIcon className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
-                Limpiar ({activeFiltersCount})
+                <span className="hidden sm:inline">Limpiar</span>
               </Button>
             )}
           </div>
 
           {/* Indicador de resultados */}
-          {filteredClients.length !== clients.length && (
+          {sortedClients.length !== clients.length && (
             <div className="text-xs sm:text-sm text-muted-foreground">
-              Mostrando {filteredClients.length} de {clients.length} clientes
+              Mostrando {sortedClients.length} de {clients.length} clientes
             </div>
           )}
         </div>
 
-        {clients.length === 0 ? (
+        <div className="mt-4 sm:mt-5">
+          {clients.length === 0 ? (
           <GettingStartedState
             title="No hay clientes registrados"
             steps={[
@@ -731,7 +959,7 @@ export function ClientsTable() {
               onClick: handleOpenCreateDialog,
             }}
           />
-        ) : filteredClients.length === 0 ? (
+        ) : sortedClients.length === 0 ? (
           <SearchEmptyState
             searchTerm={searchTerm}
             entityName="clientes"
@@ -770,8 +998,57 @@ export function ClientsTable() {
                     const paymentStatus = calculatePaymentStatus(client);
                     const paymentWithRemaining =
                       getPaymentWithRemaining(client);
-                    const hasPendingPayment =
-                      client.plan_id && !paymentStatus.isFullyPaid;
+
+                    // Calcular días hasta el próximo pago
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const nextPaymentDate = client.next_payment_date
+                      ? new Date(client.next_payment_date)
+                      : null;
+
+                    let daysUntilPayment = null;
+                    if (nextPaymentDate) {
+                      const diffTime =
+                        nextPaymentDate.getTime() - today.getTime();
+                      daysUntilPayment = Math.ceil(
+                        diffTime / (1000 * 60 * 60 * 24),
+                      );
+                    }
+
+                    const isOverdue =
+                      daysUntilPayment !== null && daysUntilPayment < 0;
+
+                    // Verificar si hay pago este mes
+                    const currentYear = today.getFullYear();
+                    const currentMonth = today.getMonth();
+                    const clientPaymentsThisMonth = payments.filter((p) => {
+                      if (
+                        p.client_id !== client.id ||
+                        p.plan_id !== client.plan_id
+                      )
+                        return false;
+                      const paymentDate = new Date(p.payment_date);
+                      return (
+                        paymentDate.getFullYear() === currentYear &&
+                        paymentDate.getMonth() === currentMonth
+                      );
+                    });
+                    const hasPaymentThisMonth =
+                      clientPaymentsThisMonth.length > 0;
+
+                    // Opción C: Status + Vencimiento + Pago del mes
+                    // Habilitar botón cuando:
+                    // - Cliente inactivo (siempre)
+                    // - Cliente pendiente (siempre)
+                    // - Cliente activo + vencido
+                    // - Cliente activo + sin pagar este mes
+                    // Deshabilitar cuando:
+                    // - Cliente activo + NO vencido + YA pagó este mes
+                    const shouldDisableButton =
+                      client.status === "activo" &&
+                      !isOverdue &&
+                      hasPaymentThisMonth;
+
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
                     // Calcular el status del cliente
@@ -796,17 +1073,65 @@ export function ClientsTable() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          <TruncatedCell
-                            value={client.email}
-                            maxWidth="160px"
-                            fallback="N/A"
-                          />
+                          {client.email ? (
+                            <div className="flex items-center">
+                              <TruncatedCell
+                                value={client.email}
+                                maxWidth="140px"
+                                className="mr-1"
+                              />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="h-5 w-5 p-0 hover:bg-transparent flex-shrink-0"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(
+                                        client.email,
+                                      );
+                                      toast.success("Email copiado");
+                                    }}
+                                    aria-label="Copiar email"
+                                  >
+                                    <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Copiar</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">N/A</span>
+                          )}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell whitespace-nowrap">
+                        <TableCell className="hidden md:table-cell">
                           {client.phone ? (
-                            <div className="flex items-center gap-1">
-                              <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                              <span>{client.phone}</span>
+                            <div className="flex items-center">
+                              <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0 mr-1" />
+                              <span className="mr-1">{client.phone}</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="h-5 w-5 p-0 hover:bg-transparent flex-shrink-0"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(
+                                        client.phone,
+                                      );
+                                      toast.success("Teléfono copiado");
+                                    }}
+                                    aria-label="Copiar teléfono"
+                                  >
+                                    <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Copiar</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                           ) : (
                             <span className="text-muted-foreground">N/A</span>
@@ -815,7 +1140,7 @@ export function ClientsTable() {
                         <TableCell>
                           <TruncatedCell
                             value={client.plans?.name || "Sin plan"}
-                            maxWidth="100px"
+                            maxWidth="120px"
                             className="font-medium"
                           />
                         </TableCell>
@@ -824,7 +1149,9 @@ export function ClientsTable() {
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                               clientStatus.status === "activo"
                                 ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
+                                : clientStatus.status === "pendiente"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
                             }`}
                           >
                             {clientStatus.label}
@@ -854,27 +1181,31 @@ export function ClientsTable() {
                         <TableCell>
                           <div className="flex space-x-2">
                             <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  onClick={() =>
-                                    handlePayRemainingForClient(client)
-                                  }
-                                  variant="default"
-                                  size="icon-sm"
-                                  className="bg-green-600 hover:bg-green-700"
-                                  disabled={!hasPendingPayment}
-                                  aria-label={`Registrar pago de ${client.first_name} ${client.last_name}`}
-                                >
-                                  <DollarSignIcon />
-                                </Button>
-                              </TooltipTrigger>
                               <TooltipContent>
                                 <p>
-                                  {paymentWithRemaining
-                                    ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
-                                    : "Registrar pago"}
+                                  {shouldDisableButton
+                                    ? "Pago al día"
+                                    : paymentWithRemaining
+                                      ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
+                                      : "Registrar pago"}
                                 </p>
                               </TooltipContent>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    onClick={() =>
+                                      handlePayRemainingForClient(client)
+                                    }
+                                    variant="default"
+                                    size="icon-sm"
+                                    className="bg-green-600 hover:bg-green-700"
+                                    disabled={shouldDisableButton}
+                                    aria-label={`Registrar pago de ${client.first_name} ${client.last_name}`}
+                                  >
+                                    <DollarSignIcon />
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -923,14 +1254,15 @@ export function ClientsTable() {
             {/* Paginación */}
             <Pagination
               currentPage={currentPage}
-              totalItems={filteredClients.length}
+              totalItems={sortedClients.length}
               pageSize={pageSize}
               onPageChange={setCurrentPage}
               onPageSizeChange={setPageSize}
             />
           </>
         )}
-      </CardContent>
+        </div>
+      </div>
 
       {/* Dialog de confirmación de eliminación */}
       <ConfirmDialog
@@ -951,7 +1283,7 @@ export function ClientsTable() {
 
       {/* Modal para crear/editar cliente */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="tall-modal">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" aria-hidden="true" />
@@ -1037,13 +1369,13 @@ export function ClientsTable() {
               <Label htmlFor="birth_date">
                 Fecha de Nacimiento <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="birth_date"
-                type="date"
-                name="birth_date"
+              <DatePicker
                 value={formData.birth_date}
-                onChange={handleInputChange}
-                required
+                onChange={(value) =>
+                  handleInputChange({ target: { name: "birth_date", value } })
+                }
+                placeholder="Seleccionar fecha"
+                size="sm"
               />
             </div>
             <div className="space-y-2">
@@ -1095,7 +1427,7 @@ export function ClientsTable() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Movistar: 0414/0424, Movilnet: 0416/0426, Digitel: 0412
+                Digitel: 0412/0422, Movistar: 0414/0424, Movilnet: 0416/0426
               </p>
             </div>
             <div className="md:col-span-2 space-y-2">
@@ -1145,14 +1477,27 @@ export function ClientsTable() {
               <Label htmlFor="join_date">
                 Fecha de Ingreso <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="join_date"
-                type="date"
-                name="join_date"
+              <DatePicker
                 value={formData.join_date}
-                onChange={handleInputChange}
-                required
+                onChange={(value) =>
+                  handleInputChange({ target: { name: "join_date", value } })
+                }
+                placeholder="Seleccionar fecha"
+                size="sm"
               />
+            </div>
+            <div className="flex items-center space-x-2 pt-4">
+              <Switch
+                id="enrollment_paid"
+                checked={formData.enrollment_paid}
+                onCheckedChange={handleEnrollmentPaidChange}
+                disabled={isEditing && formData.enrollment_paid}
+              />
+              <Label htmlFor="enrollment_paid" className="text-sm font-normal">
+                {isEditing
+                  ? "Inscripción pagada"
+                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
+              </Label>
             </div>
           </div>
 

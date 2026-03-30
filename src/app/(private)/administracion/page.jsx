@@ -28,12 +28,12 @@ export default function AdministracionPage() {
     <PermissionGate 
       permission={PERMISSIONS.ADMIN_VIEW}
       fallback={
-        <div className="container mx-auto py-6">
+        <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
           <Card>
-            <CardContent className="py-16 text-center">
-              <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Acceso Restringido</h2>
-              <p className="text-muted-foreground">
+            <CardContent className="py-12 sm:py-16 text-center">
+              <Briefcase className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-muted-foreground mb-4" />
+              <h2 className="text-lg sm:text-xl font-semibold mb-2">Acceso Restringido</h2>
+              <p className="text-sm sm:text-base text-muted-foreground">
                 No tienes permisos para acceder al módulo de administración.
               </p>
             </CardContent>
@@ -41,7 +41,7 @@ export default function AdministracionPage() {
         </div>
       }
     >
-      <div className="container mx-auto py-6 space-y-6">
+        <div className="w-full px-4 sm:px-6 lg:px-8 pb-6 space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -50,7 +50,12 @@ export default function AdministracionPage() {
                 <Briefcase className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Administración</h1>
+                <div className="relative inline-block">
+                  <h1 className="text-2xl font-bold text-foreground">
+                    Administración
+                  </h1>
+                  <span className="absolute -top-0.5 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
+                </div>
                 <p className="text-muted-foreground">
                   Gestiona el personal, pagos, gastos y genera reportes
                 </p>

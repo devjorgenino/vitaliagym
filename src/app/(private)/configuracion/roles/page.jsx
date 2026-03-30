@@ -106,10 +106,15 @@ export default function RolesConfigPage() {
       permission={PERMISSIONS.SETTINGS_MANAGE_ROLES} 
       showAccessDenied
     >
-      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6 space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Gestión de Roles</h1>
+            <div className="relative inline-block">
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+                Gestión de Roles
+              </h1>
+              <span className="absolute -top-0.5 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
+            </div>
             <p className="text-sm sm:text-base text-muted-foreground">
               Configura los roles del sistema y sus permisos asociados
             </p>

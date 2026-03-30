@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import client from "../../api/client";
 import { usePayments } from "../../hooks/usePayments";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
+import { formatDate, formatDateTime } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
+
+const INSCRIPTION_PRICE = 5;
 import {
   VENEZUELAN_BANKS,
+  getBanksWithFavorites,
+  getBanksWithFeatureFlag,
   PHONE_OPERATORS,
   formatPhone,
   parsePhone,
@@ -18,6 +26,8 @@ import {
   Settings2,
   CalendarClock,
   FileText,
+  Eye,
+  Copy,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -102,7 +112,12 @@ export function PaymentsTable({
   payRemaining = false,
   remainingAmount = null,
   paymentId = null,
+  registerMode = false,
+  amountParam = null,
+  enrollmentParam = null,
 }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const { clients, loading: clientsLoading, refetch: refetchClients } = useClients();
   const { plans, loading: plansLoading } = usePlans();
   const {
@@ -111,6 +126,15 @@ export function PaymentsTable({
     formatCurrency,
     loading: rateLoading,
   } = useExchangeRate();
+
+  // Parameters from URL or props for registration
+  const isRegisterMode = registerMode === true || registerMode === 'true' || searchParams.get('register') === 'true';
+  const enrollmentAmount = enrollmentParam || searchParams.get('enrollment');
+  const initialAmount = amountParam || searchParams.get('amount');
+
+  // State for inscription fee
+  const [includeInscription, setIncludeInscription] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const {
     payments,
@@ -148,6 +172,10 @@ export function PaymentsTable({
 
   // Estados para modo de pago restante
   const [isPayingRemaining, setIsPayingRemaining] = useState(false);
+
+  // Estados para ver detalles del pago
+  const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
+  const [detailsPayment, setDetailsPayment] = useState(null);
   const [remainingPaymentData, setRemainingPaymentData] = useState(null);
 
   // Estado para eliminación
@@ -166,6 +194,8 @@ export function PaymentsTable({
   const [dateTo, setDateTo] = useState("");
   const [displayPayments, setDisplayPayments] = useState([]);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [sortField, setSortField] = useState("payment_date");
+  const [sortDirection, setSortDirection] = useState("desc");
 
   // Estados para paginación
   const {
@@ -181,6 +211,10 @@ export function PaymentsTable({
   useEffect(() => {
     // Solo procesar si hay un cliente preseleccionado y los planes ya cargaron
     if (!preselectedClient || plansLoading || plans.length === 0) return;
+    
+    // Solo ejecutar una vez
+    if (initialLoadDone) return;
+    setInitialLoadDone(true);
 
     // Si es modo pago restante
     if (payRemaining && remainingAmount && paymentId) {
@@ -225,13 +259,32 @@ export function PaymentsTable({
     } else {
       // Modo normal: solo preseleccionar cliente y abrir modal
       const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
-      const planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
+      let planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
+
+      // Si el cliente ya tiene inscripción pagada, no agregar $5 al precio
+      const hasEnrollmentPaid = preselectedClient?.enrollment_paid === true;
+      if (hasEnrollmentPaid) {
+        planPrice = planPrice - INSCRIPTION_PRICE;
+        setIncludeInscription(false);
+      } else if (!isRegisterMode || !initialAmount) {
+        setIncludeInscription(false);
+      }
+
+      // Si es modo registro y tiene amount en URL, usarlo (incluye inscripción)
+      if (isRegisterMode && initialAmount) {
+        planPrice = parseFloat(initialAmount);
+        setIncludeInscription(true);
+      }
+
+      // Si es modo registro y tiene amount en URL, usar ese monto
+      const amountUSD = planPrice > 0 ? planPrice.toFixed(2) : "";
+      const amountBS = planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "";
 
       setFormData({
         client_id: preselectedClient.id,
         plan_id: preselectedClient.plan_id || "",
-        amount_usd: planPrice > 0 ? planPrice.toFixed(2) : "",
-        amount_bs: planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "",
+        amount_usd: amountUSD,
+        amount_bs: amountBS,
         exchange_rate: rate || 1,
         payment_date: new Date().toISOString().split("T")[0],
         reference: "",
@@ -258,6 +311,9 @@ export function PaymentsTable({
     plans,
     plansLoading,
     rate,
+    isRegisterMode,
+    initialAmount,
+    initialLoadDone,
   ]);
 
   // Obtener el precio del plan seleccionado
@@ -287,34 +343,48 @@ export function PaymentsTable({
           0,
         );
 
-        if (planPrice > 0) {
-          let paidForCurrentCycle = totalPaid % planPrice;
+        // Obtener el estado de inscripción del cliente
+        const selectedClient = clients.find((c) => c.id === formData.client_id);
+        const hasEnrollmentPaid = selectedClient?.enrollment_paid === true;
+        // Si ya tiene inscripción pagada, el precio total es solo el plan (sin $5)
+        // Si NO tiene inscripción pagada Y viene del registro, se suma la inscripción
+        const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
 
-          // Si el módulo es casi cero y se ha pagado, significa que se completó un ciclo.
-          if (paidForCurrentCycle < 0.001 && totalPaid > 0) {
-            paidForCurrentCycle = planPrice;
+        if (planPrice > 0) {
+          // Si el pago total es mayor o igual al precio total, está pagado
+          if (totalPaid >= totalPrice - 0.001) {
+            return {
+              planPrice: totalPrice,
+              totalPaid,
+              remainingAmount: 0,
+            };
           }
 
-          const remainingAmount = planPrice - paidForCurrentCycle;
+          const remainingAmount = totalPrice - totalPaid;
 
           // Si se está pagando restante, se muestra lo que falta.
           // Si no, y lo que falta es cero (ciclo completo), se propone el precio completo para un nuevo ciclo.
           return {
-            planPrice,
+            planPrice: totalPrice,
             totalPaid,
             remainingAmount:
               remainingAmount < 0.001 && !isPayingRemaining
-                ? planPrice
+                ? totalPrice
                 : remainingAmount,
           };
         }
       }
 
       // Para un pago nuevo sin cliente seleccionado, o si el plan no tiene precio.
+      // En modo registro con inscripción, incluir el precio de inscripción
+      const initialPrice = (isRegisterMode && includeInscription) 
+        ? planPrice + INSCRIPTION_PRICE 
+        : planPrice;
+        
       return {
-        planPrice,
+        planPrice: initialPrice,
         totalPaid: 0,
-        remainingAmount: planPrice,
+        remainingAmount: initialPrice,
       };
     }
     return { planPrice: 0, totalPaid: 0, remainingAmount: 0 };
@@ -325,6 +395,9 @@ export function PaymentsTable({
     payments,
     isPayingRemaining,
     getPlanPrice,
+    clients,
+    isRegisterMode,
+    includeInscription,
   ]);
 
   // Calcular pago restante (para formularios)
@@ -342,9 +415,14 @@ export function PaymentsTable({
 
   // Calcular pago restante DESPUÉS del monto actual (para campo informativo)
   const calculateRemainingAfterCurrentAmount = (planId, currentAmount) => {
-    const planPrice = getPlanPrice(planId);
+    let planPrice = getPlanPrice(planId);
     const amount = parseFloat(currentAmount || 0) || 0;
     let totalPaidSoFar = 0;
+
+    // En modo registro con inscripción, agregar el precio de inscripción al total
+    if (isRegisterMode && includeInscription) {
+      planPrice = planPrice + INSCRIPTION_PRICE;
+    }
 
     // Solo sumar pagos existentes si estamos pagando un restante.
     if (isPayingRemaining) {
@@ -396,6 +474,10 @@ export function PaymentsTable({
       };
     }
 
+    // Obtener el estado de inscripción del cliente
+    const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
+    const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
+
     // Obtener todos los pagos del cliente para este plan
     const allClientPayments = payments.filter(
       (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
@@ -407,19 +489,23 @@ export function PaymentsTable({
       0,
     );
 
-    // Lógica para manejar renovaciones/ciclos de pago
-    let paidForCurrentCycle = totalPaidSoFar % planPrice;
-
-    // Si el módulo es 0 (o muy cercano) y se ha pagado algo, significa que se completó un ciclo.
-    if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
-      paidForCurrentCycle = planPrice;
+    // Si el pago total es mayor o igual al precio total, está pagado
+    if (totalPaidSoFar >= totalPrice - 0.001) {
+      return {
+        planPrice: totalPrice,
+        totalPaid: totalPaidSoFar,
+        currentPayment: parseFloat(payment.amount_usd) || 0,
+        remaining: 0,
+        isFullyPaid: true,
+        remainingFormatted: "0.00",
+      };
     }
 
-    const currentRemaining = planPrice - paidForCurrentCycle;
+    const currentRemaining = totalPrice - totalPaidSoFar;
     const isFullyPaid = currentRemaining < 0.001;
 
     return {
-      planPrice,
+      planPrice: totalPrice,
       totalPaid: totalPaidSoFar,
       currentPayment: parseFloat(payment.amount_usd) || 0,
       remaining: isFullyPaid ? 0 : currentRemaining,
@@ -431,6 +517,10 @@ export function PaymentsTable({
   // Calcular pago restante EXCLUYENDO el pago actual (para el botón "Pagar Restante")
   const calculateRemainingForNewPayment = (payment) => {
     const planPrice = getPlanPrice(payment.plan_id);
+    
+    // Obtener el estado de inscripción del cliente
+    const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
+    const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
 
     // Obtener todos los pagos ANTERIORES del cliente para este plan (excluyendo el actual)
     const previousPayments = payments.filter(
@@ -447,10 +537,10 @@ export function PaymentsTable({
     );
 
     // Calcular el restante ANTES de hacer un nuevo pago
-    const remainingForNewPayment = Math.max(0, planPrice - totalPaidBefore);
+    const remainingForNewPayment = Math.max(0, totalPrice - totalPaidBefore);
 
     return {
-      planPrice,
+      planPrice: totalPrice,
       totalPaid: totalPaidBefore,
       remaining: remainingForNewPayment,
       isFullyPaid: remainingForNewPayment === 0,
@@ -490,6 +580,9 @@ export function PaymentsTable({
 
   // Efecto unificado para auto-cargar el monto al cambiar cliente, plan o modo de pago
   useEffect(() => {
+    // No ejecutar si estamos en modo registro con inscripción
+    if (isRegisterMode && includeInscription) return;
+
     if (
       isDialogOpen &&
       !isEditing &&
@@ -512,12 +605,20 @@ export function PaymentsTable({
     paymentMode,
     currentPaymentInfo.remainingAmount,
     rate,
+    isRegisterMode,
+    includeInscription,
   ]);
 
   // Validar monto parcial en tiempo real
   useEffect(() => {
     if (paymentMode === "partial" && formData.plan_id && formData.amount_usd) {
-      const planPrice = getPlanPrice(formData.plan_id);
+      let planPrice = getPlanPrice(formData.plan_id);
+      
+      // En modo registro con inscripción, el precio máximo incluye la inscripción
+      if (isRegisterMode && includeInscription) {
+        planPrice = planPrice + INSCRIPTION_PRICE;
+      }
+      
       const amount = parseFloat(formData.amount_usd);
 
       if (amount > planPrice) {
@@ -534,7 +635,7 @@ export function PaymentsTable({
     } else {
       setPartialValidationError("");
     }
-  }, [formData.amount_usd, formData.plan_id, paymentMode]);
+  }, [formData.amount_usd, formData.plan_id, paymentMode, isRegisterMode, includeInscription]);
 
   // Lógica de filtrado local memorizada para evitar ciclo infinito
   const filteredPayments = useMemo(() => {
@@ -586,6 +687,15 @@ export function PaymentsTable({
         matchesDateFrom &&
         matchesDateTo
       );
+    }).sort((a, b) => {
+      const aValue = new Date(a.payment_date).getTime();
+      const bValue = new Date(b.payment_date).getTime();
+      
+      if (sortDirection === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
     });
   }, [
     payments,
@@ -595,6 +705,8 @@ export function PaymentsTable({
     selectedBank,
     dateFrom,
     dateTo,
+    sortField,
+    sortDirection,
   ]);
 
   // Sincronizar displayPayments con filteredPayments
@@ -615,11 +727,15 @@ export function PaymentsTable({
         0,
       );
       const planPrice = getPlanPrice(formData.plan_id);
-      const remainingAmount = Math.max(0, planPrice - totalPaid);
-
+      
       // Encontrar cliente y plan de forma segura para evitar re-renders
       const selectedClient = clients.find((c) => c.id === formData.client_id);
       const selectedPlanData = plans.find((p) => p.id === formData.plan_id);
+      
+      // Incluir inscripción en el cálculo si aplica
+      const hasEnrollmentPaid = selectedClient?.enrollment_paid === true;
+      const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
+      const remainingAmount = Math.max(0, totalPrice - totalPaid);
 
       setRemainingPaymentData({
         client_id: formData.client_id,
@@ -629,13 +745,17 @@ export function PaymentsTable({
         plan_id: formData.plan_id,
         plan_name: selectedPlanData ? selectedPlanData.name : "",
         remaining_amount: remainingAmount,
-        plan_price: planPrice,
+        plan_price: totalPrice,
         total_paid: totalPaid,
       });
 
       // Si el modo es "full" (pagar completo), cargar el monto del plan automáticamente
       // Solo si no hay un monto ya establecido por el usuario (para no sobreescribir)
-      if (paymentMode === "full" && !formData.amount_usd) {
+      // Y no estamos en modo registro con inscripción incluida
+      // NO sobrescribir si: (estamos en modo registro con inscripción) O (ya hay un monto establecido)
+      const shouldOverride = !(isRegisterMode && includeInscription) && (!formData.amount_usd || formData.amount_usd === "0" || formData.amount_usd === "0.00");
+      
+      if (paymentMode === "full" && shouldOverride) {
         setFormData((prev) => ({
           ...prev,
           amount_usd: currentPaymentInfo.planPrice.toString(),
@@ -650,9 +770,13 @@ export function PaymentsTable({
     isEditing,
     formData.client_id,
     formData.plan_id,
+    formData.amount_usd,
     paymentMode,
     payments,
     rate,
+    isRegisterMode,
+    includeInscription,
+    initialLoadDone,
   ]);
 
   // Resetear formulario
@@ -711,11 +835,23 @@ export function PaymentsTable({
     setIsDialogOpen(true);
   }, []);
 
+  // Ver detalles del pago
+  const handleViewDetails = useCallback((payment) => {
+    setDetailsPayment(payment);
+    setIsViewDetailsOpen(true);
+  }, []);
+
   // Cerrar modal
   const handleCloseDialog = useCallback(() => {
     setIsDialogOpen(false);
     setTimeout(resetForm, 150);
   }, [resetForm]);
+
+  // Cerrar modal de detalles
+  const handleCloseDetails = useCallback(() => {
+    setIsViewDetailsOpen(false);
+    setDetailsPayment(null);
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -746,10 +882,32 @@ export function PaymentsTable({
     setPartialValidationError("");
 
     if (mode === "partial" && formData.plan_id) {
-      const amountToSuggest = currentPaymentInfo.remainingAmount;
+      let amountToSuggest = currentPaymentInfo.remainingAmount;
+      
+      // En modo registro con inscripción, agregar el monto de inscripción
+      if (isRegisterMode && includeInscription) {
+        const planPrice = getPlanPrice(formData.plan_id);
+        amountToSuggest = planPrice + INSCRIPTION_PRICE;
+      }
+      
       setFormData((prev) => ({
         ...prev,
         amount_usd: amountToSuggest > 0 ? amountToSuggest.toString() : "",
+        amount_bs: amountToSuggest > 0 ? (amountToSuggest * (rate || 1)).toFixed(2) : "",
+      }));
+    } else if (mode === "full" && formData.plan_id) {
+      // Resetear al monto completo (plan + inscripción si aplica)
+      let fullAmount = currentPaymentInfo.remainingAmount;
+      
+      if (isRegisterMode && includeInscription) {
+        const planPrice = getPlanPrice(formData.plan_id);
+        fullAmount = planPrice + INSCRIPTION_PRICE;
+      }
+      
+      setFormData((prev) => ({
+        ...prev,
+        amount_usd: fullAmount > 0 ? fullAmount.toString() : "",
+        amount_bs: fullAmount > 0 ? (fullAmount * (rate || 1)).toFixed(2) : "",
       }));
     }
   };
@@ -805,7 +963,31 @@ export function PaymentsTable({
       }
 
       if (result.success) {
+        // Si es modo registro, actualizar el status del cliente a activo
+        if (isRegisterMode && preselectedClient && !isEditing) {
+          try {
+            const clientUpdateResult = await client
+              .from('clients')
+              .update({ 
+                status: 'activo',
+                enrollment_paid: includeInscription ? true : preselectedClient.enrollment_paid
+              })
+              .eq('id', preselectedClient.id);
+            
+            if (clientUpdateResult.error) {
+              console.error('Error updating client status:', clientUpdateResult.error);
+            }
+          } catch (err) {
+            console.error('Error updating client status:', err);
+          }
+        }
+
         handleCloseDialog();
+
+        // Limpiar URL después de registro exitoso de nuevo cliente
+        if (isRegisterMode && !isEditing) {
+          router.replace(`/pagos/${preselectedClient.id}`);
+        }
 
         // Mensaje de éxito personalizado si era pago restante
         if (isPayingRemaining && remainingPaymentData) {
@@ -818,7 +1000,9 @@ export function PaymentsTable({
           toast.success(
             isEditing
               ? "Pago actualizado exitosamente"
-              : "Pago registrado exitosamente",
+              : isRegisterMode
+                ? "Pago registrado. ¡Cliente activado!"
+                : "Pago registrado exitosamente",
           );
         }
       } else {
@@ -851,10 +1035,14 @@ export function PaymentsTable({
       0,
     );
     const planPrice = getPlanPrice(payment.plan_id);
-    const remainingAmount = Math.max(0, planPrice - totalPaid);
+    
+    // Incluir inscripción en el cálculo si aplica
+    const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
+    const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
+    const remainingAmount = Math.max(0, totalPrice - totalPaid);
 
     const remainingStatus = {
-      planPrice,
+      planPrice: totalPrice,
       totalPaid,
       remaining: remainingAmount,
       isFullyPaid: remainingAmount === 0,
@@ -932,18 +1120,6 @@ export function PaymentsTable({
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    // Parsear la fecha manualmente para evitar problemas de zona horaria
-    const parts = dateString.split("-");
-    const date = new Date(
-      parseInt(parts[0], 10),
-      parseInt(parts[1], 10) - 1,
-      parseInt(parts[2], 10),
-    );
-    return date.toLocaleDateString("es-ES");
-  };
-
   const formatPaymentType = (type) => {
     const types = {
       pago_movil: "Pago Móvil",
@@ -996,41 +1172,60 @@ export function PaymentsTable({
 
   if (loading && displayPayments.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Pagos</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+          <h2 className="flex items-center gap-2 text-base sm:text-lg md:text-xl font-semibold">
+            <CreditCard
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Pagos</span>
+          </h2>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+        <div className="p-3 sm:p-4 pb-0 -mt-6">
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Pagos</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+          <h2 className="flex items-center gap-2 text-base sm:text-lg md:text-xl font-semibold">
+            <CreditCard
+              className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>Pagos</span>
+          </h2>
+          <Button onClick={refetch} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Reintentar
+          </Button>
+        </div>
+        <div className="p-3 sm:p-4 pb-0 -mt-6">
           <div className="text-center py-8">
-            <p className="text-red-500 mb-4">Error: {error}</p>
-            <Button onClick={refetch}>Reintentar</Button>
+            <p className="text-red-500">Error: {error}</p>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
-        <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+    <Card className="bg-gradient-to-br from-card to-card/80 overflow-hidden">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4">
+        <h2 className="flex items-center gap-2 text-base sm:text-lg md:text-xl font-semibold">
           <CreditCard
             className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0"
             aria-hidden="true"
@@ -1039,7 +1234,7 @@ export function PaymentsTable({
             Pagos ({displayPayments.length}
             {activeFiltersCount > 0 ? ` de ${payments.length}` : ""})
           </span>
-        </CardTitle>
+        </h2>
         <div className="flex gap-2">
           <Button
             onClick={handleOpenCreateDialog}
@@ -1093,10 +1288,10 @@ export function PaymentsTable({
             </DropdownMenuContent>
           </DropdownMenu> */}
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="p-3 sm:p-4 pb-0 -mt-6">
         {/* Barra de búsqueda y filtros */}
-        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+        <div className="mb-3 sm:mb-4 space-y-3 sm:space-y-4">
           {/* Barra de búsqueda */}
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -1173,7 +1368,7 @@ export function PaymentsTable({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los bancos</SelectItem>
-                  {VENEZUELAN_BANKS.map((bank) => (
+                  {getBanksWithFeatureFlag().map((bank) => (
                     <SelectItem
                       key={bank.code}
                       value={bank.name}
@@ -1262,8 +1457,9 @@ export function PaymentsTable({
               </ol>
             </div>
           </div>
-        ) : (
+          ) : (
           <>
+            <div className="mt-4 sm:mt-5">
             <div className="overflow-x-auto">
               <Table aria-label="Lista de pagos del gimnasio">
                 <TableHeader>
@@ -1284,7 +1480,19 @@ export function PaymentsTable({
                       Banco
                     </TableHead>
                     <TableHead className="hidden sm:table-cell">Tipo</TableHead>
-                    <TableHead>Fecha</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:text-foreground"
+                      onClick={() => {
+                        if (sortField === "payment_date") {
+                          setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+                        } else {
+                          setSortField("payment_date");
+                          setSortDirection("desc");
+                        }
+                      }}
+                    >
+                      Fecha {sortField === "payment_date" && (sortDirection === "asc" ? "↑" : "↓")}
+                    </TableHead>
                     <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1309,7 +1517,9 @@ export function PaymentsTable({
                         </TableCell>
                         <TableCell>
                           <TruncatedCell
-                            value={payment.plans?.name || "N/A"}
+                            value={payment.clients?.enrollment_paid === true && payment.plans?.name
+                              ? `${payment.plans.name} + Inscripción`
+                              : payment.plans?.name || "N/A"}
                             maxWidth="100px"
                             className="font-medium"
                           />
@@ -1342,8 +1552,25 @@ export function PaymentsTable({
                             ${paymentStatus.remainingFormatted}
                           </span>
                         </TableCell>
-                        <TableCell className="hidden xl:table-cell font-mono text-sm whitespace-nowrap">
-                          {payment.reference || "N/A"}
+                        <TableCell className="hidden xl:table-cell">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm whitespace-nowrap">
+                              {payment.reference || "N/A"}
+                            </span>
+                            {payment.reference && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(payment.reference);
+                                  toast.success("Referencia copiada");
+                                }}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="hidden xl:table-cell">
                           <TruncatedCell
@@ -1362,6 +1589,21 @@ export function PaymentsTable({
                         </TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={() => handleViewDetails(payment)}
+                                  variant="outline"
+                                  size="icon-sm"
+                                >
+                                  <Eye />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Ver detalles</p>
+                              </TooltipContent>
+                            </Tooltip>
+
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -1431,18 +1673,19 @@ export function PaymentsTable({
               onPageChange={setCurrentPage}
               onPageSizeChange={setPageSize}
             />
+            </div>
           </>
         )}
-      </CardContent>
+      </div>
 
       {/* Modal para crear/editar pago */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent
-          className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+          size="large"
           aria-describedby="payment-form-description"
+          className="tall-modal"
         >
-          {/* Header fijo */}
-          <DialogHeader className="flex-shrink-0 pb-4 border-b">
+          <DialogHeader className="pb-4 border-b">
             <DialogTitle className="flex items-center gap-2 text-lg">
               <CreditCard className="h-5 w-5 text-primary" aria-hidden="true" />
               {isPayingRemaining
@@ -1462,9 +1705,7 @@ export function PaymentsTable({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto py-4 px-1 -mx-1 scrollbar-thin">
-            <div className="space-y-6">
+          <div className="flex-1 py-3 space-y-4">
               {/* Resumen de pago restante */}
               {isPayingRemaining && remainingPaymentData && (
                 <div
@@ -1504,17 +1745,13 @@ export function PaymentsTable({
                 </div>
               )}
 
-              {/* Sección: Información del Cliente */}
-              <fieldset className="space-y-4">
-                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                    1
-                  </span>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
                   Información del Cliente
                 </legend>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Cliente */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="client_id" className="text-sm font-medium">
                       Cliente{" "}
@@ -1597,9 +1834,30 @@ export function PaymentsTable({
                     </Label>
                     <Select
                       value={formData.plan_id}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, plan_id: value }))
-                      }
+                      onValueChange={(value) => {
+                        const selectedPlan = plans.find(p => p.id === value);
+                        const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0;
+                        
+                        // En modo registro con inscripción, sumar el precio de inscripción
+                        let totalAmount = planPrice;
+                        if (isRegisterMode && includeInscription) {
+                          totalAmount = planPrice + INSCRIPTION_PRICE;
+                        }
+                        
+                        setFormData((prev) => ({ 
+                          ...prev, 
+                          plan_id: value,
+                          amount_usd: totalAmount > 0 ? totalAmount.toFixed(2) : "",
+                          amount_bs: totalAmount > 0 ? (totalAmount * (rate || 1)).toFixed(2) : ""
+                        }));
+                        
+                        // Update URL with new amount
+                        if (isRegisterMode && includeInscription) {
+                          const newUrl = new URL(window.location.href);
+                          newUrl.searchParams.set('amount', totalAmount.toString());
+                          window.history.replaceState({}, '', newUrl.toString());
+                        }
+                      }}
                       disabled={isPayingRemaining}
                     >
                       <SelectTrigger
@@ -1626,102 +1884,42 @@ export function PaymentsTable({
                 </div>
               </fieldset>
 
-              {/* Sección: Detalles del Pago */}
-              <fieldset className="space-y-4">
-                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                    2
-                  </span>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
                   Detalles del Pago
                 </legend>
 
-                {/* Modo de pago */}
                 {formData.plan_id && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <Label className="text-sm font-medium">Modo de Pago</Label>
-                    <div
-                      className="flex gap-3"
-                      role="radiogroup"
-                      aria-label="Seleccionar modo de pago"
-                    >
-                      <label
-                        className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
-                          paymentMode === "full"
-                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                            : "border-input hover:border-primary/50"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="payment_mode"
-                          value="full"
-                          checked={paymentMode === "full"}
-                          onChange={() => handlePaymentModeChange("full")}
-                          className="sr-only"
-                        />
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            paymentMode === "full"
-                              ? "border-primary"
-                              : "border-muted-foreground"
-                          }`}
-                        >
-                          {paymentMode === "full" && (
-                            <div className="w-2 h-2 rounded-full bg-primary" />
-                          )}
+                    <div className="flex gap-2" role="radiogroup" aria-label="Seleccionar modo de pago">
+                      <label className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${paymentMode === "full" ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-input hover:border-primary/50"}`}>
+                        <input type="radio" name="payment_mode" value="full" checked={paymentMode === "full"} onChange={() => handlePaymentModeChange("full")} className="sr-only" />
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMode === "full" ? "border-primary" : "border-muted-foreground"}`}>
+                          {paymentMode === "full" && <div className="w-2 h-2 rounded-full bg-primary" />}
                         </div>
                         <div>
                           <p className="font-medium text-sm">Pago Completo</p>
-                          <p className="text-xs text-muted-foreground">
-                            $
-                            {currentPaymentInfo.remainingAmount > 0
-                              ? currentPaymentInfo.remainingAmount.toFixed(2)
-                              : "0.00"}
-                          </p>
+                          <p className="text-xs text-muted-foreground">${(() => { const selectedPlan = plans.find(p => p.id === formData.plan_id); const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0; const total = isRegisterMode && includeInscription ? planPrice + INSCRIPTION_PRICE : currentPaymentInfo.remainingAmount; return total > 0 ? total.toFixed(2) : "0.00"; })()}</p>
                         </div>
                       </label>
-
-                      <label
-                        className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
-                          paymentMode === "partial"
-                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                            : "border-input hover:border-primary/50"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="payment_mode"
-                          value="partial"
-                          checked={paymentMode === "partial"}
-                          onChange={() => handlePaymentModeChange("partial")}
-                          className="sr-only"
-                        />
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            paymentMode === "partial"
-                              ? "border-primary"
-                              : "border-muted-foreground"
-                          }`}
-                        >
-                          {paymentMode === "partial" && (
-                            <div className="w-2 h-2 rounded-full bg-primary" />
-                          )}
+                      <label className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${paymentMode === "partial" ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-input hover:border-primary/50"}`}>
+                        <input type="radio" name="payment_mode" value="partial" checked={paymentMode === "partial"} onChange={() => handlePaymentModeChange("partial")} className="sr-only" />
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMode === "partial" ? "border-primary" : "border-muted-foreground"}`}>
+                          {paymentMode === "partial" && <div className="w-2 h-2 rounded-full bg-primary" />}
                         </div>
                         <div>
                           <p className="font-medium text-sm">Pago Parcial</p>
-                          <p className="text-xs text-muted-foreground">
-                            Monto personalizado
-                          </p>
+                          <p className="text-xs text-muted-foreground">Monto personalizado</p>
                         </div>
                       </label>
                     </div>
                   </div>
                 )}
 
-                {/* Campos de monto y fecha - layout adaptativo según tipo de pago */}
                 {formData.payment_type === "efectivo_dolares" ? (
-                  /* Layout para efectivo en dólares: 2 campos en una fila */
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Monto USD */}
                     <div className="space-y-2">
                       <Label
@@ -1787,35 +1985,24 @@ export function PaymentsTable({
                           *
                         </span>
                       </Label>
-                      <Input
-                        id="payment_date"
-                        type="date"
-                        name="payment_date"
+                      <DatePicker
                         value={formData.payment_date}
-                        onChange={handleInputChange}
-                        aria-required="true"
+                        onChange={(value) => handleInputChange({ target: { name: "payment_date", value } })}
+                        placeholder="Seleccionar fecha"
+                        size="sm"
                       />
                     </div>
                   </div>
                 ) : (
-                  /* Layout normal: 4 campos en 2 filas */
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Monto USD */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <Label
-                          htmlFor="amount_usd"
-                          className="text-sm font-medium"
-                        >
+                        <Label htmlFor="amount_usd" className="text-sm font-medium">
                           Monto en USD{" "}
-                          <span className="text-destructive" aria-hidden="true">
-                            *
-                          </span>
+                          <span className="text-destructive">*</span>
                         </Label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
-                            $
-                          </span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
                           <Input
                             id="amount_usd"
                             type="number"
@@ -1825,98 +2012,48 @@ export function PaymentsTable({
                             value={formData.amount_usd}
                             onChange={handleInputChange}
                             placeholder="0.00"
-                            disabled={
-                              paymentMode === "full" &&
-                              formData.plan_id &&
-                              !isEditing
-                            }
-                            className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
-                              paymentMode === "full" &&
-                              formData.plan_id &&
-                              !isEditing
-                                ? "bg-muted"
-                                : ""
-                            }`}
+                            disabled={paymentMode === "full" && formData.plan_id && !isEditing}
+                            className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${paymentMode === "full" && formData.plan_id && !isEditing ? "bg-muted" : ""}`}
                             aria-invalid={!!partialValidationError}
-                            aria-describedby={
-                              partialValidationError
-                                ? "amount-error"
-                                : undefined
-                            }
                           />
                         </div>
                         {partialValidationError && (
-                          <p
-                            id="amount-error"
-                            className="text-destructive text-xs flex items-center gap-1"
-                            role="alert"
-                          >
-                            <span aria-hidden="true">!</span>{" "}
-                            {partialValidationError}
-                          </p>
+                          <p id="amount-error" className="text-destructive text-xs" role="alert">{partialValidationError}</p>
                         )}
                       </div>
 
-                      {/* Monto Bs */}
                       <div className="space-y-2">
-                        <Label
-                          htmlFor="amount_bs"
-                          className="text-sm font-medium text-muted-foreground"
-                        >
-                          Monto en Bs{" "}
-                          <span className="text-xs">(calculado)</span>
+                        <Label htmlFor="amount_bs" className="text-sm font-medium text-muted-foreground">
+                          Monto en Bs <span className="text-xs">(calculado)</span>
                         </Label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
-                            Bs
-                          </span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
                           <Input
                             id="amount_bs"
                             type="text"
-                            value={
-                              formData.amount_bs
-                                ? parseFloat(formData.amount_bs).toLocaleString(
-                                    "es-VE",
-                                  )
-                                : ""
-                            }
+                            value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString("es-VE") : ""}
                             readOnly
                             disabled
                             className="pl-10 bg-muted"
-                            aria-readonly="true"
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Fecha de pago */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <Label
-                          htmlFor="payment_date"
-                          className="text-sm font-medium"
-                        >
-                          Fecha de Pago{" "}
-                          <span className="text-destructive" aria-hidden="true">
-                            *
-                          </span>
+                        <Label htmlFor="payment_date" className="text-sm font-medium">
+                          Fecha de Pago <span className="text-destructive">*</span>
                         </Label>
-                        <Input
-                          id="payment_date"
-                          type="date"
-                          name="payment_date"
+                        <DatePicker
                           value={formData.payment_date}
-                          onChange={handleInputChange}
-                          aria-required="true"
+                          onChange={(value) => handleInputChange({ target: { name: "payment_date", value } })}
+                          placeholder="Seleccionar fecha"
                         />
                       </div>
 
-                      {/* Tasa de cambio */}
                       <div className="space-y-2">
-                        <Label
-                          htmlFor="exchange_rate"
-                          className="text-sm font-medium text-muted-foreground"
-                        >
+                        <Label htmlFor="exchange_rate" className="text-sm font-medium text-muted-foreground">
                           Tasa de Cambio <span className="text-xs">(Bs/$)</span>
                         </Label>
                         <Input
@@ -1932,6 +2069,35 @@ export function PaymentsTable({
                       </div>
                     </div>
                   </>
+                )}
+
+                {/* Resumen de inscripción si aplica - solo en pago completo */}
+                {isRegisterMode && includeInscription && formData.plan_id && paymentMode === "full" && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      <span className="font-medium">Desglose del pago:</span>
+                    </p>
+                    <div className="mt-2 space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Plan:</span>
+                        <span className="font-medium">
+                          ${(() => {
+                            const selectedPlan = plans.find(p => p.id === formData.plan_id);
+                            const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0;
+                            return (planPrice).toFixed(2);
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Inscripción:</span>
+                        <span className="font-medium">${INSCRIPTION_PRICE.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-blue-200 pt-1 mt-1">
+                        <span className="font-medium">Total:</span>
+                        <span className="font-bold">${formData.amount_usd || "0.00"}</span>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* Restante después del pago */}
@@ -1961,16 +2127,12 @@ export function PaymentsTable({
                   )}
               </fieldset>
 
-              {/* Sección: Método de Pago */}
-              <fieldset className="space-y-4">
-                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                    3
-                  </span>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">3</span>
                   Método de Pago
                 </legend>
 
-                {/* Tipo de pago */}
                 <div className="space-y-2">
                   <Label htmlFor="payment_type" className="text-sm font-medium">
                     Tipo de Pago{" "}
@@ -2040,11 +2202,11 @@ export function PaymentsTable({
                 {/* Campos adicionales según tipo de pago */}
                 {(formData.payment_type === "pago_movil" ||
                   formData.payment_type === "transferencia") && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                     {/* Banco */}
                     <div className="space-y-2">
                       <Label htmlFor="bank" className="text-sm font-medium">
-                        Banco Emisor
+                        Banco Receptor
                       </Label>
                       <Select
                         value={formData.bank}
@@ -2054,12 +2216,12 @@ export function PaymentsTable({
                       >
                         <SelectTrigger
                           id="bank"
-                          aria-label="Seleccionar banco emisor del pago"
+                          aria-label="Seleccionar banco receptor del pago"
                         >
                           <SelectValue placeholder="Seleccionar banco..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {VENEZUELAN_BANKS.map((bank) => (
+                          {getBanksWithFeatureFlag().map((bank) => (
                             <SelectItem key={bank.code} value={bank.name}>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
@@ -2178,7 +2340,6 @@ export function PaymentsTable({
                   </div>
                 )}
               </fieldset>
-            </div>
           </div>
 
           {/* Footer fijo */}
@@ -2226,6 +2387,122 @@ export function PaymentsTable({
         loading={deletingId !== null}
         onConfirm={handleDeletePayment}
       />
+
+      {/* Modal de detalles del pago */}
+      <Dialog open={isViewDetailsOpen} onOpenChange={setIsViewDetailsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalles del Pago</DialogTitle>
+          </DialogHeader>
+          {detailsPayment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Cliente</p>
+                  <p className="font-medium">
+                    {detailsPayment.clients?.first_name} {detailsPayment.clients?.last_name}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Cédula</p>
+                  <p className="font-medium">{detailsPayment.clients?.cedula || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Plan</p>
+                  <p className="font-medium">
+                    {detailsPayment.clients?.enrollment_paid === true && detailsPayment.plans?.name
+                      ? `${detailsPayment.plans.name} + Inscripción`
+                      : detailsPayment.plans?.name || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Fecha de Pago</p>
+                  <p className="font-medium">{formatDate(detailsPayment.payment_date)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Monto (USD)</p>
+                  <p className="font-medium text-green-600">
+                    ${parseFloat(detailsPayment.amount_usd || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Monto (BS)</p>
+                  <p className="font-medium">
+                    {parseFloat(detailsPayment.amount_bs || 0).toFixed(2)} BS
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Tipo de Pago</p>
+                  <p className="font-medium">{formatPaymentType(detailsPayment.payment_type)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Tasa de Cambio</p>
+                  <p className="font-medium">
+                    {parseFloat(detailsPayment.exchange_rate || 1).toFixed(2)} BS/USD
+                  </p>
+                </div>
+                {detailsPayment.bank && (
+                  <div>
+                    <p className="text-muted-foreground">Banco</p>
+                    <p className="font-medium">{detailsPayment.bank}</p>
+                  </div>
+                )}
+                {detailsPayment.reference && (
+                  <div>
+                    <p className="text-muted-foreground">Referencia</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{detailsPayment.reference}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(detailsPayment.reference);
+                          toast.success("Referencia copiada al portapapeles");
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {detailsPayment.phone_payment && (
+                  <div>
+                    <p className="text-muted-foreground">Teléfono</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{detailsPayment.phone_payment}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(detailsPayment.phone_payment);
+                          toast.success("Teléfono copiado al portapapeles");
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {detailsPayment.payment_detail && (
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground">Detalle</p>
+                    <p className="font-medium">{detailsPayment.payment_detail}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-muted-foreground">Creado</p>
+                  <p className="font-medium">{formatDate(detailsPayment.created_at)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseDetails}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -33,12 +33,10 @@ const PrivatePagesLayout = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Combinar todos los items para buscar el título
   const allItems = useMemo(() => [...sidebarItems, ...configItems], []);
 
-  // Verificar si puede acceder a la ruta actual
   const hasRouteAccess = useMemo(() => {
-    if (permissionsLoading) return true; // Mientras carga, permitir
+    if (permissionsLoading) return true;
     return canAccessRoute(pathname);
   }, [canAccessRoute, pathname, permissionsLoading]);
 
@@ -48,12 +46,11 @@ const PrivatePagesLayout = ({ children }) => {
     }
   }, [authLoading, user, router]);
 
-  // Estado de carga
   const isLoading = authLoading || !user;
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full" role="status" aria-label="Cargando aplicación">
+      <div className="flex h-[100dvh] w-full" role="status" aria-label="Cargando aplicación">
         <Skeleton className="h-full w-64 hidden md:block" />
         <div className="flex flex-col flex-1 gap-4 p-4">
           <Skeleton className="h-12 w-full" />
@@ -66,7 +63,6 @@ const PrivatePagesLayout = ({ children }) => {
     );
   }
 
-  // Obtener información de la página actual (título e icono)
   const getCurrentPageInfo = () => {
     if (pathname.startsWith("/perfil")) {
       return { title: "Perfil", icon: User };
@@ -86,11 +82,9 @@ const PrivatePagesLayout = ({ children }) => {
   const PageIcon = currentPageInfo.icon;
   const DashboardIcon = sidebarItems.find(i => i.url === "/dashboard")?.icon;
 
-  // Determinar si mostrar el link al dashboard
   const showDashboardLink =
     !pathname.startsWith("/perfil") && pathname !== "/dashboard";
 
-  // Determinar breadcrumbs para rutas anidadas
   const getBreadcrumbs = () => {
     const crumbs = [];
 
@@ -113,8 +107,22 @@ const PrivatePagesLayout = ({ children }) => {
   const breadcrumbs = getBreadcrumbs();
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col">
-      {/* Skip link for accessibility */}
+    <div className="h-[100dvh] overflow-hidden flex flex-col relative">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div 
+          className="absolute top-0 right-0 w-[600px] h-[400px] rounded-full opacity-[0.04] blur-3xl"
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)' }}
+        />
+        <div 
+          className="absolute bottom-0 left-0 w-[500px] h-[350px] rounded-full opacity-[0.03] blur-3xl"
+          style={{ background: 'radial-gradient(circle, var(--secondary) 0%, transparent 70%)' }}
+        />
+        <div 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] rounded-full opacity-[0.02] blur-3xl"
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 50%)' }}
+        />
+      </div>
+      
       <a 
         href="#main-content" 
         className="skip-link"
@@ -122,15 +130,14 @@ const PrivatePagesLayout = ({ children }) => {
         Saltar al contenido principal
       </a>
       
-      <SidebarProvider className="flex-1 min-h-0 h-full">
+      <SidebarProvider className="flex-1 min-h-0 h-full" defaultOpen={true}>
         <AppSidebar />
-        <SidebarInset>
+        <SidebarInset className="relative flex flex-col min-h-0 overflow-hidden">
           <header 
-            className="flex h-14 sm:h-16 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40 transition-[height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
+            className="flex h-14 sm:h-16 shrink-0 items-center gap-2 border-b border-[--border]/20 bg-[--background]/60 backdrop-blur-xl supports-[backdrop-filter]:bg-[--background]/40 sticky top-0 z-40 transition-[height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
             role="banner"
           >
             <div className="flex items-center gap-2 px-3 sm:px-4">
-              {/* Trigger visible solo en móvil */}
               <SidebarTrigger 
                 className="-ml-1 md:hidden touch-target" 
                 aria-label="Abrir menú de navegación"
@@ -221,10 +228,14 @@ const PrivatePagesLayout = ({ children }) => {
           
           <main 
             id="main-content"
-            className="flex flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 overflow-y-auto min-h-0"
+            className="flex flex-1 flex-col gap-3 sm:gap-4 md:gap-6 p-3 sm:p-4 md:p-6 overflow-y-auto min-h-0 relative"
             role="main"
           >
-            {/* Verificar acceso a la ruta */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10" aria-hidden="true">
+              <div className="absolute top-20 right-10 w-32 h-32 rounded-full bg-primary/5 blur-2xl" style={{ animation: 'float 6s ease-in-out infinite' }} />
+              <div className="absolute bottom-40 left-20 w-24 h-24 rounded-full bg-secondary/5 blur-xl" style={{ animation: 'float 8s ease-in-out infinite', animationDelay: '2s' }} />
+              <div className="absolute top-1/2 left-1/3 w-16 h-16 rounded-full bg-primary/3 blur-lg" style={{ animation: 'float 10s ease-in-out infinite', animationDelay: '4s' }} />
+            </div>
             {!hasRouteAccess ? (
               <AccessDeniedMessage
                 title="Acceso Restringido"
@@ -236,7 +247,7 @@ const PrivatePagesLayout = ({ children }) => {
                 <Skeleton className="h-[300px] sm:h-[400px] w-full" />
               </div>
             ) : (
-              <div className="animate-fade-in flex flex-col flex-1 min-h-0">
+              <div className="animate-fade-in flex flex-col flex-1 min-h-0 w-full">
                 {children}
               </div>
             )}

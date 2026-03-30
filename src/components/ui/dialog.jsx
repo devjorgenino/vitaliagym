@@ -16,6 +16,7 @@ const DialogClose = DialogPrimitive.Close;
 
 // Hook para combinar refs
 function useCombinedRefs(...refs) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Combining multiple refs into one callback
   return React.useCallback((element) => {
     refs.forEach((ref) => {
       if (!ref) return;
@@ -25,7 +26,7 @@ function useCombinedRefs(...refs) {
         ref.current = element;
       }
     });
-  }, refs);
+  }, []);
 }
 
 const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => {
@@ -60,15 +61,20 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => {
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef(
-  ({ className, children, ...props }, ref) => {
+  ({ className, children, size = "default", ...props }, ref) => {
     const contentRef = React.useRef(null);
     const combinedRef = useCombinedRefs(ref, contentRef);
+
+    const sizeClasses = {
+      default: "max-w-2xl",
+      large: "max-w-4xl",
+      full: "max-w-full",
+    };
 
     React.useEffect(() => {
       const el = contentRef.current;
       if (!el) return;
 
-      // Animacion snappy de entrada
       gsap.fromTo(
         el,
         {
@@ -90,52 +96,45 @@ const DialogContent = React.forwardRef(
         <DialogPrimitive.Content
           ref={combinedRef}
           className={cn(
-            // Positioning - full screen en movil, centrado en desktop
             "fixed z-50",
-            "inset-0 sm:inset-auto",
-            "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]",
-            // Layout - usar grid por defecto, flex cuando se necesite scroll interno
-            "flex flex-col w-full sm:max-w-lg gap-3 sm:gap-4",
-            // Appearance
-            "border-0 sm:border bg-background shadow-xl",
-            "rounded-none sm:rounded-lg",
-            // Padding responsive
-            "p-4 sm:p-6",
-            // Max height - sin overflow aquí, se maneja internamente
-            "max-h-screen sm:max-h-[85vh]",
-            // Animacion de salida CSS ultra rapida
+            "inset-0 md:inset-auto md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%]",
+            "w-full md:w-[85vw]",
+            sizeClasses[size] || sizeClasses.default,
+            "flex flex-col",
+            "border-0 md:border bg-background shadow-xl",
+            "rounded-none md:rounded-lg",
+            "p-3 sm:p-4 md:p-5 overflow-y-auto",
+            "max-h-[90vh] pb-4",
             "data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0",
             "data-[state=closed]:zoom-out-[0.98]",
             "data-[state=closed]:duration-75",
-            // Focus
             "focus:outline-none",
-            // Reduced motion
             "motion-reduce:transform-none",
             className
           )}
           {...props}
         >
-          {children}
+          <div className="flex-1 px-3">
+            {children}
+          </div>
           <DialogPrimitive.Close
             className={cn(
-              "absolute right-3 top-3 sm:right-4 sm:top-4",
-              "rounded-sm p-1.5 sm:p-1",
+              "absolute right-2 top-2 md:right-3 md:top-3",
+              "rounded-sm p-1.5",
               "text-muted-foreground/60",
               "transition-colors duration-75",
               "hover:text-foreground hover:bg-accent",
               "focus:outline-none focus:ring-2 focus:ring-ring",
               "active:scale-95",
               "disabled:pointer-events-none",
-              // Touch target mas grande en movil
-              "min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0",
+              "min-h-[36px] min-w-[36px] md:min-h-0 md:min-w-0",
               "flex items-center justify-center",
-              // Z-index para estar sobre el contenido
               "z-10"
             )}
             aria-label="Cerrar dialogo"
           >
-            <X className="h-5 w-5 sm:h-4 sm:w-4" />
+            <X className="h-4 w-4 md:h-4 md:w-4" />
             <span className="sr-only">Cerrar</span>
           </DialogPrimitive.Close>
         </DialogPrimitive.Content>

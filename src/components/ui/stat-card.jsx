@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 /**
@@ -34,31 +35,37 @@ export function StatCard({
       bg: "bg-primary/10",
       icon: "text-primary",
       border: "border-primary/20",
+      gradient: "bg-gradient-to-br from-primary/5 to-primary/10",
     },
     blue: {
       bg: "bg-blue-50 dark:bg-blue-950/30",
       icon: "text-blue-600 dark:text-blue-400",
       border: "border-blue-200 dark:border-blue-800",
+      gradient: "bg-gradient-to-br from-blue-50/50 to-blue-100/30 dark:from-blue-950/20 dark:to-blue-900/10",
     },
     green: {
       bg: "bg-emerald-50 dark:bg-emerald-950/30",
       icon: "text-emerald-600 dark:text-emerald-400",
       border: "border-emerald-200 dark:border-emerald-800",
+      gradient: "bg-gradient-to-br from-emerald-50/50 to-emerald-100/30 dark:from-emerald-950/20 dark:to-emerald-900/10",
     },
     amber: {
       bg: "bg-amber-50 dark:bg-amber-950/30",
       icon: "text-amber-600 dark:text-amber-400",
       border: "border-amber-200 dark:border-amber-800",
+      gradient: "bg-gradient-to-br from-amber-50/50 to-amber-100/30 dark:from-amber-950/20 dark:to-amber-900/10",
     },
     red: {
       bg: "bg-red-50 dark:bg-red-950/30",
       icon: "text-red-600 dark:text-red-400",
       border: "border-red-200 dark:border-red-800",
+      gradient: "bg-gradient-to-br from-red-50/50 to-red-100/30 dark:from-red-950/20 dark:to-red-900/10",
     },
     purple: {
       bg: "bg-purple-50 dark:bg-purple-950/30",
       icon: "text-purple-600 dark:text-purple-400",
       border: "border-purple-200 dark:border-purple-800",
+      gradient: "bg-gradient-to-br from-purple-50/50 to-purple-100/30 dark:from-purple-950/20 dark:to-purple-900/10",
     },
   };
 
@@ -100,7 +107,17 @@ export function StatCard({
       <CardContent className="p-3 sm:p-4 md:p-6">
         <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="space-y-0.5 sm:space-y-1 flex-1 min-w-0">
-            <p className="text-[11px] sm:text-xs md:text-sm font-medium text-muted-foreground truncate">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate cursor-default md:hidden">
+                  {title}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="font-medium md:hidden">
+                <p>{title}</p>
+              </TooltipContent>
+            </Tooltip>
+            <p className="hidden md:block text-[11px] sm:text-xs md:text-sm font-medium text-muted-foreground truncate">
               {title}
             </p>
             <p className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">
@@ -141,7 +158,7 @@ export function StatsGrid({ children, className }) {
   return (
     <div className={cn(
       "grid gap-3 sm:gap-4 md:gap-6",
-      "grid-cols-2 lg:grid-cols-4",
+      "grid-cols-2 lg:grid-cols-3",
       className
     )}>
       {children}
