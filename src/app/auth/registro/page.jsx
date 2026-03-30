@@ -16,19 +16,9 @@ import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import {
-  Loader2,
-  Shield,
-  ArrowRight,
-  Sparkles,
-  Dumbbell,
-  UserPlus,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Loader2, Shield, ArrowRight } from "lucide-react";
 import { useCriticalImagePreload } from "@/hooks/useImagePreload";
 import useRolesList from "@/hooks/useRolesList";
-import { logoBlurDataURL } from "@/lib/imagePlaceholders";
 import { PHONE_OPERATORS, formatPhone } from "@/lib/venezuelanData";
 import "@/styles/image-optimization.css";
 
@@ -136,80 +126,63 @@ const Registro = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-[--background] p-4">
-      {/* Organic background shapes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className="absolute -top-1/4 -right-1/4 w-[600px] h-[600px] rounded-full opacity-25 blur-3xl"
-          style={{
-            background:
-              "radial-gradient(circle, var(--primary) 0%, transparent 70%)",
-          }}
+    <div className="min-h-screen w-full flex">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop"
+          alt="Gimnasio moderno"
+          fill
+          priority
+          className="object-cover"
         />
-        <div
-          className="absolute -bottom-1/4 -left-1/3 w-[500px] h-[500px] rounded-full opacity-20 blur-3xl"
-          style={{
-            background:
-              "radial-gradient(circle, var(--secondary) 0%, transparent 70%)",
-          }}
-        />
-      </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/85 via-primary/80 to-[#4a5a1a]/90" />
 
-      {/* Floating elements */}
-      <div className="absolute top-16 right-12 w-14 h-14 rounded-2xl bg-primary/10 backdrop-blur-sm flex items-center justify-center animate-float hidden sm:flex">
-        <UserPlus className="w-7 h-7 text-primary" />
-      </div>
-      <div
-        className="absolute bottom-24 left-16 w-12 h-12 rounded-xl bg-secondary/20 backdrop-blur-sm flex items-center justify-center animate-float-delayed hidden sm:flex"
-        style={{ animationDelay: "1.5s" }}
-      >
-        <Sparkles className="w-6 h-6 text-primary" />
-      </div>
+        <div className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-32 right-32 w-96 h-96 bg-secondary/30 rounded-full blur-3xl" />
 
-      {/* Main card */}
-      <div className="relative z-10 w-full max-w-lg">
-        <div
-          className="relative bg-[--card] border border-[--border]/30 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-md"
-          style={{
-            boxShadow:
-              "0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255,255,255,0.5) inset",
-          }}
-        >
-          {/* Logo */}
-          <div className="flex justify-center mb-6">
-            <div className="relative w-24 h-16">
-              <Image
-                src="/logo.png"
-                alt="VitaliaGym"
-                fill
-                sizes="96px"
-                priority={true}
-                placeholder="blur"
-                blurDataURL={logoBlurDataURL}
-                className="object-contain"
-              />
-            </div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="relative w-64 h-48 sm:w-72 sm:h-54 lg:w-[28rem] lg:h-80">
+            <Image
+              src="/logo-dark.png"
+              alt="VitaliaGym"
+              fill
+              sizes="(max-width: 768px) 256px, (max-width: 1024px) 288px, 448px"
+              className="object-contain"
+              priority
+            />
           </div>
+        </div>
+      </div>
 
-          {/* Header */}
-          <div className="text-center mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-6 sm:p-8 lg:p-12 bg-background">
+        <div className="lg:hidden relative w-full mb-6">
+          <div className="absolute left-1/2 -translate-x-1/2 top-0 w-48 h-36 sm:w-56 sm:h-42">
+            <Image
+              src="/logo-light.png"
+              alt="VitaliaGym"
+              fill
+              sizes="(max-width: 640px) 192px, 224px"
+              className="object-contain"
+              priority
+            />
+          </div>
+        </div>
+
+        <div className="w-full max-w-md lg:mt-0 mt-24 md:mt-32">
+          <div className="bg-card border border-border rounded-xl p-6 sm:p-8 space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
               ¡Únete a VitaliaGym!
-            </h1>
-            <p className="text-[--muted-foreground] text-sm">
-              Crea tu cuenta y comienza a entrenar
+            </h2>
+            <p className="text-muted-foreground">
+              Crea tu cuenta y comienza a transformar tu cuerpo
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleRegister} className="space-y-4">
-            {/* Name row */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="firstname"
-                  className="text-sm font-medium text-[--foreground] ml-1"
-                >
+              <div className="space-y-2">
+                <Label htmlFor="firstname" className="text-sm font-medium">
                   Nombre *
                 </Label>
                 <Input
@@ -220,20 +193,17 @@ const Registro = () => {
                   value={formData.firstname}
                   onChange={handleInputChange}
                   required
-                  className={`h-11 rounded-xl bg-[--background]/50 border-[--border] transition-all duration-200 ${
+                  className={`h-10 transition-all duration-200 ${
                     focusedField === "firstname"
                       ? "border-primary ring-2 ring-primary/20"
-                      : "hover:border-primary/50"
+                      : ""
                   }`}
                   onFocus={() => setFocusedField("firstname")}
                   onBlur={() => setFocusedField(null)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="lastname"
-                  className="text-sm font-medium text-[--foreground] ml-1"
-                >
+              <div className="space-y-2">
+                <Label htmlFor="lastname" className="text-sm font-medium">
                   Apellido *
                 </Label>
                 <Input
@@ -244,10 +214,10 @@ const Registro = () => {
                   value={formData.lastname}
                   onChange={handleInputChange}
                   required
-                  className={`h-11 rounded-xl bg-[--background]/50 border-[--border] transition-all duration-200 ${
+                  className={`h-10 transition-all duration-200 ${
                     focusedField === "lastname"
                       ? "border-primary ring-2 ring-primary/20"
-                      : "hover:border-primary/50"
+                      : ""
                   }`}
                   onFocus={() => setFocusedField("lastname")}
                   onBlur={() => setFocusedField(null)}
@@ -255,12 +225,8 @@ const Registro = () => {
               </div>
             </div>
 
-            {/* Email */}
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="email"
-                className="text-sm font-medium text-[--foreground] ml-1"
-              >
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">
                 Correo electrónico *
               </Label>
               <Input
@@ -271,23 +237,19 @@ const Registro = () => {
                 value={formData.email}
                 onChange={handleInputChange}
                 required
-                className={`h-11 rounded-xl bg-[--background]/50 border-[--border] transition-all duration-200 ${
+                className={`h-10 transition-all duration-200 ${
                   focusedField === "email"
                     ? "border-primary ring-2 ring-primary/20"
-                    : "hover:border-primary/50"
+                    : ""
                 }`}
                 onFocus={() => setFocusedField("email")}
                 onBlur={() => setFocusedField(null)}
               />
             </div>
 
-            {/* Phone and Role */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="phone"
-                  className="text-sm font-medium text-[--foreground] ml-1"
-                >
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="text-sm font-medium">
                   Teléfono
                 </Label>
                 <div className="flex gap-1">
@@ -301,8 +263,7 @@ const Registro = () => {
                     }
                   >
                     <SelectTrigger
-                      size="lg"
-                      className="w-[85px] rounded-xl bg-[--background]/50 border-[--border] px-3"
+                      className="w-[85px]"
                       aria-label="Operador telefónico"
                     >
                       <SelectValue />
@@ -323,14 +284,14 @@ const Registro = () => {
                     maxLength={7}
                     value={formData.phone}
                     onChange={handleInputChange}
-                    className="flex-1 h-11 rounded-xl bg-[--background]/50 border-[--border] px-3"
+                    className="flex-1 h-10"
                   />
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label
                   htmlFor="role"
-                  className="text-sm font-medium text-[--foreground] ml-1 flex items-center gap-1"
+                  className="text-sm font-medium flex items-center gap-1"
                 >
                   <Shield className="w-3 h-3" />
                   Rol *
@@ -340,7 +301,7 @@ const Registro = () => {
                   onValueChange={handleRoleChange}
                   disabled={rolesLoading}
                 >
-                  <SelectTrigger size="lg" className="rounded-xl bg-[--background]/50 border-[--border] px-3">
+                  <SelectTrigger className="h-10">
                     <SelectValue
                       placeholder={rolesLoading ? "Cargando..." : "Selecciona"}
                     />
@@ -356,13 +317,9 @@ const Registro = () => {
               </div>
             </div>
 
-            {/* Passwords */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="password"
-                  className="text-sm font-medium text-[--foreground] ml-1"
-                >
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">
                   Contraseña *
                 </Label>
                 <div className="relative">
@@ -374,10 +331,10 @@ const Registro = () => {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    className={`h-11 rounded-xl bg-[--background]/50 border-[--border] pr-12 transition-all duration-200 ${
+                    className={`h-10 pr-10 transition-all duration-200 ${
                       focusedField === "password"
                         ? "border-primary ring-2 ring-primary/20"
-                        : "hover:border-primary/50"
+                        : ""
                     }`}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
@@ -387,21 +344,50 @@ const Registro = () => {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
                     tabIndex={-1}
-                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    aria-label={
+                      showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                    }
                   >
                     {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                        />
+                      </svg>
                     ) : (
-                      <Eye className="w-5 h-5" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
+                      </svg>
                     )}
                   </button>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="password2"
-                  className="text-sm font-medium text-[--foreground] ml-1"
-                >
+              <div className="space-y-2">
+                <Label htmlFor="password2" className="text-sm font-medium">
                   Confirmar *
                 </Label>
                 <div className="relative">
@@ -413,10 +399,10 @@ const Registro = () => {
                     value={formData.password2}
                     onChange={handleInputChange}
                     required
-                    className={`h-11 rounded-xl bg-[--background]/50 border-[--border] pr-12 transition-all duration-200 ${
+                    className={`h-10 pr-10 transition-all duration-200 ${
                       focusedField === "password2"
                         ? "border-primary ring-2 ring-primary/20"
-                        : "hover:border-primary/50"
+                        : ""
                     }`}
                     onFocus={() => setFocusedField("password2")}
                     onBlur={() => setFocusedField(null)}
@@ -426,12 +412,46 @@ const Registro = () => {
                     onClick={() => setShowPassword2(!showPassword2)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
                     tabIndex={-1}
-                    aria-label={showPassword2 ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    aria-label={
+                      showPassword2
+                        ? "Ocultar contraseña"
+                        : "Mostrar contraseña"
+                    }
                   >
                     {showPassword2 ? (
-                      <EyeOff className="w-5 h-5" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                        />
+                      </svg>
                     ) : (
-                      <Eye className="w-5 h-5" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
+                      </svg>
                     )}
                   </button>
                 </div>
@@ -441,74 +461,46 @@ const Registro = () => {
             <Button
               type="submit"
               disabled={loading || rolesLoading}
-              className="w-full mt-2"
+              className="w-full"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Creando cuenta...
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
                   Crear Cuenta
-                  <ArrowRight className="w-5 h-5" />
+                  <ArrowRight className="w-4 h-4" />
                 </span>
               )}
             </Button>
           </form>
 
-          {/* Footer */}
-          <div className="mt-6 pt-5 border-t border-[--border]/20">
-            <p className="text-center text-sm text-[--muted-foreground]">
-              ¿Ya tienes cuenta?{" "}
-              <Link
-                href="/auth/login"
-                className="text-primary font-semibold hover:text-primary/80 transition-colors inline-flex items-center gap-1"
-              >
-                Iniciar Sesión
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </p>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                O
+              </span>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            ¿Ya tienes cuenta?{" "}
+            <Link
+              href="/auth/login"
+              className="text-primary font-semibold hover:text-primary/80 transition-colors inline-flex items-center gap-1"
+            >
+              Iniciar Sesión
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </p>
           </div>
         </div>
-
-        {/* Back to home */}
-        <div className="text-center mt-5">
-          <Link
-            href="/"
-            className="text-sm text-[--muted-foreground] hover:text-primary transition-colors"
-          >
-            ← Volver al inicio de sesión
-          </Link>
-        </div>
       </div>
-
-      <style jsx global>{`
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-12px);
-          }
-        }
-        @keyframes float-delayed {
-          0%,
-          100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-18px);
-          }
-        }
-        .animate-float {
-          animation: float 4.5s ease-in-out infinite;
-        }
-        .animate-float-delayed {
-          animation: float-delayed 5.5s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };

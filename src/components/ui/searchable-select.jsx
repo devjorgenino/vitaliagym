@@ -33,7 +33,6 @@ export function SearchableSelect({
   renderValue,
   emptyMessage = "No se encontraron resultados",
   "aria-label": ariaLabel,
-  "aria-required": ariaRequired,
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -187,7 +186,6 @@ export function SearchableSelect({
         onClick={handleTriggerClick}
         disabled={disabled}
         aria-label={ariaLabel}
-        aria-required={ariaRequired}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         className={cn(

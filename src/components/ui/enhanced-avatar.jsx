@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { AvatarSkeleton } from './avatar-skeleton'
 
@@ -31,22 +32,24 @@ function EnhancedAvatarImage({
     <>
       {isLoading && (
         <AvatarSkeleton 
-          className={className}
+          class={className}
           size={getSizeFromClassName(className)}
         />
       )}
-      <img
+      <Image
         ref={imgRef}
         src={src}
         alt={alt}
+        fill
         className={cn(
-          "aspect-square size-full transition-opacity duration-300",
+          "object-cover transition-opacity duration-300",
           isLoading ? "opacity-0 absolute inset-0" : "opacity-100",
           hasError && "hidden",
           className
         )}
         onLoad={handleLoad}
         onError={handleError}
+        unoptimized={!src?.startsWith('/')}
         {...props}
       />
     </>

@@ -9,8 +9,7 @@ import client from "@/api/client";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Loader2, Dumbbell, ArrowRight, Sparkles, Eye, EyeOff } from "lucide-react";
-import { logoBlurDataURL } from "@/lib/imagePlaceholders";
+import { Loader2, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const router = useRouter();
@@ -51,121 +50,95 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-[--background]">
-      {/* Organic background shapes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className="absolute -top-1/4 -left-1/4 w-[600px] h-[600px] rounded-full opacity-30 blur-3xl"
-          style={{
-            background:
-              "radial-gradient(circle, var(--primary) 0%, transparent 70%)",
-          }}
+    <div className="min-h-screen w-full flex">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop"
+          alt="Gimnasio moderno"
+          fill
+          priority
+          className="object-cover"
         />
-        <div
-          className="absolute -bottom-1/3 -right-1/4 w-[500px] h-[500px] rounded-full opacity-20 blur-3xl"
-          style={{
-            background:
-              "radial-gradient(circle, var(--secondary) 0%, transparent 70%)",
-          }}
-        />
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full opacity-10"
-          style={{
-            background:
-              "radial-gradient(circle, var(--primary) 0%, transparent 50%)",
-          }}
-        />
-      </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/85 via-primary/80 to-[#4a5a1a]/90" />
 
-      {/* Floating elements */}
-      <div className="absolute top-20 left-10 w-16 h-16 rounded-2xl bg-primary/10 backdrop-blur-sm flex items-center justify-center animate-float hidden sm:flex">
-        <Dumbbell className="w-8 h-8 text-primary" />
-      </div>
-      <div
-        className="absolute bottom-32 right-16 w-12 h-12 rounded-xl bg-secondary/20 backdrop-blur-sm flex items-center justify-center animate-float-delayed hidden sm:flex"
-        style={{ animationDelay: "1s" }}
-      >
-        <Sparkles className="w-6 h-6 text-primary" />
-      </div>
+        <div className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-32 right-32 w-96 h-96 bg-secondary/30 rounded-full blur-3xl" />
 
-      {/* Main card */}
-      <div className="relative z-10 w-full max-w-md px-4 sm:px-0">
-        <div
-          className="relative bg-[--card] border border-[--border]/30 rounded-3xl p-8 sm:p-10 shadow-2xl backdrop-blur-md"
-          style={{
-            boxShadow:
-              "0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255,255,255,0.5) inset",
-          }}
-        >
-          {/* Logo */}
-          <div className="flex justify-center mb-8">
-            <div className="relative w-28 h-20">
-              <Image
-                src="/logo.png"
-                alt="VitaliaGym"
-                fill
-                sizes="112px"
-                priority={true}
-                placeholder="blur"
-                blurDataURL={logoBlurDataURL}
-                className="object-contain"
-              />
-            </div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="relative w-64 h-48 sm:w-72 sm:h-54 lg:w-[28rem] lg:h-80">
+            <Image
+              src="/logo-dark.png"
+              alt="VitaliaGym"
+              fill
+              sizes="(max-width: 768px) 256px, (max-width: 1024px) 288px, 448px"
+              className="object-contain"
+              priority
+            />
           </div>
+        </div>
+      </div>
 
-          {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
-              ¡Bienvenido de vuelta!
-            </h1>
-            <p className="text-[--muted-foreground] text-sm">
-              Ingresa a tu cuenta para continuar
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-6 sm:p-8 lg:p-12 bg-background">
+        <div className="lg:hidden relative w-full mb-6">
+          <div className="absolute left-1/2 -translate-x-1/2 top-0 w-48 h-36 sm:w-56 sm:h-42">
+            <Image
+              src="/logo-light.png"
+              alt="VitaliaGym"
+              fill
+              sizes="(max-width: 640px) 192px, 224px"
+              className="object-contain"
+              priority
+            />
+          </div>
+        </div>
+
+        <div className="w-full max-w-md lg:mt-0 mt-24 md:mt-32">
+          <div className="bg-card border border-border rounded-xl p-6 sm:p-8 space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              ¡Bienvenido de nuevo!
+            </h2>
+            <p className="text-muted-foreground">
+              Ingresa a tu cuenta para continuar entrenando
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label
-                htmlFor="email"
-                className="text-sm font-medium text-[--foreground] ml-1"
-              >
+              <Label htmlFor="email" className="text-sm font-medium">
                 Correo electrónico
               </Label>
-              <div className="relative">
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="tu@email.com"
-                  required
-                  className={`h-12 rounded-xl bg-[--background]/50 border-[--border] px-4 transition-all duration-200 ${
-                    focusedField === "email"
-                      ? "border-primary ring-2 ring-primary/20 shadow-lg shadow-primary/10"
-                      : "hover:border-primary/50"
-                  }`}
-                  onFocus={() => setFocusedField("email")}
-                  onBlur={() => setFocusedField(null)}
-                />
-              </div>
+              <Input
+                id="email"
+                type="email"
+                placeholder="tu@email.com"
+                required
+                className={`h-10 transition-all duration-200 ${
+                  focusedField === "email"
+                    ? "border-primary ring-2 ring-primary/20 shadow-lg shadow-primary/5"
+                    : ""
+                }`}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
+              />
             </div>
 
             <div className="space-y-2">
-              <Label
-                htmlFor="password"
-                className="text-sm font-medium text-[--foreground] ml-1"
-              >
-                Contraseña
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Contraseña
+                </Label>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   required
-                  className={`h-12 rounded-xl bg-[--background]/50 border-[--border] px-4 pr-12 transition-all duration-200 ${
+                  className={`h-10 pr-12 transition-all duration-200 ${
                     focusedField === "password"
-                      ? "border-primary ring-2 ring-primary/20 shadow-lg shadow-primary/10"
-                      : "hover:border-primary/50"
+                      ? "border-primary ring-2 ring-primary/20 shadow-lg shadow-primary/5"
+                      : ""
                   }`}
                   onFocus={() => setFocusedField("password")}
                   onBlur={() => setFocusedField(null)}
@@ -175,96 +148,66 @@ const Login = () => {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
                   tabIndex={-1}
-                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-label={
+                    showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                  }
                 >
                   {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
+                    <EyeOff className="w-4 h-4" />
                   ) : (
-                    <Eye className="w-5 h-5" />
+                    <Eye className="w-4 h-4" />
                   )}
                 </button>
               </div>
-              <div className="flex justify-end pt-1">
+              <div className="flex justify-end">
                 <Link
                   href="/auth/reset-password"
-                  className="text-xs text-primary/80 hover:text-primary font-medium transition-colors"
+                  className="text-sm text-primary/80 hover:text-primary font-medium transition-colors"
                 >
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
             </div>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full"
-            >
+            <Button type="submit" disabled={loading} className="w-full">
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Iniciando...
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
                   Iniciar Sesión
-                  <ArrowRight className="w-5 h-5" />
+                  <ArrowRight className="w-4 h-4" />
                 </span>
               )}
             </Button>
           </form>
 
-          {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-[--border]/20">
-            <p className="text-center text-sm text-[--muted-foreground]">
-              ¿No tienes cuenta?{" "}
-              <Link
-                href="/auth/registro"
-                className="text-primary font-semibold hover:text-primary/80 transition-colors inline-flex items-center gap-1"
-              >
-                Regístrate
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </p>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                O
+              </span>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            ¿No tienes cuenta?{" "}
+            <Link
+              href="/auth/registro"
+              className="text-primary font-semibold hover:text-primary/80 transition-colors inline-flex items-center gap-1"
+            >
+              Regístrate
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </p>
           </div>
         </div>
-
-        {/* Back to home */}
-        {/*  <div className="text-center mt-6">
-          <Link 
-            href="/" 
-            className="text-sm text-[--muted-foreground] hover:text-primary transition-colors"
-          >
-            ← Volver al inicio
-          </Link>
-        </div> */}
       </div>
-
-      <style jsx global>{`
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-10px);
-          }
-        }
-        @keyframes float-delayed {
-          0%,
-          100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-15px);
-          }
-        }
-        .animate-float {
-          animation: float 4s ease-in-out infinite;
-        }
-        .animate-float-delayed {
-          animation: float-delayed 5s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };

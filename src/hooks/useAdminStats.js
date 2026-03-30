@@ -4,6 +4,16 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import client from "@/api/client";
 import { fetchWithOffline } from "../lib/offline-read";
 
+const MONTH_NAMES = [
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+];
+
+const MONTH_NAMES_FULL = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
 /**
  * Hook para obtener estadísticas agregadas del dashboard de administración
  * Combina datos de: personal, pagos al personal, gastos e ingresos (membresías)
@@ -18,17 +28,6 @@ export default function useAdminStats() {
   const [expenses, setExpenses] = useState([]);
   const [clientPayments, setClientPayments] = useState([]);
   const [expenseCategories, setExpenseCategories] = useState([]);
-
-  // Nombres de meses en español
-  const monthNames = [
-    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
-  ];
-
-  const monthNamesFull = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-  ];
 
   // Fetch all data in parallel
   const fetchAllData = useCallback(async () => {
@@ -190,49 +189,16 @@ export default function useAdminStats() {
   // Monthly income vs expenses chart data
   const monthlyIncomeVsExpenses = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    const data = monthNames.map((month, index) => ({
-      name: month,
-      month: index,
-      ingresos: 0,
-      gastos: 0,
-      nomina: 0,
+    const data = MONTH_NAMES.map((month, index) => ({
+      month,
+      income: monthlyIncome[index] || 0,
+      expenses: monthlyExpenses[index] || 0,
+      staffPayments: monthlyStaffPayments[index] || 0,
+      net: (monthlyIncome[index] || 0) - (monthlyExpenses[index] || 0) - (monthlyStaffPayments[index] || 0)
     }));
-
-    // Income (client payments) - sin filtro de status (tabla payments no tiene ese campo)
-    clientPayments
-      .filter(p => {
-        const paymentYear = new Date(p.payment_date).getFullYear();
-        return paymentYear === currentYear;
-      })
-      .forEach(p => {
-        const month = new Date(p.payment_date).getMonth();
-        data[month].ingresos += parseFloat(p.amount_usd) || 0;
-      });
-
-    // Expenses
-    expenses
-      .filter(e => {
-        const expenseYear = new Date(e.expense_date).getFullYear();
-        return expenseYear === currentYear && e.status === "paid";
-      })
-      .forEach(e => {
-        const month = new Date(e.expense_date).getMonth();
-        data[month].gastos += parseFloat(e.amount) || 0;
-      });
-
-    // Staff payments (payroll)
-    staffPayments
-      .filter(p => {
-        const paymentYear = new Date(p.payment_date).getFullYear();
-        return paymentYear === currentYear && p.status === "paid";
-      })
-      .forEach(p => {
-        const month = new Date(p.payment_date).getMonth();
-        data[month].nomina += parseFloat(p.total_amount) || 0;
-      });
-
+    
     return data;
-  }, [clientPayments, expenses, staffPayments, monthNames]);
+  }, [clientPayments, expenses, staffPayments]);
 
   // Expenses by category (for pie chart)
   const expensesByCategory = useMemo(() => {
@@ -281,7 +247,7 @@ export default function useAdminStats() {
   // Monthly staff payments trend
   const monthlyStaffPayments = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    const data = monthNames.map((month, index) => ({
+    const data = MONTH_NAMES.map((month, index) => ({
       name: month,
       month: index,
       total: 0,
@@ -300,7 +266,7 @@ export default function useAdminStats() {
       });
 
     return data;
-  }, [staffPayments, monthNames]);
+  }, [staffPayments]);
 
   // Recent activity (last 10 transactions)
   const recentActivity = useMemo(() => {
@@ -360,13 +326,13 @@ export default function useAdminStats() {
       .reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
 
     return {
-      monthName: monthNamesFull[currentMonth],
+      monthName: MONTH_NAMES_FULL[currentMonth],
       income: monthIncome,
       expenses: monthExpenses,
       payroll: monthPayroll,
       total: monthIncome - monthExpenses - monthPayroll,
     };
-  }, [clientPayments, expenses, staffPayments, monthNamesFull]);
+  }, [clientPayments, expenses, staffPayments]);
 
   return {
     loading,

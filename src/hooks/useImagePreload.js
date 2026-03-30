@@ -44,7 +44,8 @@ export function useCriticalImagePreload() {
   useEffect(() => {
     // Critical images for login and sidebar
     const criticalImages = [
-      '/logo.png',
+      '/logo-dark.png',
+      '/logo-light.png',
       '/logo-sidebar.png', 
       '/logo-collapsible.png'
     ]

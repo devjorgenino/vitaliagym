@@ -12,6 +12,7 @@ const poppinsFont = Poppins({
 });
 
 export const metadata = {
+  metadataBase: new URL("https://vitaliagym.com"),
   title: {
     default: "VitaliaGym",
     template: "%s | VitaliaGym",

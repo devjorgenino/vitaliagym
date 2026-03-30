@@ -322,7 +322,7 @@ export function validateCedula(type, number) {
   return { valid: true };
 }
 
-export default {
+const venezuelanData = {
   VENEZUELAN_BANKS,
   DOCUMENT_TYPES,
   BANK_ACCOUNT_TYPES,
@@ -336,3 +336,5 @@ export default {
   parsePhone,
   validatePhone,
 };
+
+export default venezuelanData;
