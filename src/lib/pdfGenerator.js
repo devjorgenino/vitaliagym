@@ -1125,6 +1125,7 @@ export const generateIncomeReport = async (payments, options = {}) => {
 export const generatePaymentReceipt = async (payment, staffMember) => {
   const doc = createBasePDF("portrait");
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   
   // Header especial para recibo con colores del tema
   doc.setFillColor(...COLORS.primary);
@@ -1171,6 +1172,12 @@ export const generatePaymentReceipt = async (payment, staffMember) => {
   
   let y = 65;
   
+  // Verificar espacio para la sección de empleado
+  if (y > pageHeight - 120) {
+    doc.addPage();
+    y = 15;
+  }
+  
   // Información del empleado
   doc.setFillColor(...COLORS.light);
   doc.roundedRect(15, y, pageWidth - 30, 50, 4, 4, "F");
@@ -1213,9 +1220,15 @@ export const generatePaymentReceipt = async (payment, staffMember) => {
   
   y += 25;
   
+  // Verificar espacio para la sección de pago
+  if (y > pageHeight - 150) {
+    doc.addPage();
+    y = 15;
+  }
+  
   // Información del pago
   doc.setFillColor(...COLORS.light);
-  doc.roundedRect(15, y, pageWidth - 30, 85, 4, 4, "F");
+  doc.roundedRect(15, y, pageWidth - 30, 95, 4, 4, "F");
   
   doc.setFillColor(...COLORS.primary);
   doc.roundedRect(15, y, pageWidth - 30, 4, 4, 4, "F");
@@ -1224,7 +1237,7 @@ export const generatePaymentReceipt = async (payment, staffMember) => {
   doc.setTextColor(...COLORS.primary);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text("DETALLE DEL PAGO", 25, y + 15);
+  doc.text("DETALLE DEL PAGO (EN DÓLARES)", 25, y + 15);
   
   doc.setTextColor(...COLORS.foreground);
   doc.setFontSize(10);
@@ -1232,6 +1245,8 @@ export const generatePaymentReceipt = async (payment, staffMember) => {
   const detailY = y + 28;
   const leftCol = 25;
   const rightCol = pageWidth - 25;
+  
+  const formatUSD = (v) => `$${(v || 0).toFixed(2)}`;
   
   doc.setFont("helvetica", "normal");
   doc.text("Período:", leftCol, detailY);
@@ -1250,52 +1265,119 @@ export const generatePaymentReceipt = async (payment, staffMember) => {
   
   doc.setFont("helvetica", "normal");
   doc.text("Salario Base:", leftCol, detailY + 28);
-  doc.text(formatCurrency(payment.base_amount), rightCol, detailY + 28, { align: "right" });
+  doc.text(formatUSD(payment.base_amount), rightCol, detailY + 28, { align: "right" });
   
   doc.setTextColor(...COLORS.success);
   doc.text("Bonificaciones:", leftCol, detailY + 38);
-  doc.text(`+${formatCurrency(payment.bonus || 0)}`, rightCol, detailY + 38, { align: "right" });
+  doc.text(`+${formatUSD(payment.bonus || 0)}`, rightCol, detailY + 38, { align: "right" });
   
   doc.setTextColor(...COLORS.danger);
   doc.text("Deducciones:", leftCol, detailY + 48);
-  doc.text(`-${formatCurrency(payment.deductions || 0)}`, rightCol, detailY + 48, { align: "right" });
+  doc.text(`-${formatUSD(payment.deductions || 0)}`, rightCol, detailY + 48, { align: "right" });
   
-  y += 95;
+  y += 105;
   
-  // Total
+  // Total en dólares
   doc.setFillColor(...COLORS.success);
   doc.roundedRect(15, y, pageWidth - 30, 28, 4, 4, "F");
   
   doc.setTextColor(...COLORS.white);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("TOTAL A PAGAR:", 25, y + 18);
+  doc.text("TOTAL A PAGAR (USD):", 25, y + 18);
   doc.setFontSize(20);
-  doc.text(formatCurrency(payment.total_amount), pageWidth - 25, y + 18, { align: "right" });
+  doc.text(formatUSD(payment.total_amount), pageWidth - 25, y + 18, { align: "right" });
   
-  y += 40;
+  y += 35;
+  
+  // Verificar espacio para sección de bolívares
+  if (y > pageHeight - 80) {
+    doc.addPage();
+    y = 15;
+  }
+  
+  // Sección de montos en bolívares
+  const exchangeRate = payment.exchange_rate || 1;
+  const totalBs = (payment.total_amount || 0) * exchangeRate;
+  
+  doc.setFillColor(...COLORS.secondary);
+  doc.roundedRect(15, y, pageWidth - 30, 35, 4, 4, "F");
+  
+  doc.setFillColor(...COLORS.primary);
+  doc.roundedRect(15, y, pageWidth - 30, 4, 4, 4, "F");
+  doc.rect(15, y + 2, pageWidth - 30, 2, "F");
+  
+  doc.setTextColor(...COLORS.primaryDark);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("EQUIVALENTE EN BOLÍVARES", 25, y + 15);
+  
+  doc.setFontSize(10);
+  doc.text(`Tasa de cambio: Bs ${exchangeRate.toFixed(2)}`, 25, y + 25);
+  
+  doc.setFontSize(14);
+  doc.text(`Bs ${totalBs.toFixed(2)}`, pageWidth - 25, y + 22, { align: "right" });
+  
+  y += 45;
+  
+  // Verificar espacio para método de pago
+  if (y > pageHeight - 80) {
+    doc.addPage();
+    y = 15;
+  }
   
   // Método de pago
   doc.setFillColor(...COLORS.secondary);
-  doc.roundedRect(15, y, pageWidth - 30, 25, 4, 4, "F");
+  doc.roundedRect(15, y, pageWidth - 30, 40, 4, 4, "F");
   
   doc.setTextColor(...COLORS.primaryDark);
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   
   const methodLabels = {
-    cash: "Efectivo",
+    cash: "Efectivo Bs",
+    cash_usd: "Efectivo $",
     transfer: "Transferencia Bancaria",
     check: "Cheque",
     mobile_payment: "Pago Móvil",
   };
   
+  doc.setFont("helvetica", "bold");
   doc.text(`Método de Pago: ${methodLabels[payment.payment_method] || payment.payment_method}`, 25, y + 10);
+  
   if (payment.payment_reference) {
+    doc.setFont("helvetica", "normal");
     doc.text(`Referencia: ${payment.payment_reference}`, 25, y + 18);
   }
   
-  y += 40;
+  // Datos bancarios del empleado
+  if (staffMember.bank_name) {
+    doc.setFont("helvetica", "normal");
+    doc.text(`Banco: ${staffMember.bank_name}`, 25, y + 26);
+    
+    if (staffMember.payment_type === "pago_movil") {
+      if (staffMember.payment_document_id) {
+        doc.text(`Cédula: ${staffMember.payment_document_id}`, 25, y + 34);
+      }
+      if (staffMember.payment_phone_operator && staffMember.payment_phone) {
+        doc.text(`Teléfono: ${staffMember.payment_phone_operator}${staffMember.payment_phone}`, pageWidth - 25, y + 34, { align: "right" });
+      }
+    } else if (staffMember.payment_type === "transferencia" && staffMember.bank_account) {
+      doc.text(`Cuenta: ${staffMember.bank_account}`, pageWidth - 25, y + 26, { align: "right" });
+    }
+  } else if (staffMember.payment_type === "efectivo_dolares") {
+    doc.text("Pago en efectivo (USD)", 25, y + 26);
+  } else if (staffMember.payment_type === "efectivo_bolivares") {
+    doc.text("Pago en efectivo (Bs)", 25, y + 26);
+  }
+  
+  y += 45;
+  
+  // Verificar espacio para firmas
+  if (y > pageHeight - 60) {
+    doc.addPage();
+    y = 15;
+  }
   
   // Firmas
   doc.setDrawColor(...COLORS.foreground);
@@ -1311,6 +1393,10 @@ export const generatePaymentReceipt = async (payment, staffMember) => {
   // Notas
   if (payment.notes) {
     y += 45;
+    if (y > pageHeight - 30) {
+      doc.addPage();
+      y = 15;
+    }
     doc.setFontSize(9);
     doc.setTextColor(...COLORS.muted);
     doc.text(`Notas: ${payment.notes}`, 25, y);
