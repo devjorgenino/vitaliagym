@@ -562,13 +562,26 @@ export function PaymentsTable({
 
   // Calcular el total pagado por un cliente-plan (TODOS los pagos incluido el actual)
 
+  // Estado para controlar qué campo se está editando (evitar bucles infinitos)
+  const [editingField, setEditingField] = useState(null);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
   // Actualizar amount_bs cuando cambia amount_usd o la tasa
   useEffect(() => {
-    if (formData.amount_usd && rate) {
+    // No ejecutar hasta que termine la carga inicial
+    if (!initialLoadComplete) return;
+    // No recalcular en modo edición (mantener los valores originales del pago)
+    if (isEditing) return;
+    if (editingField === "amount_bs") return;
+    
+    // En modo creación: usar la tasa del BCV o la tasa guardada en el formulario
+    const currentRate = parseFloat(formData.exchange_rate) || rate || 1;
+    
+    if (formData.amount_usd && currentRate) {
       setFormData((prev) => ({
         ...prev,
-        amount_bs: (parseFloat(formData.amount_usd) * rate).toFixed(2),
-        exchange_rate: rate,
+        amount_bs: (parseFloat(formData.amount_usd) * currentRate).toFixed(2),
+        exchange_rate: currentRate,
       }));
     } else if (!formData.amount_usd) {
       setFormData((prev) => ({
@@ -576,12 +589,64 @@ export function PaymentsTable({
         amount_bs: "",
       }));
     }
-  }, [formData.amount_usd, rate]);
+  }, [formData.amount_usd, rate, editingField, initialLoadComplete, isEditing]);
+
+  // Actualizar amount_usd cuando cambia amount_bs (edición inversa)
+  useEffect(() => {
+    // No ejecutar hasta que termine la carga inicial
+    if (!initialLoadComplete) return;
+    // No recalcular en modo edición (mantener los valores originales del pago)
+    if (isEditing) return;
+    if (editingField === "amount_usd") return;
+    
+    // En modo creación: usar la tasa del BCV o la tasa guardada en el formulario  
+    const currentRate = parseFloat(formData.exchange_rate) || rate || 1;
+    
+    if (formData.amount_bs && parseFloat(formData.amount_bs) > 0) {
+      const bsAmount = parseFloat(formData.amount_bs);
+      if (currentRate > 0) {
+        const usdAmount = bsAmount / currentRate;
+        setFormData((prev) => ({
+          ...prev,
+          amount_usd: usdAmount.toFixed(2),
+        }));
+      }
+    } else if (!formData.amount_bs) {
+      setFormData((prev) => ({
+        ...prev,
+        amount_usd: "",
+      }));
+    }
+  }, [formData.amount_bs, rate, editingField, initialLoadComplete, isEditing]);
+
+  // Recalcular amount_bs cuando cambia la tasa de cambio (en vivo)
+  useEffect(() => {
+    // No ejecutar hasta que termine la carga inicial
+    if (!initialLoadComplete) return;
+    // Solo recalcular cuando el usuario cambia manualmente el campo exchange_rate
+    if (editingField !== "exchange_rate") return;
+    
+    // Solo recalcular si hay un monto en USD y una tasa válida
+    if (formData.amount_usd && formData.exchange_rate && parseFloat(formData.exchange_rate) > 0) {
+      const currentRate = parseFloat(formData.exchange_rate);
+      const usdAmount = parseFloat(formData.amount_usd);
+      setFormData((prev) => ({
+        ...prev,
+        amount_bs: (usdAmount * currentRate).toFixed(2),
+      }));
+    }
+  }, [formData.exchange_rate, editingField, initialLoadComplete]);
 
   // Efecto unificado para auto-cargar el monto al cambiar cliente, plan o modo de pago
   useEffect(() => {
+    // No ejecutar si no ha terminado la carga inicial
+    if (!initialLoadComplete) return;
+
     // No ejecutar si estamos en modo registro con inscripción
     if (isRegisterMode && includeInscription) return;
+    
+    // No sobreescribir si el usuario está editando amount_usd o amount_bs manualmente
+    if (editingField === "amount_usd" || editingField === "amount_bs") return;
 
     if (
       isDialogOpen &&
@@ -607,6 +672,8 @@ export function PaymentsTable({
     rate,
     isRegisterMode,
     includeInscription,
+    editingField,
+    initialLoadComplete,
   ]);
 
   // Validar monto parcial en tiempo real
@@ -716,7 +783,16 @@ export function PaymentsTable({
 
   // Actualizar remainingPaymentData cuando cambia el cliente o plan en modo de creación
   useEffect(() => {
-    if (isDialogOpen && !isEditing && formData.client_id && formData.plan_id) {
+    // No ejecutar hasta que termine la carga inicial
+    if (!initialLoadComplete) return;
+
+    // No ejecutar en modo edición
+    if (isEditing) return;
+    
+    // No sobreescribir si el usuario está editando amount_usd o amount_bs manualmente
+    if (editingField === "amount_usd" || editingField === "amount_bs") return;
+
+    if (isDialogOpen && formData.client_id && formData.plan_id) {
       // Calcular el restante actual
       const allClientPayments = payments.filter(
         (p) =>
@@ -768,6 +844,7 @@ export function PaymentsTable({
   }, [
     isDialogOpen,
     isEditing,
+    editingField,
     formData.client_id,
     formData.plan_id,
     formData.amount_usd,
@@ -801,12 +878,14 @@ export function PaymentsTable({
     setPartialValidationError("");
     setIsPayingRemaining(false);
     setRemainingPaymentData(null);
+    setInitialLoadComplete(false);
   }, [preselectedClient, rate]);
 
   // Abrir modal para crear
   const handleOpenCreateDialog = useCallback(() => {
     resetForm();
     setIsDialogOpen(true);
+    setTimeout(() => setInitialLoadComplete(true), 50);
   }, [resetForm]);
 
   // Abrir modal para editar
@@ -833,6 +912,7 @@ export function PaymentsTable({
     });
     setIsEditing(true);
     setIsDialogOpen(true);
+    setInitialLoadComplete(true);
   }, []);
 
   // Ver detalles del pago
@@ -855,6 +935,13 @@ export function PaymentsTable({
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+
+    // Establecer el campo que se está editando para evitar bucles infinitos
+    if (name === "amount_usd" || name === "amount_bs" || name === "exchange_rate") {
+      setEditingField(name);
+      // Limpiar después de un pequeño delay para permitir que el useEffect procese
+      setTimeout(() => setEditingField(null), 100);
+    }
 
     // Si estamos pagando restante, no permitir cambiar cliente o plan
     if (isPayingRemaining && (name === "client_id" || name === "plan_id")) {
@@ -1974,23 +2061,23 @@ export function PaymentsTable({
                       )}
                     </div>
 
-                    {/* Fecha de pago */}
+                    {/* Monto en Bs */}
                     <div className="space-y-2">
-                      <Label
-                        htmlFor="payment_date"
-                        className="text-sm font-medium"
-                      >
-                        Fecha de Pago{" "}
-                        <span className="text-destructive" aria-hidden="true">
-                          *
-                        </span>
+                      <Label htmlFor="amount_bs" className="text-sm font-medium">
+                        Monto en Bs
                       </Label>
-                      <DatePicker
-                        value={formData.payment_date}
-                        onChange={(value) => handleInputChange({ target: { name: "payment_date", value } })}
-                        placeholder="Seleccionar fecha"
-                        size="sm"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
+                        <Input
+                          id="amount_bs"
+                          type="text"
+                          name="amount_bs"
+                          value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString("es-VE") : ""}
+                          onChange={handleInputChange}
+                          placeholder="0.00"
+                          className="pl-10"
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2023,18 +2110,19 @@ export function PaymentsTable({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="amount_bs" className="text-sm font-medium text-muted-foreground">
-                          Monto en Bs <span className="text-xs">(calculado)</span>
+                        <Label htmlFor="amount_bs" className="text-sm font-medium">
+                          Monto en Bs
                         </Label>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
                           <Input
                             id="amount_bs"
                             type="text"
-                            value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString("es-VE") : ""}
-                            readOnly
-                            disabled
-                            className="pl-10 bg-muted"
+                            name="amount_bs"
+                            value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
+                            onChange={handleInputChange}
+                            placeholder="0.00"
+                            className="pl-10"
                           />
                         </div>
                       </div>
@@ -2053,7 +2141,7 @@ export function PaymentsTable({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="exchange_rate" className="text-sm font-medium text-muted-foreground">
+                        <Label htmlFor="exchange_rate" className="text-sm font-medium">
                           Tasa de Cambio <span className="text-xs">(Bs/$)</span>
                         </Label>
                         <Input
@@ -2063,8 +2151,7 @@ export function PaymentsTable({
                           name="exchange_rate"
                           value={formData.exchange_rate}
                           onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className={!isEditing ? "bg-muted" : ""}
+                          placeholder="Ej: 35.00"
                         />
                       </div>
                     </div>
