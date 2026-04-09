@@ -329,8 +329,10 @@ export const generatePaymentsReport = async (payments, options = {}) => {
   y = addSection(doc, y, "Detalle de Pagos al Personal");
 
   const PAYMENT_METHOD_LABELS = {
-    cash: "Efectivo", transfer: "Transferencia",
-    check: "Cheque", mobile_payment: "Pago Móvil",
+    cash: "Efectivo Bs",
+    cash_usd: "Efectivo $",
+    transfer: "Transferencia",
+    mobile_payment: "Pago Móvil",
   };
 
   const tableData = payments.map((p) => [
@@ -1338,7 +1340,6 @@ export const generatePaymentReceipt = async (payment, staffMember) => {
     cash: "Efectivo Bs",
     cash_usd: "Efectivo $",
     transfer: "Transferencia Bancaria",
-    check: "Cheque",
     mobile_payment: "Pago Móvil",
   };
   

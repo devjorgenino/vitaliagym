@@ -90,7 +90,6 @@ const CATEGORY_ICONS = {
 const PAYMENT_METHODS = {
   cash: "Efectivo",
   transfer: "Transferencia",
-  check: "Cheque",
   mobile_payment: "Pago Móvil",
 };
 
@@ -544,7 +543,7 @@ export default function ExpensesTable() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoría *</Label>
                   <Select
@@ -588,7 +587,7 @@ export default function ExpensesTable() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="amount">Monto (USD) *</Label>
                   <div className="relative">
@@ -618,7 +617,7 @@ export default function ExpensesTable() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="exchange_rate">Tasa del Día (Bs)</Label>
                   <div className="relative">
@@ -652,7 +651,7 @@ export default function ExpensesTable() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="payment_method">Método de Pago</Label>
                   <Select
@@ -716,7 +715,7 @@ export default function ExpensesTable() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="vendor">Proveedor</Label>
                   <Input
