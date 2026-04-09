@@ -343,7 +343,7 @@ export default function useAdminStats() {
     const currentYear = now.getFullYear();
 
     const isCurrentMonth = (dateStr) => {
-      const date = new Date(dateStr);
+      const date = new Date(dateStr + "T00:00:00");
       return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
     };
 
@@ -357,7 +357,12 @@ export default function useAdminStats() {
 
     const monthPayroll = staffPayments
       .filter(p => isCurrentMonth(p.payment_date) && p.status === "paid")
-      .reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
+      .reduce((sum, p) => {
+        const base = parseFloat(p.base_amount) || 0;
+        const bonus = parseFloat(p.bonus) || 0;
+        const deductions = parseFloat(p.deductions) || 0;
+        return sum + (base + bonus - deductions);
+      }, 0);
 
     return {
       monthName: monthNamesFull[currentMonth],

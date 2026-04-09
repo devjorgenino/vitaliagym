@@ -81,7 +81,6 @@ const PAYMENT_METHODS = {
   cash: "Efectivo Bs",
   cash_usd: "Efectivo $",
   transfer: "Transferencia",
-  check: "Cheque",
   mobile_payment: "Pago Móvil",
 };
 
@@ -610,7 +609,7 @@ export default function StaffPaymentsTable() {
 
       {/* Dialog para crear/editar */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {isEditing ? "Editar Pago" : "Nuevo Pago"}
@@ -728,6 +727,7 @@ export default function StaffPaymentsTable() {
                     value={formData.period_start}
                     onChange={handleInputChange}
                     required
+                    className="w-full [&::-webkit-calendar-picker-indicator]:mr-0"
                   />
                 </div>
                 <div className="space-y-2">
@@ -739,6 +739,7 @@ export default function StaffPaymentsTable() {
                     value={formData.period_end}
                     onChange={handleInputChange}
                     required
+                    className="w-full [&::-webkit-calendar-picker-indicator]:mr-0"
                   />
                 </div>
                 <div className="space-y-2">
@@ -750,6 +751,7 @@ export default function StaffPaymentsTable() {
                     value={formData.payment_date}
                     onChange={handleInputChange}
                     required
+                    className="w-full [&::-webkit-calendar-picker-indicator]:mr-0"
                   />
                 </div>
               </div>
@@ -847,7 +849,7 @@ export default function StaffPaymentsTable() {
                 </div>
               </div>
 
-              <div className={`grid gap-4 ${isEditing ? "grid-cols-3" : "grid-cols-2"}`}>
+              <div className={`grid gap-4 ${isEditing ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}>
                 <div className="space-y-2">
                   <Label htmlFor="payment_method">Método de Pago</Label>
                   <Select
@@ -892,8 +894,8 @@ export default function StaffPaymentsTable() {
                   </div>
                 )}
 
-                {/* Reference field - only shown when editing */}
-                {isEditing && (
+                {/* Reference field - only shown when editing and not for cash payments */}
+                {isEditing && formData.payment_method !== "cash" && formData.payment_method !== "cash_usd" && (
                   <div className="space-y-2">
                     <Label htmlFor="payment_reference">Referencia</Label>
                     <Input
