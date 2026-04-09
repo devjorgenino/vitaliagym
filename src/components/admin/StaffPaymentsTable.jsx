@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
 import useStaffPayments from "@/hooks/useStaffPayments";
 import useStaff from "@/hooks/useStaff";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { VENEZUELAN_BANKS } from "@/lib/venezuelanData";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { PERMISSIONS } from "@/components/context/PermissionsProvider";
@@ -77,7 +78,8 @@ const STATUS_CONFIG = {
 };
 
 const PAYMENT_METHODS = {
-  cash: "Efectivo",
+  cash: "Efectivo Bs",
+  cash_usd: "Efectivo $",
   transfer: "Transferencia",
   check: "Cheque",
   mobile_payment: "Pago Móvil",
@@ -91,9 +93,10 @@ const initialFormData = {
   base_amount: "",
   bonus: "",
   deductions: "",
+  exchange_rate: "",
+  amount_bs: "",
   payment_method: "transfer",
   bank_name: "",
-  payment_reference: "",
   notes: "",
 };
 
@@ -110,6 +113,7 @@ export default function StaffPaymentsTable() {
   } = useStaffPayments();
 
   const { staff, loading: staffLoading } = useStaff();
+  const { rate } = useExchangeRate();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -120,6 +124,7 @@ export default function StaffPaymentsTable() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, payment: null });
   const [markPaidDialog, setMarkPaidDialog] = useState({ open: false, payment: null, reference: "" });
+  const [selectedStaffInfo, setSelectedStaffInfo] = useState(null);
 
   const activeStaff = useMemo(() => staff.filter((s) => s.status === "active"), [staff]);
   const stats = getPaymentStats();
@@ -138,21 +143,69 @@ export default function StaffPaymentsTable() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      
+      if (name === "exchange_rate" || name === "base_amount" || name === "bonus" || name === "deductions") {
+        const baseAmount = parseFloat(name === "base_amount" ? value : prev.base_amount) || 0;
+        const bonus = parseFloat(prev.bonus) || 0;
+        const deductions = parseFloat(prev.deductions) || 0;
+        const totalUSD = baseAmount + bonus - deductions;
+        const exchangeRate = parseFloat(name === "exchange_rate" ? value : prev.exchange_rate) || 0;
+        
+        if (totalUSD > 0 && exchangeRate > 0) {
+          updated.amount_bs = (totalUSD * exchangeRate).toFixed(2);
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSelectChange = (name, value) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      
+      if (name === "staff_id") {
+        const selectedStaff = staff.find((s) => s.id === value);
+        setSelectedStaffInfo(selectedStaff || null);
+        
+        if (selectedStaff) {
+          updated.bank_name = selectedStaff.bank_name || "";
+          if (selectedStaff.payment_type === "pago_movil") {
+            updated.payment_method = "mobile_payment";
+          } else if (selectedStaff.payment_type === "transferencia") {
+            updated.payment_method = "transfer";
+          } else if (selectedStaff.payment_type === "efectivo_dolares") {
+            updated.payment_method = "cash_usd";
+          } else if (selectedStaff.payment_type === "efectivo_bolivares") {
+            updated.payment_method = "cash";
+          }
+          updated.exchange_rate = rate ? rate.toFixed(2) : "";
+          
+          const baseAmount = parseFloat(prev.base_amount) || 0;
+          if (baseAmount > 0 && rate) {
+            updated.amount_bs = (baseAmount * rate).toFixed(2);
+          }
+        }
+      }
+      
+      return updated;
+    });
   };
 
   const resetForm = () => {
-    setFormData(initialFormData);
+    setFormData({
+      ...initialFormData,
+      exchange_rate: rate ? rate.toFixed(2) : "",
+    });
     setSelectedPayment(null);
     setIsEditing(false);
   };
 
   const handleOpenDialog = (payment = null) => {
     if (payment) {
+      const selectedStaff = staff.find((s) => s.id === payment.staff_id);
+      
       setFormData({
         staff_id: payment.staff_id,
         payment_date: payment.payment_date,
@@ -161,8 +214,10 @@ export default function StaffPaymentsTable() {
         base_amount: payment.base_amount?.toString() || "",
         bonus: payment.bonus?.toString() || "",
         deductions: payment.deductions?.toString() || "",
-        payment_method: payment.payment_method,
-        bank_name: payment.bank_name || "",
+        exchange_rate: payment.exchange_rate?.toString() || (rate ? rate.toFixed(2) : ""),
+        amount_bs: payment.amount_bs?.toString() || "",
+        payment_method: payment.payment_method || (selectedStaff?.payment_type === "pago_movil" ? "mobile_payment" : "transfer"),
+        bank_name: payment.bank_name || selectedStaff?.bank_name || "",
         payment_reference: payment.payment_reference || "",
         notes: payment.notes || "",
       });
@@ -179,15 +234,27 @@ export default function StaffPaymentsTable() {
     setIsSubmitting(true);
 
     try {
+      const baseAmount = parseFloat(formData.base_amount) || 0;
+      const bonusAmount = parseFloat(formData.bonus) || 0;
+      const deductionsAmount = parseFloat(formData.deductions) || 0;
+      
       const dataToSend = {
-        ...formData,
-        base_amount: parseFloat(formData.base_amount) || 0,
-        bonus: parseFloat(formData.bonus) || 0,
-        deductions: parseFloat(formData.deductions) || 0,
+        staff_id: formData.staff_id,
+        payment_date: formData.payment_date,
+        period_start: formData.period_start,
+        period_end: formData.period_end,
+        base_amount: baseAmount,
+        bonus: bonusAmount,
+        deductions: deductionsAmount,
+        exchange_rate: parseFloat(formData.exchange_rate) || rate || 0,
+        amount_bs: parseFloat(formData.amount_bs) || 0,
       };
 
       if (isEditing && selectedPayment) {
-        const { error } = await updatePayment(selectedPayment.id, dataToSend);
+        const { error } = await updatePayment(selectedPayment.id, {
+          ...dataToSend,
+          payment_reference: formData.payment_reference || "",
+        });
         if (error) throw new Error(error);
         toast.success("Pago actualizado correctamente");
       } else {
@@ -216,6 +283,8 @@ export default function StaffPaymentsTable() {
       toast.error(err.message || "Error al marcar pago");
     } finally {
       setMarkPaidDialog({ open: false, payment: null, reference: "" });
+      // Recargar datos para obtener la relación con staff
+      window.location.reload();
     }
   };
 
@@ -260,15 +329,16 @@ export default function StaffPaymentsTable() {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("es-VE", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "VES",
+      currency: "USD",
     }).format(amount || 0);
   };
 
   const formatDate = (date) => {
     if (!date) return "-";
-    return new Date(date).toLocaleDateString("es-ES", {
+    const d = new Date(date + "T00:00:00");
+    return d.toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -540,7 +610,7 @@ export default function StaffPaymentsTable() {
 
       {/* Dialog para crear/editar */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {isEditing ? "Editar Pago" : "Nuevo Pago"}
@@ -572,9 +642,85 @@ export default function StaffPaymentsTable() {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Información del pago del empleado */}
+              {selectedStaffInfo && (
+                <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-muted-foreground">Datos de Pago del Empleado</h4>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        const info = selectedStaffInfo;
+                        let paymentInfo = `Banco: ${info.bank_name || "N/A"}\n`;
+                        if (info.payment_type === "pago_movil") {
+                          paymentInfo += `Pago Móvil\nCédula: ${info.payment_document_id || "N/A"}\nTeléfono: ${info.payment_phone_operator || ""}${info.payment_phone || ""}`;
+                        } else if (info.payment_type === "transferencia") {
+                          paymentInfo += `Transferencia\nCuenta: ${info.bank_account || "N/A"}\nTipo: ${info.bank_account_type || "N/A"}`;
+                        } else if (info.payment_type === "efectivo_dolares") {
+                          paymentInfo += "Pago en efectivo (USD)";
+                        } else if (info.payment_type === "efectivo_bolivares") {
+                          paymentInfo += "Pago en efectivo (Bs)";
+                        }
+                        navigator.clipboard.writeText(paymentInfo);
+                        toast.success("Información copiada al portapapeles");
+                      }}
+                    >
+                      Copiar
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Tipo de Pago:</span>
+                      <span className="ml-2 font-medium">
+                        {selectedStaffInfo.payment_type === "pago_movil" && "Pago Móvil"}
+                        {selectedStaffInfo.payment_type === "transferencia" && "Transferencia"}
+                        {selectedStaffInfo.payment_type === "efectivo_dolares" && "Efectivo $"}
+                        {selectedStaffInfo.payment_type === "efectivo_bolivares" && "Efectivo Bs"}
+                        {!selectedStaffInfo.payment_type && "No definido"}
+                      </span>
+                    </div>
+                    {selectedStaffInfo.bank_name && (
+                      <div>
+                        <span className="text-muted-foreground">Banco:</span>
+                        <span className="ml-2 font-medium">{selectedStaffInfo.bank_name}</span>
+                      </div>
+                    )}
+                    {selectedStaffInfo.payment_type === "pago_movil" && (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Cédula:</span>
+                          <span className="ml-2 font-medium">{selectedStaffInfo.payment_document_id || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Teléfono:</span>
+                          <span className="ml-2 font-medium">
+                            {selectedStaffInfo.payment_phone_operator}{selectedStaffInfo.payment_phone || "N/A"}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {selectedStaffInfo.payment_type === "transferencia" && (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Cuenta:</span>
+                          <span className="ml-2 font-medium">{selectedStaffInfo.bank_account || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Tipo:</span>
+                          <span className="ml-2 font-medium">{selectedStaffInfo.bank_account_type || "N/A"}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="period_start">Inicio Período *</Label>
+                  <Label htmlFor="period_start">Período Inicio *</Label>
                   <Input
                     id="period_start"
                     name="period_start"
@@ -585,7 +731,7 @@ export default function StaffPaymentsTable() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="period_end">Fin Período *</Label>
+                  <Label htmlFor="period_end">Período Fin *</Label>
                   <Input
                     id="period_end"
                     name="period_end"
@@ -595,68 +741,113 @@ export default function StaffPaymentsTable() {
                     required
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="payment_date">Fecha de Pago *</Label>
-                <Input
-                  id="payment_date"
-                  name="payment_date"
-                  type="date"
-                  value={formData.payment_date}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="base_amount">Monto Base *</Label>
+                  <Label htmlFor="payment_date">Fecha Pago *</Label>
                   <Input
-                    id="base_amount"
-                    name="base_amount"
-                    type="number"
-                    step="0.01"
-                    value={formData.base_amount}
+                    id="payment_date"
+                    name="payment_date"
+                    type="date"
+                    value={formData.payment_date}
                     onChange={handleInputChange}
                     required
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="bonus">Bonos</Label>
-                  <Input
-                    id="bonus"
-                    name="bonus"
-                    type="number"
-                    step="0.01"
-                    value={formData.bonus}
-                    onChange={handleInputChange}
-                  />
+                  <Label htmlFor="base_amount">Monto Base (USD) *</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      id="base_amount"
+                      name="base_amount"
+                      type="number"
+                      step="0.01"
+                      value={formData.base_amount}
+                      onChange={handleInputChange}
+                      required
+                      className="pl-7"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="deductions">Deducciones</Label>
-                  <Input
-                    id="deductions"
-                    name="deductions"
-                    type="number"
-                    step="0.01"
-                    value={formData.deductions}
-                    onChange={handleInputChange}
-                  />
+                  <Label htmlFor="bonus">Bonos (USD)</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      id="bonus"
+                      name="bonus"
+                      type="number"
+                      step="0.01"
+                      value={formData.bonus}
+                      onChange={handleInputChange}
+                      className="pl-7"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="deductions">Deducciones (USD)</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      id="deductions"
+                      name="deductions"
+                      type="number"
+                      step="0.01"
+                      value={formData.deductions}
+                      onChange={handleInputChange}
+                      className="pl-7"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="exchange_rate">Tasa del Día (Bs)</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Bs</span>
+                    <Input
+                      id="exchange_rate"
+                      name="exchange_rate"
+                      type="number"
+                      step="0.01"
+                      value={formData.exchange_rate}
+                      onChange={handleInputChange}
+                      className="pl-10"
+                      placeholder={rate?.toString() || "0.00"}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="amount_bs">Monto en Bs</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Bs</span>
+                    <Input
+                      id="amount_bs"
+                      name="amount_bs"
+                      type="number"
+                      step="0.01"
+                      value={formData.amount_bs}
+                      onChange={handleInputChange}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Total calculado */}
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="flex justify-between items-center">
-                  <span className="font-medium">Total a Pagar:</span>
+                  <span className="font-medium">Total a Pagar (USD):</span>
                   <span className="text-xl font-bold text-primary">
-                    {formatCurrency(calculatedTotal)}
+                    ${calculatedTotal.toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${isEditing ? "grid-cols-3" : "grid-cols-2"}`}>
                 <div className="space-y-2">
                   <Label htmlFor="payment_method">Método de Pago</Label>
                   <Select
@@ -675,42 +866,46 @@ export default function StaffPaymentsTable() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="payment_reference">Referencia</Label>
-                  <Input
-                    id="payment_reference"
-                    name="payment_reference"
-                    value={formData.payment_reference}
-                    onChange={handleInputChange}
-                    placeholder="N° de referencia"
-                  />
-                </div>
-              </div>
 
-              {/* Bank selection - shown for transfer or mobile payment */}
-              {(formData.payment_method === "transfer" || formData.payment_method === "mobile_payment") && (
-                <div className="space-y-2">
-                  <Label htmlFor="bank_name">Banco</Label>
-                  <Select
-                    value={formData.bank_name}
-                    onValueChange={(value) => handleSelectChange("bank_name", value)}
-                  >
-                    <SelectTrigger id="bank_name" className="w-full">
-                      <SelectValue placeholder="Seleccionar banco" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VENEZUELAN_BANKS.map((bank) => (
-                        <SelectItem key={bank.code} value={bank.name}>
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-3 w-3 text-muted-foreground" />
-                            <span>{bank.shortName}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+                {/* Bank selection - shown for transfer or mobile payment */}
+                {(formData.payment_method === "transfer" || formData.payment_method === "mobile_payment") && (
+                  <div className="space-y-2">
+                    <Label htmlFor="bank_name">Banco</Label>
+                    <Select
+                      value={formData.bank_name}
+                      onValueChange={(value) => handleSelectChange("bank_name", value)}
+                    >
+                      <SelectTrigger id="bank_name" className="w-full">
+                        <SelectValue placeholder="Seleccionar banco" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VENEZUELAN_BANKS.map((bank) => (
+                          <SelectItem key={bank.code} value={bank.name}>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3 text-muted-foreground" />
+                              <span>{bank.shortName}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Reference field - only shown when editing */}
+                {isEditing && (
+                  <div className="space-y-2">
+                    <Label htmlFor="payment_reference">Referencia</Label>
+                    <Input
+                      id="payment_reference"
+                      name="payment_reference"
+                      value={formData.payment_reference || ""}
+                      onChange={handleInputChange}
+                      placeholder="N° de referencia"
+                    />
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="notes">Notas</Label>
