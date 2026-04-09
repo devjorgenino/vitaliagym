@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
 import useStaff from "@/hooks/useStaff";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { VENEZUELAN_BANKS, BANK_ACCOUNT_TYPES, DOCUMENT_TYPES, PHONE_OPERATORS, formatCedula, parseCedula, formatPhone, parsePhone } from "@/lib/venezuelanData";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { PERMISSIONS } from "@/components/context/PermissionsProvider";
@@ -94,11 +95,24 @@ const initialFormData = {
   hire_date: new Date().toISOString().split("T")[0],
   salary: "",
   salary_type: "monthly",
+  salary_exchange_rate: "",
+  salary_bs: "",
+  payment_type: "transferencia",
+  payment_phone_operator: "0414",
+  payment_phone: "",
+  payment_document_id: "",
   status: "active",
   bank_name: "",
   bank_account: "",
   bank_account_type: "",
   notes: "",
+};
+
+const PAYMENT_TYPES = {
+  pago_movil: "Pago Móvil",
+  transferencia: "Transferencia",
+  efectivo_dolares: "Efectivo $",
+  efectivo_bolivares: "Efectivo Bs",
 };
 
 export default function StaffTable() {
@@ -112,13 +126,18 @@ export default function StaffTable() {
     getStaffStats,
   } = useStaff();
 
+  const { rate } = useExchangeRate();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState({
+    ...initialFormData,
+    salary_exchange_rate: rate ? rate.toFixed(2) : "",
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, staff: null });
 
@@ -144,25 +163,58 @@ export default function StaffTable() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      if (name === "salary_exchange_rate" || name === "salary") {
+        const salary = parseFloat(name === "salary" ? value : prev.salary) || 0;
+        const rate = parseFloat(name === "salary_exchange_rate" ? value : prev.salary_exchange_rate) || 0;
+        if (salary > 0 && rate > 0) {
+          updated.salary_bs = (salary * rate).toFixed(2);
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSelectChange = (name, value) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      if (name === "salary_exchange_rate") {
+        const salary = parseFloat(prev.salary) || 0;
+        const rate = parseFloat(value) || 0;
+        if (salary > 0 && rate > 0) {
+          updated.salary_bs = (salary * rate).toFixed(2);
+        }
+      }
+      return updated;
+    });
   };
 
   const resetForm = () => {
-    setFormData(initialFormData);
+    setFormData({
+      ...initialFormData,
+      salary_exchange_rate: rate ? rate.toFixed(2) : "",
+      salary_bs: "",
+    });
     setSelectedStaff(null);
     setIsEditing(false);
   };
 
   const handleOpenDialog = (staffMember = null) => {
     if (staffMember) {
-      // Parse document_id to separate type and number
       const { type, number } = parseCedula(staffMember.document_id || "");
-      // Parse phone to separate operator and number
       const { operator, number: phoneNumber } = parsePhone(staffMember.phone || "");
+      
+      const exchangeRate = staffMember.salary_exchange_rate 
+        ? parseFloat(staffMember.salary_exchange_rate) 
+        : (rate || 0);
+      const salary = parseFloat(staffMember.salary) || 0;
+      const salaryBs = staffMember.salary_bs 
+        ? staffMember.salary_bs.toString() 
+        : (salary > 0 && exchangeRate > 0 ? (salary * exchangeRate).toFixed(2) : "");
+      
+      const rateValue = rate ? rate.toFixed(2) : "";
+      
       setFormData({
         first_name: staffMember.first_name,
         last_name: staffMember.last_name,
@@ -176,6 +228,12 @@ export default function StaffTable() {
         hire_date: staffMember.hire_date,
         salary: staffMember.salary?.toString() || "",
         salary_type: staffMember.salary_type || "monthly",
+        salary_exchange_rate: staffMember.salary_exchange_rate?.toString() || rateValue,
+        salary_bs: salaryBs,
+        payment_type: staffMember.payment_type || "transferencia",
+        payment_phone_operator: staffMember.payment_phone_operator || "0414",
+        payment_phone: staffMember.payment_phone || "",
+        payment_document_id: staffMember.payment_document_id || "",
         status: staffMember.status,
         bank_name: staffMember.bank_name || "",
         bank_account: staffMember.bank_account || "",
@@ -208,10 +266,16 @@ export default function StaffTable() {
         hire_date: formData.hire_date,
         salary: parseFloat(formData.salary) || 0,
         salary_type: formData.salary_type,
+        salary_exchange_rate: parseFloat(formData.salary_exchange_rate) || rate || 0,
+        salary_bs: parseFloat(formData.salary_bs) || 0,
+        payment_type: formData.payment_type,
+        payment_phone_operator: formData.payment_type === "pago_movil" ? formData.payment_phone_operator : null,
+        payment_phone: formData.payment_type === "pago_movil" ? formData.payment_phone : null,
+        payment_document_id: formData.payment_type === "pago_movil" ? formData.payment_document_id : null,
         status: formData.status,
-        bank_name: formData.bank_name,
-        bank_account: formData.bank_account,
-        bank_account_type: formData.bank_account_type,
+        bank_name: formData.payment_type === "efectivo_dolares" || formData.payment_type === "efectivo_bolivares" ? "" : formData.bank_name,
+        bank_account: formData.payment_type === "efectivo_dolares" || formData.payment_type === "efectivo_bolivares" || formData.payment_type === "pago_movil" ? "" : formData.bank_account,
+        bank_account_type: formData.payment_type === "efectivo_dolares" || formData.payment_type === "efectivo_bolivares" || formData.payment_type === "pago_movil" ? "" : formData.bank_account_type,
         notes: formData.notes,
       };
 
@@ -249,10 +313,24 @@ export default function StaffTable() {
   };
 
   const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(amount || 0);
+  };
+
+  const formatCurrencyBs = (amount) => {
     return new Intl.NumberFormat("es-VE", {
       style: "currency",
       currency: "VES",
+      minimumFractionDigits: 2,
     }).format(amount || 0);
+  };
+
+  const convertToBs = (usdAmount) => {
+    if (!rate || !usdAmount) return 0;
+    return usdAmount * rate;
   };
 
   if (loading) {
@@ -405,7 +483,8 @@ export default function StaffTable() {
                     <TableHead>Cargo</TableHead>
                     <TableHead className="hidden md:table-cell">Contacto</TableHead>
                     <TableHead className="hidden lg:table-cell">Fecha Ingreso</TableHead>
-                    <TableHead className="text-right">Salario</TableHead>
+                    <TableHead className="text-right">Salario (USD)</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">Monto (Bs)</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
@@ -456,6 +535,13 @@ export default function StaffTable() {
                             {SALARY_TYPES[member.salary_type]}
                           </p>
                         </div>
+                      </TableCell>
+                      <TableCell className="text-right hidden sm:table-cell">
+                        <p className="text-sm">
+                          {member.salary_bs 
+                            ? formatCurrencyBs(member.salary_bs) 
+                            : formatCurrencyBs(convertToBs(member.salary))}
+                        </p>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge className={STATUS_CONFIG[member.status]?.color}>
@@ -689,16 +775,20 @@ export default function StaffTable() {
                 <h4 className="text-sm font-medium text-muted-foreground">Información Salarial</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="salary">Salario *</Label>
-                    <Input
-                      id="salary"
-                      name="salary"
-                      type="number"
-                      step="0.01"
-                      value={formData.salary}
-                      onChange={handleInputChange}
-                      required
-                    />
+                    <Label htmlFor="salary">Salario (USD) *</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input
+                        id="salary"
+                        name="salary"
+                        type="number"
+                        step="0.01"
+                        value={formData.salary}
+                        onChange={handleInputChange}
+                        required
+                        className="pl-7"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="salary_type">Tipo de Pago</Label>
@@ -719,62 +809,185 @@ export default function StaffTable() {
                     </Select>
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="salary_exchange_rate">Tasa del día (Bs) *</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Bs</span>
+                      <Input
+                        id="salary_exchange_rate"
+                        name="salary_exchange_rate"
+                        type="number"
+                        step="0.01"
+                        value={formData.salary_exchange_rate}
+                        onChange={handleInputChange}
+                        required
+                        className="pl-10"
+                        placeholder={rate?.toString() || "0.00"}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="salary_bs">Monto en Bs *</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Bs</span>
+                      <Input
+                        id="salary_bs"
+                        name="salary_bs"
+                        type="number"
+                        step="0.01"
+                        value={formData.salary_bs}
+                        onChange={handleInputChange}
+                        required
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Información bancaria */}
+              {/* Información de pago */}
               <div className="space-y-4">
-                <h4 className="text-sm font-medium text-muted-foreground">Información Bancaria</h4>
-                <div className="grid grid-cols-3 gap-4">
+                <h4 className="text-sm font-medium text-muted-foreground">Información de Pago</h4>
+                <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="bank_name">Banco</Label>
+                    <Label htmlFor="payment_type">Tipo de Pago</Label>
                     <Select
-                      value={formData.bank_name}
-                      onValueChange={(value) => handleSelectChange("bank_name", value)}
+                      value={formData.payment_type}
+                      onValueChange={(value) => handleSelectChange("payment_type", value)}
                     >
-                      <SelectTrigger id="bank_name" className="w-full">
-                        <SelectValue placeholder="Seleccionar banco" />
+                      <SelectTrigger id="payment_type" className="w-full">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {VENEZUELAN_BANKS.map((bank) => (
-                          <SelectItem key={bank.code} value={bank.name}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-3 w-3 text-muted-foreground" />
-                              <span>{bank.shortName}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bank_account">N° de Cuenta</Label>
-                    <Input
-                      id="bank_account"
-                      name="bank_account"
-                      value={formData.bank_account}
-                      onChange={handleInputChange}
-                      placeholder="0000-0000-0000-0000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bank_account_type">Tipo</Label>
-                    <Select
-                      value={formData.bank_account_type}
-                      onValueChange={(value) => handleSelectChange("bank_account_type", value)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BANK_ACCOUNT_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
+                        {Object.entries(PAYMENT_TYPES).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+
+                {formData.payment_type === "pago_movil" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="bank_name">Banco</Label>
+                      <Select
+                        value={formData.bank_name}
+                        onValueChange={(value) => handleSelectChange("bank_name", value)}
+                      >
+                        <SelectTrigger id="bank_name" className="w-full">
+                          <SelectValue placeholder="Seleccionar banco" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {VENEZUELAN_BANKS.map((bank) => (
+                            <SelectItem key={bank.code} value={bank.name}>
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-3 w-3 text-muted-foreground" />
+                                <span>{bank.shortName}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="payment_document_id">Cédula</Label>
+                      <Input
+                        id="payment_document_id"
+                        name="payment_document_id"
+                        value={formData.payment_document_id}
+                        onChange={handleInputChange}
+                        placeholder="V-12345678"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="payment_phone">Teléfono</Label>
+                      <div className="flex gap-1">
+                        <Select
+                          value={formData.payment_phone_operator}
+                          onValueChange={(value) => handleSelectChange("payment_phone_operator", value)}
+                        >
+                          <SelectTrigger className="w-[90px] flex-shrink-0" aria-label="Operador telefónico">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PHONE_OPERATORS.map((op) => (
+                              <SelectItem key={op.code} value={op.code}>
+                                <span className="font-medium">{op.code}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          id="payment_phone"
+                          name="payment_phone"
+                          value={formData.payment_phone}
+                          onChange={handleInputChange}
+                          placeholder="1234567"
+                          maxLength={7}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {formData.payment_type === "transferencia" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="bank_name">Banco</Label>
+                      <Select
+                        value={formData.bank_name}
+                        onValueChange={(value) => handleSelectChange("bank_name", value)}
+                      >
+                        <SelectTrigger id="bank_name" className="w-full">
+                          <SelectValue placeholder="Seleccionar banco" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {VENEZUELAN_BANKS.map((bank) => (
+                            <SelectItem key={bank.code} value={bank.name}>
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-3 w-3 text-muted-foreground" />
+                                <span>{bank.shortName}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bank_account">N° de Cuenta</Label>
+                      <Input
+                        id="bank_account"
+                        name="bank_account"
+                        value={formData.bank_account}
+                        onChange={handleInputChange}
+                        placeholder="0000-0000-0000-0000"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bank_account_type">Tipo</Label>
+                      <Select
+                        value={formData.bank_account_type}
+                        onValueChange={(value) => handleSelectChange("bank_account_type", value)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BANK_ACCOUNT_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Notas */}
