@@ -178,6 +178,18 @@ const addStatCard = (doc, x, y, width, label, value, color = COLORS.primary) => 
   return y + 30;
 };
 
+// Verificar y crear nueva página si es necesario
+const checkPageBreak = (doc, y, spaceNeeded) => {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerSpace = 25;
+  
+  if (y + spaceNeeded > pageHeight - footerSpace) {
+    doc.addPage();
+    return 15;
+  }
+  return y;
+};
+
 // Agregar sección con título
 const addSection = (doc, y, title) => {
   doc.setTextColor(...COLORS.foreground);
@@ -631,6 +643,7 @@ export const generateFinancialReport = async (data, options = {}) => {
 export const generateIncomeReport = async (payments, options = {}) => {
   const doc = createBasePDF("landscape");
   const period = options.period || "Histórico completo";
+  const bankFilter = options.bank || null;
   let y = await addHeader(doc, "Consolidado de Ingresos", period);
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -645,6 +658,16 @@ export const generateIncomeReport = async (payments, options = {}) => {
 
   const formatUSD = (v) => `$${(v || 0).toFixed(2)}`;
   const formatBs  = (v) => `Bs ${(v || 0).toFixed(2)}`;
+
+  // ── Agrupación por banco ──────────────────────────────────────────────────
+  const byBank = {};
+  payments.forEach((p) => {
+    const lbl = p.bank || "Sin banco";
+    if (!byBank[lbl]) byBank[lbl] = { count: 0, usd: 0, bs: 0 };
+    byBank[lbl].count += 1;
+    byBank[lbl].usd   += parseFloat(p.amount_usd) || 0;
+    byBank[lbl].bs    += parseFloat(p.amount_bs)  || 0;
+  });
 
   // ── Totales globales ───────────────────────────────────────────────────────
   const totalUSD = payments.reduce((s, p) => s + (parseFloat(p.amount_usd) || 0), 0);
@@ -698,15 +721,63 @@ export const generateIncomeReport = async (payments, options = {}) => {
   y += 35;
 
   // ══════════════════════════════════════════════════════════════════════════
-  // SECCIÓN 1 — RESUMEN POR MES / AÑO
+  // SECCIÓN 1 — RESUMEN POR BANCO
   // ══════════════════════════════════════════════════════════════════════════
+  if (!bankFilter) {
+    y = checkPageBreak(doc, y, 50);
+    y = addSection(doc, y, "Resumen por Banco");
+
+    const bankKeys = Object.keys(byBank).sort();
+    const bankTableData = bankKeys.map((k) => {
+      const b = byBank[k];
+      const pct = totalUSD > 0 ? ((b.usd / totalUSD) * 100).toFixed(1) : "0.0";
+      return [
+        k,
+        b.count.toString(),
+        formatUSD(b.usd),
+        formatBs(b.bs),
+        `${pct}%`,
+      ];
+    });
+
+    bankTableData.push([
+      "TOTAL GENERAL",
+      payments.length.toString(),
+      formatUSD(totalUSD),
+      formatBs(totalBs),
+      "100%",
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      head: [["Banco", "N° Pagos", "Total USD", "Total Bs", "% del Total"]],
+      body: bankTableData,
+      theme: "grid",
+      headStyles: {
+        fillColor: COLORS.primary,
+      },
+      columnStyles: {
+        0: { cellWidth: 60 },
+        1: { cellWidth: 25, halign: "center" },
+        2: { cellWidth: 35, halign: "right" },
+        3: { cellWidth: 40, halign: "right" },
+        4: { cellWidth: 25, halign: "right" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 15;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SECCIÓN 2 — RESUMEN POR MES / AÑO
+  // ══════════════════════════════════════════════════════════════════════════
+  y = checkPageBreak(doc, y, 60);
   y = addSection(doc, y, "Resumen por Mes / Año");
 
   const monthTableData = monthKeys.map((k) => {
     const m = byMonth[k];
     const pct = totalUSD > 0 ? ((m.usd / totalUSD) * 100).toFixed(1) : "0.0";
     return [
-      // Capitalizar primera letra del mes
       m.label.charAt(0).toUpperCase() + m.label.slice(1),
       m.count.toString(),
       formatUSD(m.usd),
@@ -715,7 +786,6 @@ export const generateIncomeReport = async (payments, options = {}) => {
     ];
   });
 
-  // Fila de totales
   monthTableData.push([
     "TOTAL GENERAL",
     payments.length.toString(),
@@ -737,9 +807,7 @@ export const generateIncomeReport = async (payments, options = {}) => {
     },
     bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
     alternateRowStyles: { fillColor: COLORS.light },
-    foot: [],
     didParseCell: (data) => {
-      // Resaltar fila de totales
       if (data.row.index === monthTableData.length - 1) {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fillColor = COLORS.secondary;
@@ -747,19 +815,24 @@ export const generateIncomeReport = async (payments, options = {}) => {
       }
     },
     columnStyles: {
-      0: { fontStyle: "bold", cellWidth: 55 },
-      1: { halign: "center" },
-      2: { halign: "right", fontStyle: "bold" },
-      3: { halign: "right" },
-      4: { halign: "center" },
+      0: { fontStyle: "bold", cellWidth: 50 },
+      1: { halign: "center", cellWidth: 25 },
+      2: { halign: "right", cellWidth: 35, fontStyle: "bold" },
+      3: { halign: "right", cellWidth: 40 },
+      4: { halign: "center", cellWidth: 25 },
     },
-    margin: { left: 15, right: pageWidth / 2 + 5 },
+    margin: { left: 15, right: 15 },
     styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
-    tableWidth: pageWidth / 2 - 25,
   });
 
-  // ── Métodos de pago (columna derecha) ──────────────────────────────────────
-  const typeTableY = y;
+  y = doc.lastAutoTable.finalY + 15;
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SECCIÓN 3 — RESUMEN POR MÉTODO DE PAGO
+  // ══════════════════════════════════════════════════════════════════════════
+  y = checkPageBreak(doc, y, 50);
+  y = addSection(doc, y, "Resumen por Método de Pago");
+
   const typeData = Object.entries(byType)
     .sort((a, b) => b[1].usd - a[1].usd)
     .map(([lbl, v]) => [
@@ -769,9 +842,16 @@ export const generateIncomeReport = async (payments, options = {}) => {
       totalUSD > 0 ? `${((v.usd / totalUSD) * 100).toFixed(1)}%` : "0%",
     ]);
 
+  typeData.push([
+    "TOTAL",
+    payments.length.toString(),
+    formatUSD(totalUSD),
+    "100%",
+  ]);
+
   doc.autoTable({
-    startY: typeTableY,
-    head: [["Método de Pago", "N°", "Total USD", "%"]],
+    startY: y,
+    head: [["Método de Pago", "N° Pagos", "Total USD", "%"]],
     body: typeData,
     theme: "grid",
     headStyles: {
@@ -782,20 +862,29 @@ export const generateIncomeReport = async (payments, options = {}) => {
     },
     bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
     alternateRowStyles: { fillColor: COLORS.light },
-    columnStyles: {
-      0: { fontStyle: "bold" },
-      1: { halign: "center" },
-      2: { halign: "right" },
-      3: { halign: "center" },
+    didParseCell: (data) => {
+      if (data.row.index === typeData.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = COLORS.secondary;
+        data.cell.styles.textColor = COLORS.primaryDark;
+      }
     },
-    margin: { left: pageWidth / 2 + 5, right: 15 },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 60 },
+      1: { halign: "center", cellWidth: 30 },
+      2: { halign: "right", cellWidth: 40, fontStyle: "bold" },
+      3: { halign: "center", cellWidth: 30 },
+    },
+    margin: { left: 15, right: 15 },
     styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
-    tableWidth: pageWidth / 2 - 25,
   });
 
   y = doc.lastAutoTable.finalY + 15;
 
-  // ── Resumen por plan (tabla estrecha, nueva fila) ──────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // SECCIÓN 4 — RESUMEN POR PLAN / MEMBRESÍA
+  // ══════════════════════════════════════════════════════════════════════════
+  y = checkPageBreak(doc, y, 50);
   y = addSection(doc, y, "Resumen por Plan / Membresía");
 
   const planData = Object.entries(byPlan)
@@ -807,24 +896,38 @@ export const generateIncomeReport = async (payments, options = {}) => {
       totalUSD > 0 ? `${((v.usd / totalUSD) * 100).toFixed(1)}%` : "0%",
     ]);
 
+  planData.push([
+    "TOTAL",
+    payments.length.toString(),
+    formatUSD(totalUSD),
+    "100%",
+  ]);
+
   doc.autoTable({
     startY: y,
-    head: [["Plan / Membresía", "N° Pagos", "Total USD", "% del Total"]],
+    head: [["Plan / Membresía", "N° Pagos", "Total USD", "%"]],
     body: planData,
     theme: "grid",
     headStyles: {
-      fillColor: COLORS.primaryDark,
+      fillColor: COLORS.success,
       textColor: COLORS.white,
       fontStyle: "bold",
       fontSize: 9,
     },
     bodyStyles: { fontSize: 8, textColor: COLORS.foreground },
     alternateRowStyles: { fillColor: COLORS.light },
+    didParseCell: (data) => {
+      if (data.row.index === planData.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = COLORS.secondary;
+        data.cell.styles.textColor = COLORS.primaryDark;
+      }
+    },
     columnStyles: {
-      0: { fontStyle: "bold" },
-      1: { halign: "center" },
-      2: { halign: "right", fontStyle: "bold" },
-      3: { halign: "center" },
+      0: { fontStyle: "bold", cellWidth: 70 },
+      1: { halign: "center", cellWidth: 30 },
+      2: { halign: "right", cellWidth: 40, fontStyle: "bold" },
+      3: { halign: "center", cellWidth: 30 },
     },
     margin: { left: 15, right: 15 },
     styles: { lineColor: COLORS.muted, lineWidth: 0.1 },
@@ -833,8 +936,9 @@ export const generateIncomeReport = async (payments, options = {}) => {
   y = doc.lastAutoTable.finalY + 15;
 
   // ══════════════════════════════════════════════════════════════════════════
-  // SECCIÓN 2 — DETALLE COMPLETO (una fila por pago, ordenado fecha ASC)
+  // SECCIÓN 5 — DETALLE COMPLETO DE PAGOS
   // ══════════════════════════════════════════════════════════════════════════
+  y = checkPageBreak(doc, y, 60);
   y = addSection(doc, y, "Detalle Completo de Pagos");
 
   const detailData = payments.map((p, idx) => [
@@ -852,53 +956,140 @@ export const generateIncomeReport = async (payments, options = {}) => {
     formatBs(parseFloat(p.amount_bs) || 0),
   ]);
 
-  doc.autoTable({
-    startY: y,
-    head: [[
-      "#", "Fecha", "Cliente", "Cédula", "Plan",
-      "Método", "Banco", "Referencia", "Monto USD", "Monto Bs",
-    ]],
-    body: detailData,
-    theme: "striped",
-    headStyles: {
-      fillColor: COLORS.primary,
-      textColor: COLORS.white,
-      fontStyle: "bold",
-      fontSize: 7,
-    },
-    bodyStyles: { fontSize: 6.5, textColor: COLORS.foreground },
-    alternateRowStyles: { fillColor: COLORS.light },
-    columnStyles: {
-      0:  { halign: "center", cellWidth: 8 },
-      1:  { cellWidth: 20 },
-      2:  { fontStyle: "bold", cellWidth: 38 },
-      3:  { cellWidth: 22 },
-      4:  { cellWidth: 28 },
-      5:  { cellWidth: 28 },
-      6:  { cellWidth: 22 },
-      7:  { cellWidth: 26 },
-      8:  { halign: "right", fontStyle: "bold", cellWidth: 22 },
-      9:  { halign: "right", cellWidth: 26 },
-    },
-    margin: { left: 15, right: 15 },
-    styles: { lineColor: COLORS.muted, lineWidth: 0.1, overflow: "ellipsize" },
-    // Fila de gran total al final de la tabla
-    foot: [[
-      "", "TOTAL", "", "", "",
-      "", "", "",
-      formatUSD(totalUSD),
-      formatBs(totalBs),
-    ]],
-    footStyles: {
-      fillColor: COLORS.secondary,
-      textColor: COLORS.primaryDark,
-      fontStyle: "bold",
-      fontSize: 7,
-    },
-  });
+  const tableStartY = y;
+  const estimatedRowHeight = 7;
+  const rowsCount = detailData.length;
+  const estimatedTableHeight = rowsCount * estimatedRowHeight + 30;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  // Si la tabla估计太高，添加页面
+  if (tableStartY + estimatedTableHeight > pageHeight - 45) {
+    // 对于大表，分页处理
+    const maxRowsPerPage = Math.floor((pageHeight - 60) / estimatedRowHeight);
+    const chunks = [];
+    for (let i = 0; i < detailData.length; i += maxRowsPerPage) {
+      chunks.push(detailData.slice(i, i + maxRowsPerPage));
+    }
+    
+    // 为每个块创建单独的表
+    let currentY = y;
+    chunks.forEach((chunk, index) => {
+      if (index > 0) {
+        doc.addPage();
+        currentY = 15;
+      }
+      
+      const chunkWithFoot = [...chunk];
+      if (index === chunks.length - 1) {
+        chunkWithFoot.push([
+          "", "TOTAL", "", "", "",
+          "", "", "",
+          formatUSD(totalUSD),
+          formatBs(totalBs),
+        ]);
+      }
+      
+      doc.autoTable({
+        startY: currentY,
+        head: [[
+          "#", "Fecha", "Cliente", "Cédula", "Plan",
+          "Método", "Banco", "Referencia", "Monto USD", "Monto Bs",
+        ]],
+        body: chunkWithFoot,
+        theme: index === chunks.length - 1 ? "striped" : "grid",
+        headStyles: {
+          fillColor: COLORS.primary,
+          textColor: COLORS.white,
+          fontStyle: "bold",
+          fontSize: 7,
+        },
+        bodyStyles: { fontSize: 6.5, textColor: COLORS.foreground },
+        alternateRowStyles: { fillColor: COLORS.light },
+        columnStyles: {
+          0:  { halign: "center", cellWidth: 8 },
+          1:  { cellWidth: 20 },
+          2:  { fontStyle: "bold", cellWidth: 38 },
+          3:  { cellWidth: 22 },
+          4:  { cellWidth: 28 },
+          5:  { cellWidth: 28 },
+          6:  { cellWidth: 22 },
+          7:  { cellWidth: 26 },
+          8:  { halign: "right", fontStyle: "bold", cellWidth: 22 },
+          9:  { halign: "right", cellWidth: 26 },
+        },
+        margin: { left: 15, right: 15, bottom: 30 },
+        styles: { lineColor: COLORS.muted, lineWidth: 0.1, overflow: "ellipsize" },
+        foot: index === chunks.length - 1 ? [[
+          "", "TOTAL", "", "", "",
+          "", "", "",
+          formatUSD(totalUSD),
+          formatBs(totalBs),
+        ]] : undefined,
+        footStyles: index === chunks.length - 1 ? {
+          fillColor: COLORS.secondary,
+          textColor: COLORS.primaryDark,
+          fontStyle: "bold",
+          fontSize: 7,
+        } : {},
+      });
+      
+      currentY = doc.lastAutoTable.finalY + 10;
+    });
+  } else {
+    doc.autoTable({
+      startY: y,
+      head: [[
+        "#", "Fecha", "Cliente", "Cédula", "Plan",
+        "Método", "Banco", "Referencia", "Monto USD", "Monto Bs",
+      ]],
+      body: detailData,
+      theme: "striped",
+      headStyles: {
+        fillColor: COLORS.primary,
+        textColor: COLORS.white,
+        fontStyle: "bold",
+        fontSize: 7,
+      },
+      bodyStyles: { fontSize: 6.5, textColor: COLORS.foreground },
+      alternateRowStyles: { fillColor: COLORS.light },
+      columnStyles: {
+        0:  { halign: "center", cellWidth: 8 },
+        1:  { cellWidth: 20 },
+        2:  { fontStyle: "bold", cellWidth: 38 },
+        3:  { cellWidth: 22 },
+        4:  { cellWidth: 28 },
+        5:  { cellWidth: 28 },
+        6:  { cellWidth: 22 },
+        7:  { cellWidth: 26 },
+        8:  { halign: "right", fontStyle: "bold", cellWidth: 22 },
+        9:  { halign: "right", cellWidth: 26 },
+      },
+      margin: { left: 15, right: 15, bottom: 30 },
+      styles: { lineColor: COLORS.muted, lineWidth: 0.1, overflow: "ellipsize" },
+      foot: [[
+        "", "TOTAL", "", "", "",
+        "", "", "",
+        formatUSD(totalUSD),
+        formatBs(totalBs),
+      ]],
+      footStyles: {
+        fillColor: COLORS.secondary,
+        textColor: COLORS.primaryDark,
+        fontStyle: "bold",
+        fontSize: 7,
+      },
+    });
+  }
 
   // ── Caja de gran total ─────────────────────────────────────────────────────
-  const finalY = doc.lastAutoTable.finalY + 6;
+  let finalY = doc.lastAutoTable.finalY + 10;
+  
+  // Verificar si hay espacio para el total, si no, nueva página
+  if (finalY > doc.internal.pageSize.getHeight() - 45) {
+    doc.addPage();
+    finalY = 15;
+  }
+  
   const boxWidth = 130;
   doc.setFillColor(...COLORS.secondary);
   doc.roundedRect(pageWidth - boxWidth - 15, finalY, boxWidth, 28, 3, 3, "F");

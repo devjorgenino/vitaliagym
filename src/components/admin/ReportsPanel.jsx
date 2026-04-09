@@ -33,6 +33,7 @@ import {
 } from "@/lib/pdfGenerator";
 import client from "@/api/client";
 import { fetchWithOffline } from "@/lib/offline-read";
+import { getBanksWithFeatureFlag } from "@/lib/venezuelanData";
 
 // Reportes que usan el selector de período (mes/año)
 const PERIOD_REPORTS = new Set(["financial"]);
@@ -93,6 +94,7 @@ export default function ReportsPanel() {
   const [selectedReport, setSelectedReport] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth().toString());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedBank, setSelectedBank] = useState("all");
   const [isGenerating, setIsGenerating] = useState(false);
 
   const loading = staffLoading || paymentsLoading || expensesLoading;
@@ -157,9 +159,13 @@ export default function ReportsPanel() {
       switch (selectedReport) {
 
         case "income": {
-          // Todos los pagos de membresías históricos
+          // Todos los pagos de membresías históricos filtrados por banco
           const allPayments = await fetchAllClientPayments();
-          doc = await generateIncomeReport(allPayments, { period: "Histórico completo" });
+          const filteredPayments = selectedBank === "all" 
+            ? allPayments 
+            : allPayments.filter(p => p.bank === selectedBank);
+          const bankLabel = selectedBank === "all" ? "Todos los bancos" : selectedBank;
+          doc = await generateIncomeReport(filteredPayments, { period: `Histórico completo - ${bankLabel}`, bank: selectedBank });
           break;
         }
 
@@ -302,6 +308,29 @@ export default function ReportsPanel() {
             })}
           </div>
         </div>
+
+        {/* ── Filtro por banco (solo reporte consolidado de ingresos) ─────── */}
+        {selectedReport === "income" && (
+          <div className="bg-muted/50 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm font-medium mb-3">
+              <DollarSign className="h-4 w-4" />
+              Filtrar por Banco
+            </div>
+            <Select value={selectedBank} onValueChange={setSelectedBank}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Todos los bancos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los bancos</SelectItem>
+                {getBanksWithFeatureFlag().map((bank) => (
+                  <SelectItem key={bank.code} value={bank.name}>
+                    {bank.shortName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* ── Selector de período (solo reporte financiero) ─────────────── */}
         {showPeriodSelector && (
