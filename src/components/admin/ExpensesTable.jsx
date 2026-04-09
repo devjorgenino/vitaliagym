@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
 import useExpenses from "@/hooks/useExpenses";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { VENEZUELAN_BANKS } from "@/lib/venezuelanData";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { PERMISSIONS } from "@/components/context/PermissionsProvider";
@@ -98,6 +99,8 @@ const initialFormData = {
   subcategory: "",
   description: "",
   amount: "",
+  exchange_rate: "",
+  amount_bs: "",
   expense_date: new Date().toISOString().split("T")[0],
   payment_method: "cash",
   bank_name: "",
@@ -117,6 +120,7 @@ export default function ExpensesTable() {
     deleteExpense,
     getExpenseStats,
   } = useExpenses();
+  const { rate } = useExchangeRate();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -157,7 +161,19 @@ export default function ExpensesTable() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      
+      if (name === "exchange_rate" || name === "amount") {
+        const amount = parseFloat(name === "amount" ? value : prev.amount) || 0;
+        const exchangeRate = parseFloat(name === "exchange_rate" ? value : prev.exchange_rate) || 0;
+        
+        if (amount > 0 && exchangeRate > 0) {
+          updated.amount_bs = (amount * exchangeRate).toFixed(2);
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSelectChange = (name, value) => {
@@ -165,18 +181,29 @@ export default function ExpensesTable() {
   };
 
   const resetForm = () => {
-    setFormData(initialFormData);
+    setFormData({
+      ...initialFormData,
+      exchange_rate: rate ? rate.toFixed(2) : "",
+    });
     setSelectedExpense(null);
     setIsEditing(false);
   };
 
   const handleOpenDialog = (expense = null) => {
     if (expense) {
+      const exchangeRate = expense.exchange_rate ? parseFloat(expense.exchange_rate) : (rate || 0);
+      const amount = parseFloat(expense.amount) || 0;
+      const amountBs = expense.amount_bs 
+        ? expense.amount_bs.toString() 
+        : (amount > 0 && exchangeRate > 0 ? (amount * exchangeRate).toFixed(2) : "");
+      
       setFormData({
         category: expense.category,
         subcategory: expense.subcategory || "",
         description: expense.description,
         amount: expense.amount?.toString() || "",
+        exchange_rate: expense.exchange_rate?.toString() || (rate ? rate.toFixed(2) : ""),
+        amount_bs: amountBs,
         expense_date: expense.expense_date,
         payment_method: expense.payment_method,
         bank_name: expense.bank_name || "",
@@ -199,8 +226,19 @@ export default function ExpensesTable() {
 
     try {
       const dataToSend = {
-        ...formData,
+        category: formData.category,
+        subcategory: formData.subcategory || "",
+        description: formData.description,
         amount: parseFloat(formData.amount) || 0,
+        exchange_rate: parseFloat(formData.exchange_rate) || rate || 0,
+        amount_bs: parseFloat(formData.amount_bs) || 0,
+        expense_date: formData.expense_date,
+        payment_method: formData.payment_method,
+        bank_name: formData.bank_name || "",
+        reference: formData.reference || "",
+        vendor: formData.vendor || "",
+        status: formData.status,
+        notes: formData.notes || "",
       };
 
       if (isEditing && selectedExpense) {
@@ -237,9 +275,9 @@ export default function ExpensesTable() {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("es-VE", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "VES",
+      currency: "USD",
     }).format(amount || 0);
   };
 
@@ -552,16 +590,20 @@ export default function ExpensesTable() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="amount">Monto *</Label>
-                  <Input
-                    id="amount"
-                    name="amount"
-                    type="number"
-                    step="0.01"
-                    value={formData.amount}
-                    onChange={handleInputChange}
-                    required
-                  />
+                  <Label htmlFor="amount">Monto (USD) *</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      id="amount"
+                      name="amount"
+                      type="number"
+                      step="0.01"
+                      value={formData.amount}
+                      onChange={handleInputChange}
+                      required
+                      className="pl-7"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="expense_date">Fecha *</Label>
@@ -573,6 +615,40 @@ export default function ExpensesTable() {
                     onChange={handleInputChange}
                     required
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="exchange_rate">Tasa del Día (Bs)</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Bs</span>
+                    <Input
+                      id="exchange_rate"
+                      name="exchange_rate"
+                      type="number"
+                      step="0.01"
+                      value={formData.exchange_rate}
+                      onChange={handleInputChange}
+                      className="pl-10"
+                      placeholder={rate?.toString() || "0.00"}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="amount_bs">Monto en Bs</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Bs</span>
+                    <Input
+                      id="amount_bs"
+                      name="amount_bs"
+                      type="number"
+                      step="0.01"
+                      value={formData.amount_bs}
+                      onChange={handleInputChange}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
               </div>
 
