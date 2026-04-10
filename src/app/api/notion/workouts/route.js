@@ -113,6 +113,12 @@ export async function POST(request) {
       };
     }
 
+    if (entrenadore) {
+      properties.Entrenador = {
+        rich_text: [{ text: { content: entrenadore } }],
+      };
+    }
+
     const response = await fetch(`${NOTION_API_URL}/pages`, {
       method: "POST",
       headers: {
@@ -344,7 +350,7 @@ function parseWorkoutPage(page) {
       objetivo: "",
       observaciones: "",
       activo: false,
-      entrenadore: [],
+      entrenadore: getRichText(props.Entrenador) || "",
     },
   };
 }

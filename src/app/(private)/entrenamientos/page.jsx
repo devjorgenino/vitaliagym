@@ -175,18 +175,16 @@ const Trainings = () => {
   const workoutsByCoach = useMemo(() => {
     const grouped = {};
     filteredWorkouts.forEach((workout) => {
-      const coachList = workout.properties.entrenadore || [];
-      if (coachList.length > 0) {
-        coachList.forEach((coach) => {
-          const coachId = coach.id;
-          if (!grouped[coachId]) {
-            grouped[coachId] = {
-              coach,
-              workouts: [],
-            };
-          }
-          grouped[coachId].workouts.push(workout);
-        });
+      const coachName = workout.properties.entrenadore;
+      if (typeof coachName === "string" && coachName.trim()) {
+        const name = coachName.trim();
+        if (!grouped[name]) {
+          grouped[name] = {
+            coach: { id: name, name: name },
+            workouts: [],
+          };
+        }
+        grouped[name].workouts.push(workout);
       } else {
         if (!grouped["sin_entrenador"]) {
           grouped["sin_entrenador"] = {
