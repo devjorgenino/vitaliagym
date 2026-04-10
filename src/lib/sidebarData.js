@@ -8,6 +8,7 @@ import {
   Settings,
   Shield,
   Briefcase,
+  UserCog,
 } from "lucide-react";
 
 /**
@@ -58,6 +59,12 @@ export const items = [
     url: "/pagos",
     icon: BanknoteIcon,
     permission: "payments.view",
+  },
+  {
+    title: "Entrenador",
+    url: "/entrenamientos",
+    icon: UserCog,
+    permission: "coach.view",
   },
 ];
 

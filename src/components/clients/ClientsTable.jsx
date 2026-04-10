@@ -4,6 +4,8 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
+import { useCoaches } from "../../hooks/useCoaches";
+import { isUserAdmin, getUserCoachId, isUserCoach } from "@/lib/user-utils";
 import { formatDate } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -115,6 +117,8 @@ export function ClientsTable() {
     plan_id: "",
     join_date: new Date().toISOString().split("T")[0],
     enrollment_paid: false,
+    custom_training: false,
+    coach_id: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -132,6 +136,25 @@ export function ClientsTable() {
   const [paymentFilter, setPaymentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [dateSort, setDateSort] = useState("");
+  
+  // Estado para tab personalizado
+  const [activeTab, setActiveTab] = useState("all");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userCoachId, setUserCoachId] = useState(null);
+  const [isCoach, setIsCoach] = useState(false);
+  const { coaches, loading: coachesLoading } = useCoaches();
+
+  useEffect(() => {
+    const checkRoles = async () => {
+      const admin = await isUserAdmin();
+      const coachId = await getUserCoachId();
+      const coach = await isUserCoach();
+      setIsAdmin(admin);
+      setUserCoachId(coachId);
+      setIsCoach(coach);
+    };
+    checkRoles();
+  }, []);
 
   // Refrescar clientes al volver a la pestaña (p. ej. después de registrar un pago en /pagos)
   useEffect(() => {
@@ -339,6 +362,8 @@ export function ClientsTable() {
       plan_id: "",
       join_date: new Date().toISOString().split("T")[0],
       enrollment_paid: false,
+      custom_training: false,
+      coach_id: "",
     });
     setSelectedClient(null);
     setIsEditing(false);
@@ -371,6 +396,8 @@ export function ClientsTable() {
       plan_id: client.plan_id || "",
       join_date: client.join_date || "",
       enrollment_paid: client.enrollment_paid || false,
+      custom_training: client.custom_training || false,
+      coach_id: client.coach_id || "",
     });
     setIsEditing(true);
     setIsDialogOpen(true);
@@ -405,6 +432,21 @@ export function ClientsTable() {
     setFormData((prev) => ({
       ...prev,
       enrollment_paid: checked,
+    }));
+  };
+
+  const handleCustomTrainingChange = (checked) => {
+    setFormData((prev) => ({
+      ...prev,
+      custom_training: checked,
+      coach_id: checked ? prev.coach_id : "",
+    }));
+  };
+
+  const handleCoachChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      coach_id: value,
     }));
   };
 
@@ -463,6 +505,8 @@ export function ClientsTable() {
         plan_id: formData.plan_id,
         join_date: formData.join_date,
         enrollment_paid: formData.enrollment_paid,
+        custom_training: formData.custom_training,
+        coach_id: formData.custom_training && formData.coach_id ? formData.coach_id : null,
         status: isEditing ? undefined : "pendiente",
       };
 
@@ -604,7 +648,17 @@ export function ClientsTable() {
       matchesStatus = clientStatus.status === statusFilter;
     }
 
-    return matchesSearch && matchesPlan && matchesPayment && matchesStatus;
+    // Filtrar por tab personalizados
+    let matchesPersonalized = true;
+    if (activeTab === "personalized") {
+      if (isAdmin) {
+        matchesPersonalized = client.custom_training === true;
+      } else {
+        matchesPersonalized = client.custom_training === true && client.coach_id === userCoachId;
+      }
+    }
+
+    return matchesSearch && matchesPlan && matchesPayment && matchesStatus && matchesPersonalized;
   });
 
   // Filtrar por mes
@@ -833,6 +887,28 @@ export function ClientsTable() {
             <span className="text-xs sm:text-sm font-medium text-muted-foreground">
               Filtros:
             </span>
+            
+            {/* Tabs para Admin/Coach */}
+            {(isAdmin || isCoach) && (
+              <>
+                <Button
+                  variant={activeTab === "all" ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs h-8"
+                  onClick={() => setActiveTab("all")}
+                >
+                  Todos
+                </Button>
+                <Button
+                  variant={activeTab === "personalized" ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs h-8"
+                  onClick={() => setActiveTab("personalized")}
+                >
+                  {isAdmin ? "Mis Personalizados" : "Mis Clientes"}
+                </Button>
+              </>
+            )}
 
             {/* Filtro por plan */}
             <Select
@@ -1499,6 +1575,37 @@ export function ClientsTable() {
                   : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
               </Label>
             </div>
+            <div className="flex items-center space-x-2 pt-4">
+              <Switch
+                id="custom_training"
+                checked={formData.custom_training}
+                onCheckedChange={handleCustomTrainingChange}
+              />
+              <Label htmlFor="custom_training" className="text-sm font-normal">
+                Entrenamiento personalizado
+              </Label>
+            </div>
+            {formData.custom_training && (
+              <div className="space-y-2 pt-2">
+                <Label htmlFor="coach_id">Entrenador</Label>
+                <Select
+                  value={formData.coach_id}
+                  onValueChange={handleCoachChange}
+                  disabled={coachesLoading}
+                >
+                  <SelectTrigger id="coach_id">
+                    <SelectValue placeholder="Seleccionar entrenador" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {coaches.map((coach) => (
+                      <SelectItem key={coach.id} value={coach.id}>
+                        {coach.full_name || coach.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
