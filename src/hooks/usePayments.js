@@ -4,7 +4,8 @@ import { fetchWithOffline } from '../lib/offline-read';
 import { executeWithSync } from '../lib/data-sync';
 import { 
   recalculateNextPaymentDate,
-  recalculateAllNextPaymentDates as recalculateAllDates
+  recalculateAllNextPaymentDates as recalculateAllDates,
+  updateClientStatus
 } from '../utils/paymentCalculations';
 
 export function usePayments({ onClientUpdate } = {}) {
@@ -74,6 +75,7 @@ export function usePayments({ onClientUpdate } = {}) {
           clientId: paymentData.client_id, 
           planId: paymentData.plan_id 
         });
+        await updateClientStatus(paymentData.client_id, paymentData.plan_id);
       }
       
       // Refetch para obtener los datos completos con joins (clients, plans)
@@ -110,6 +112,7 @@ export function usePayments({ onClientUpdate } = {}) {
           clientId: paymentData.client_id, 
           planId: paymentData.plan_id 
         });
+        await updateClientStatus(paymentData.client_id, paymentData.plan_id);
       }
       
       // Refetch para obtener los datos completos con joins (clients, plans)
@@ -142,6 +145,7 @@ export function usePayments({ onClientUpdate } = {}) {
       // Recalculate next_payment_date after removing a payment
       if (clientId && planId) {
         await recalculateNextPaymentDate({ clientId, planId });
+        await updateClientStatus(clientId, planId);
       }
 
       // Refetch to reflect updated state

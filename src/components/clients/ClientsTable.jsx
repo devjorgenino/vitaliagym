@@ -19,6 +19,7 @@ import {
 import {
   auditNextPaymentDates,
   recalculateNextPaymentDate,
+  fixAllClientStatuses,
 } from "../../utils/paymentCalculations";
 import { toast } from "sonner";
 import {
@@ -125,6 +126,7 @@ export function ClientsTable() {
 
   // Estado para reparación de fechas de pago
   const [isRepairing, setIsRepairing] = useState(false);
+  const [isFixingStatuses, setIsFixingStatuses] = useState(false);
 
   // Estados para búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -568,6 +570,29 @@ export function ClientsTable() {
     }
   };
 
+  // Corregir statuses de clientes (pendiente → activo/inactivo)
+  const handleFixStatuses = async () => {
+    setIsFixingStatuses(true);
+    try {
+      const result = await fixAllClientStatuses();
+      if (result.success) {
+        if (result.updated > 0) {
+          toast.success(`Status corregidos: ${result.updated} clientes`);
+        } else {
+          toast.info("Todos los clientes ya tienen el status correcto");
+        }
+        refetch();
+      } else {
+        toast.error("Error al corregir statuses: " + result.error);
+      }
+    } catch (err) {
+      console.error("Error fixing client statuses:", err);
+      toast.error("Error al corregir statuses de clientes");
+    } finally {
+      setIsFixingStatuses(false);
+    }
+  };
+
   // Lógica de filtrado
   const filteredClients = clients.filter((client) => {
     // Filtrar por término de búsqueda (nombre o cédula)
@@ -805,6 +830,31 @@ export function ClientsTable() {
             </TooltipTrigger>
             <TooltipContent>
               <p>Reparar fechas de próximo pago de clientes</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleFixStatuses}
+                variant="outline"
+                size="sm"
+                className="text-xs sm:text-sm"
+                disabled={isFixingStatuses}
+                aria-label="Corregir statuses de clientes"
+              >
+                {isFixingStatuses ? (
+                  <Loader2 className="h-3.5 w-3.5 sm:mr-1.5 animate-spin" />
+                ) : (
+                  <Wrench
+                    className="h-3.5 w-3.5 sm:mr-1.5"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="hidden sm:inline">Corregir Status</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Corregir statuses de clientes (pendiente → activo)</p>
             </TooltipContent>
           </Tooltip>
         </div>

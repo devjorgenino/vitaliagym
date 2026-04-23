@@ -15,7 +15,9 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "db:recalculate-dates": "node scripts/recalculate-payment-dates.mjs",
-    "db:recalculate-dates:dry": "node scripts/recalculate-payment-dates.mjs --dry-run"
+    "db:recalculate-dates:dry": "node scripts/recalculate-payment-dates.mjs --dry-run",
+    "db:fix-statuses": "node scripts/fix-client-statuses.mjs",
+    "db:fix-statuses:dry": "node scripts/fix-client-statuses.mjs --dry-run"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
@@ -63,7 +65,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "jsdom": "^27.4.0",
-    "supabase": "^2.81.3",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5.9.3",

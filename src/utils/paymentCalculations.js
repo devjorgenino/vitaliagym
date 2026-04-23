@@ -506,3 +506,215 @@ export function getPaymentStatusColor(daysLeft) {
   if (daysLeft <= 15) return 'text-yellow-500'; // Vence (≤15 días)
   return 'text-green-500';                      // Activo (>15 días)
 }
+
+/**
+ * Calcula y actualiza el status del cliente basándose en sus pagos.
+ * Lógica:
+ * - Si tiene pagos suficientes para al menos 1 ciclo Y próximo pago no vencido → "activo"
+ * - Si próximo pago vencido (días negativos) → "inactivo"
+ * - Si no tiene pagos suficientes → "pendiente" (o "inactivo" si prefers)
+ *
+ * @param {string} clientId - ID del cliente
+ * @param {string} planId - ID del plan actual del cliente
+ * @returns {Promise<{success: boolean, status?: string, previousStatus?: string, error?: any}>}
+ */
+export async function updateClientStatus(clientId, planId) {
+  try {
+    const { data: clientData, error: clientError } = await client
+      .from('clients')
+      .select(`
+        id,
+        status,
+        next_payment_date,
+        join_date,
+        plan_id,
+        plans (
+          id,
+          price
+        )
+      `)
+      .eq('id', clientId)
+      .single();
+
+    if (clientError || !clientData) {
+      console.error('Error fetching client for status update:', clientError);
+      return { success: false, error: clientError };
+    }
+
+    const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
+
+    if (planPrice <= 0) {
+      return { success: false, error: 'Plan price is invalid or zero' };
+    }
+
+    const { data: payments, error: paymentsError } = await client
+      .from('payments')
+      .select('id, amount_usd, payment_date')
+      .eq('client_id', clientId)
+      .eq('plan_id', planId);
+
+    if (paymentsError) {
+      console.error('Error fetching payments for status update:', paymentsError);
+      return { success: false, error: paymentsError };
+    }
+
+    const totalPaid = (payments || []).reduce(
+      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      0
+    );
+
+    const cycles = Math.floor(totalPaid / planPrice);
+    const daysUntilPayment = calculateDaysUntilPayment(
+      clientData.next_payment_date,
+      clientData.join_date
+    );
+
+    let newStatus;
+    if (cycles >= 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+      newStatus = 'activo';
+    } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
+      newStatus = 'inactivo';
+    } else {
+      newStatus = 'inactivo';
+    }
+
+    if (newStatus !== clientData.status) {
+      const { error } = await client
+        .from('clients')
+        .update({ status: newStatus })
+        .eq('id', clientId);
+
+      if (error) {
+        console.error('Error updating client status:', error);
+        return { success: false, error };
+      }
+
+      return {
+        success: true,
+        status: newStatus,
+        previousStatus: clientData.status,
+      };
+    }
+
+    return {
+      success: true,
+      status: clientData.status,
+      previousStatus: clientData.status,
+      unchanged: true,
+    };
+  } catch (err) {
+    console.error('Error updating client status:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Corrige el status de TODOS los clientes basándose en sus pagos.
+ * Útil para arreglar clientes existentes con status incorrecto.
+ * 
+ * @returns {Promise<{success: boolean, updated: number, total: number, errors: string[]}>}
+ */
+export async function fixAllClientStatuses() {
+  try {
+    const { data: allClients, error: fetchError } = await client
+      .from('clients')
+      .select(`
+        id,
+        status,
+        next_payment_date,
+        join_date,
+        plan_id,
+        plans (
+          id,
+          price
+        )
+      `);
+
+    if (fetchError) throw fetchError;
+    if (!allClients || allClients.length === 0) {
+      return { success: true, updated: 0, total: 0, errors: [] };
+    }
+
+    const { data: allPayments, error: paymentsError } = await client
+      .from('payments')
+      .select('id, client_id, plan_id, amount_usd');
+
+    if (paymentsError) throw paymentsError;
+
+    const updates = [];
+    const errors = [];
+
+    for (const clientData of allClients) {
+      try {
+        const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
+        
+        if (planPrice <= 0) continue;
+
+        const clientPayments = (allPayments || []).filter(
+          p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
+        );
+
+        const totalPaid = clientPayments.reduce(
+          (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+          0
+        );
+
+        const cycles = Math.floor(totalPaid / planPrice);
+        const daysUntilPayment = calculateDaysUntilPayment(
+          clientData.next_payment_date,
+          clientData.join_date
+        );
+
+        let newStatus;
+        if (cycles >= 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+          newStatus = 'activo';
+        } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
+          newStatus = 'inactivo';
+        } else {
+          newStatus = 'inactivo';
+        }
+
+        if (newStatus !== clientData.status) {
+          updates.push({
+            id: clientData.id,
+            name: `${clientData.first_name} ${clientData.last_name}`,
+            oldStatus: clientData.status,
+            newStatus
+          });
+        }
+      } catch (err) {
+        errors.push(`Cliente ${clientData.id}: ${err.message}`);
+      }
+    }
+
+    if (updates.length > 0) {
+      let updatedCount = 0;
+      
+      for (const u of updates) {
+        const { error } = await client
+          .from('clients')
+          .update({ status: u.newStatus })
+          .eq('id', u.id);
+
+        if (error) {
+          errors.push(`${u.name}: ${error.message}`);
+        } else {
+          updatedCount++;
+        }
+      }
+      
+      return { 
+        success: errors.length === 0, 
+        updated: updatedCount, 
+        total: allClients.length, 
+        errors 
+      };
+    }
+
+    return { success: true, updated: 0, total: allClients.length, errors: [] };
+
+  } catch (err) {
+    console.error('Error fixing all client statuses:', err);
+    return { success: false, updated: 0, total: 0, errors: [err.message] };
+  }
+}
