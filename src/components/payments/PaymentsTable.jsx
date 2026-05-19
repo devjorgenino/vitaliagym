@@ -352,9 +352,10 @@ export function PaymentsTable({
         // Obtener el estado de inscripción del cliente
         const selectedClient = clients.find((c) => c.id === formData.client_id);
         const hasEnrollmentPaid = selectedClient?.enrollment_paid === true;
-        // Si ya tiene inscripción pagada, el precio total es solo el plan (sin $5)
-        // Si NO tiene inscripción pagada Y viene del registro, se suma la inscripción
-        const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
+        // En modo registro con inscripción, el precio total incluye la inscripción
+        const totalPrice = (isRegisterMode && includeInscription && !hasEnrollmentPaid) 
+          ? planPrice + INSCRIPTION_PRICE 
+          : planPrice;
 
         if (planPrice > 0) {
           // Si el pago total es mayor o igual al precio total, está pagado
@@ -664,26 +665,27 @@ export function PaymentsTable({
   // Efecto para aplicar descuento cuando cambia
   useEffect(() => {
     if (!isDialogOpen || isEditing || paymentMode !== "full" || !formData.plan_id) return;
+    if (isPayingRemaining) return;
+
+    // Calcular la base correcta: incluir inscripción si aplica
+    const planPrice = getPlanPrice(formData.plan_id);
+    const baseAmount = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
+
     if (!formData.discount_type || !formData.discount_value || parseFloat(formData.discount_value) <= 0) {
-      // Sin descuento, usar el precio del plan
-      const planPrice = currentPaymentInfo.planPrice || currentPaymentInfo.remainingAmount;
-      setDiscountedAmount(planPrice);
+      // Sin descuento, usar el precio base completo
+      setDiscountedAmount(baseAmount);
       return;
     }
-
-    // Usar el precio del plan como base para el descuento
-    const baseAmount = currentPaymentInfo?.planPrice || currentPaymentInfo?.remainingAmount || 0;
 
     const discounted = calculateDiscountedAmount(baseAmount, formData.discount_type, formData.discount_value);
     setDiscountedAmount(discounted);
     
-    // Actualizar el monto en el formulario
+    // Solo actualizar amount_usd; el efecto de amount_bs (línea 594) recalculará Bs automáticamente
     setFormData((prev) => ({
       ...prev,
       amount_usd: discounted > 0 ? discounted.toString() : "0",
-      amount_bs: discounted > 0 ? (discounted * (rate || 1)).toFixed(2) : "0.00",
     }));
-  }, [isDialogOpen, isEditing, paymentMode, formData.plan_id, formData.discount_type, formData.discount_value, rate, currentPaymentInfo?.planPrice, currentPaymentInfo?.remainingAmount]);
+  }, [isDialogOpen, isEditing, paymentMode, formData.plan_id, formData.discount_type, formData.discount_value, isRegisterMode, includeInscription, isPayingRemaining, getPlanPrice]);
 
   // Validar monto parcial en tiempo real
   useEffect(() => {
@@ -817,9 +819,8 @@ export function PaymentsTable({
       const selectedClient = clients.find((c) => c.id === formData.client_id);
       const selectedPlanData = plans.find((p) => p.id === formData.plan_id);
       
-      // Incluir inscripción en el cálculo si aplica
-      const hasEnrollmentPaid = selectedClient?.enrollment_paid === true;
-      const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
+      // El precio total siempre es el precio del plan
+      const totalPrice = planPrice;
       const remainingAmount = Math.max(0, totalPrice - totalPaid);
 
       setRemainingPaymentData({
@@ -839,13 +840,12 @@ export function PaymentsTable({
 
       // Si el modo es "full" (pagar completo), cargar el monto del plan automáticamente
       // Solo si no hay un monto ya establecido por el usuario (para no sobreescribir)
-      // Y no estamos en modo registro con inscripción incluida
-      const shouldOverride = !(isRegisterMode && includeInscription) && (!formData.amount_usd || formData.amount_usd === "0" || formData.amount_usd === "0.00");
+      const currentAmount = parseFloat(formData.amount_usd) || 0;
+      const shouldOverride = currentAmount === 0;
       
       if (paymentMode === "full" && shouldOverride) {
-        // Usar el precio del plan, no el restante
-      const planPrice = currentPaymentInfo?.planPrice || currentPaymentInfo?.remainingAmount || 0;
-        setDiscountedAmount(planPrice);
+        const basePrice = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
+        setDiscountedAmount(basePrice);
       }
     } else if (!isDialogOpen) {
       setRemainingPaymentData(null);
@@ -856,15 +856,15 @@ export function PaymentsTable({
     editingField,
     formData.client_id,
     formData.plan_id,
-    formData.amount_usd,
     paymentMode,
     payments.length,
-    rate,
     isRegisterMode,
     includeInscription,
     initialLoadDone,
-    isPayingRemaining,
-    currentPaymentInfo?.remainingAmount,
+    getPlanPrice,
+    clients,
+    plans,
+    discountedAmount,
   ]);
 
   // Resetear formulario
@@ -983,6 +983,16 @@ export function PaymentsTable({
   const handlePaymentModeChange = (mode) => {
     setPaymentMode(mode);
     setPartialValidationError("");
+
+    // Limpiar descuento al cambiar a parcial
+    if (mode === "partial") {
+      setFormData((prev) => ({
+        ...prev,
+        discount_type: "",
+        discount_value: "",
+      }));
+      setDiscountedAmount(0);
+    }
 
     if (mode === "partial" && formData.plan_id) {
       let amountToSuggest = currentPaymentInfo.remainingAmount;
@@ -2010,7 +2020,9 @@ export function PaymentsTable({
                           <p className="font-medium text-sm">Pago Completo</p>
                           <p className="text-xs text-muted-foreground">${(() => { 
                             const selectedPlan = plans.find(p => p.id === formData.plan_id); 
-                            return selectedPlan ? parseFloat(selectedPlan.price).toFixed(2) : "0.00"; 
+                            const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0;
+                            const totalAmount = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
+                            return totalAmount > 0 ? totalAmount.toFixed(2) : "0.00"; 
                           })()}</p>
                         </div>
                       </label>
@@ -2028,8 +2040,8 @@ export function PaymentsTable({
                   </div>
                 )}
 
-                {/* Sección de descuento - solo en modo completo y no editando */}
-                {paymentMode === "full" && formData.plan_id && !isEditing && (
+                {/* Sección de descuento - solo en modo completo, no editando, y no pagando restante */}
+                {paymentMode === "full" && formData.plan_id && !isEditing && !isPayingRemaining && (
                   <div className="space-y-3 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <Label className="text-sm font-semibold text-green-900 dark:text-green-100 flex items-center gap-2">
                       <span className="text-lg">🏷️</span>
@@ -2091,44 +2103,50 @@ export function PaymentsTable({
                     </div>
 
                     {/* Mostrar información del descuento aplicado */}
-                    {formData.discount_type && formData.discount_value && parseFloat(formData.discount_value) > 0 && (
-                      <div className="p-3 bg-white dark:bg-green-950/40 rounded border border-green-300 dark:border-green-700">
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-green-700 dark:text-green-300">
-                            Precio del plan:
-                          </span>
-                          <span className="font-medium line-through text-muted-foreground">
-                            ${(() => {
-                              const planPrice = currentPaymentInfo?.planPrice || currentPaymentInfo?.remainingAmount || 0;
-                              return planPrice.toFixed(2);
-                            })()}
-                          </span>
+                    {formData.discount_type && formData.discount_value && parseFloat(formData.discount_value) > 0 && (() => {
+                      const planPrice = getPlanPrice(formData.plan_id);
+                      const baseAmount = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
+                      const discountValue = parseFloat(formData.discount_value) || 0;
+                      let discountAmount = 0;
+                      if (formData.discount_type === "percentage") {
+                        discountAmount = baseAmount * (discountValue / 100);
+                      } else if (formData.discount_type === "fixed") {
+                        discountAmount = Math.min(discountValue, baseAmount);
+                      }
+                      const exceedsPrice = formData.discount_type === "fixed" && discountValue > baseAmount;
+
+                      return (
+                        <div className="p-3 bg-white dark:bg-green-950/40 rounded border border-green-300 dark:border-green-700">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-green-700 dark:text-green-300">
+                              {isRegisterMode && includeInscription ? "Total (Plan + Inscripción):" : "Precio del plan:"}
+                            </span>
+                            <span className="font-medium line-through text-muted-foreground">
+                              ${baseAmount.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm mt-1">
+                            <span className="text-green-700 dark:text-green-300">
+                              Descuento ({formData.discount_type === "percentage" ? `${discountValue}%` : `$${discountValue.toFixed(2)}`}):
+                            </span>
+                            <span className="font-medium text-red-600">
+                              -${discountAmount.toFixed(2)}
+                            </span>
+                          </div>
+                          {exceedsPrice && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                              <span>⚠️</span> El descuento excede el precio. El total será $0.00
+                            </p>
+                          )}
+                          <div className="flex justify-between items-center text-sm mt-1 pt-1 border-t border-green-200 dark:border-green-700">
+                            <span className="font-semibold text-green-900 dark:text-green-100">Total a pagar:</span>
+                            <span className="font-bold text-green-900 dark:text-green-100 text-base">
+                              ${discountedAmount.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex justify-between items-center text-sm mt-1">
-                          <span className="text-green-700 dark:text-green-300">
-                            Descuento ({formData.discount_type === "percentage" ? `${formData.discount_value}%` : `$${parseFloat(formData.discount_value).toFixed(2)}`}):
-                          </span>
-                          <span className="font-medium text-red-600">
-                            -${(() => {
-                              const planPrice = currentPaymentInfo?.planPrice || currentPaymentInfo?.remainingAmount || 0;
-                              const value = parseFloat(formData.discount_value) || 0;
-                              if (formData.discount_type === "percentage") {
-                                return (planPrice * (value / 100)).toFixed(2);
-                              } else if (formData.discount_type === "fixed") {
-                                return Math.min(value, planPrice).toFixed(2);
-                              }
-                              return "0.00";
-                            })()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm mt-1 pt-1 border-t border-green-200 dark:border-green-700">
-                          <span className="font-semibold text-green-900 dark:text-green-100">Total a pagar:</span>
-                          <span className="font-bold text-green-900 dark:text-green-100 text-base">
-                            ${discountedAmount.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
 
