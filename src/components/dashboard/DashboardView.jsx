@@ -89,7 +89,7 @@ export function DashboardView() {
   }
 
   return (
-    <div className="flex flex-col h-full gap-4 sm:gap-6">
+    <div className="flex flex-col lg:h-full gap-4 sm:gap-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 shrink-0">
         <div className="min-w-0">
@@ -151,7 +151,7 @@ export function DashboardView() {
       </div>
 
       {/* Graficos y Listas — ocupa el espacio restante */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:flex-1 lg:min-h-0">
         {/* Clientes proximos a vencer */}
         <Card className="overflow-hidden flex flex-col min-h-0 bg-gradient-to-br from-card to-card/80">
           <CardHeader className="pb-3 sm:pb-4 shrink-0">
