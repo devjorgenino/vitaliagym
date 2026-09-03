@@ -14,16 +14,18 @@ import { logoBlurDataURL } from "@/lib/imagePlaceholders";
 
 const Login = () => {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const email = e.target[0]?.value;
-    const password = e.target[1]?.value;
+    const finalEmail = (email || e.target.email?.value || e.target[0]?.value || "").trim();
+    const finalPassword = password || e.target.password?.value || e.target[1]?.value || "";
 
-    if (!email || !password) {
+    if (!finalEmail || !finalPassword) {
       toast.error("Por favor, completa todos los campos");
       return;
     }
@@ -31,12 +33,19 @@ const Login = () => {
     setLoading(true);
     try {
       const { data, error } = await client.auth.signInWithPassword({
-        email,
-        password,
+        email: finalEmail,
+        password: finalPassword,
       });
 
       if (error) {
-        toast.error("Error al iniciar sesión. Verifica tus credenciales.");
+        console.error("Login error:", error);
+        if (error.message.includes("Invalid login credentials")) {
+          toast.error("Credenciales inválidas. Verifica tu correo y contraseña.");
+        } else if (error.message.includes("Email not confirmed")) {
+          toast.error("El correo no ha sido confirmado. Por favor revisa tu bandeja de entrada.");
+        } else {
+          toast.error(`Error al iniciar sesión: ${error.message}`);
+        }
       } else if (data?.user) {
         toast.success("¡Bienvenido de vuelta!");
         router.push("/dashboard");
@@ -44,7 +53,8 @@ const Login = () => {
         toast.error("Respuesta inesperada del servidor");
       }
     } catch (err) {
-      toast.error("Error al iniciar sesión. Inténtalo de nuevo.");
+      console.error("Login exception:", err);
+      toast.error(`Error de conexión: ${err.message || "Inténtalo de nuevo."}`);
     } finally {
       setLoading(false);
     }
@@ -135,7 +145,10 @@ const Login = () => {
               <div className="relative">
                 <Input
                   id="email"
+                  name="email"
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="tu@email.com"
                   required
                   className={`h-12 rounded-xl bg-[--background]/50 border-[--border] px-4 transition-all duration-200 ${
@@ -159,7 +172,10 @@ const Login = () => {
               <div className="relative">
                 <Input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                   className={`h-12 rounded-xl bg-[--background]/50 border-[--border] px-4 pr-12 transition-all duration-200 ${

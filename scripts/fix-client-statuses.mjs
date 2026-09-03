@@ -24,15 +24,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 config({ path: resolve(__dirname, '../.env.local') });
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const isProd = process.argv.includes('--prod');
+const SUPABASE_URL = isProd
+  ? (process.env.SUPABASE_PROD_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
+  : process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+const SUPABASE_KEY = isProd
+  ? (process.env.SUPABASE_PROD_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ Faltan variables de entorno. Verifica tu .env.local:');
-  console.error('   NEXT_PUBLIC_SUPABASE_URL');
-  console.error('   SUPABASE_SERVICE_ROLE_KEY');
+  console.error('   NEXT_PUBLIC_SUPABASE_URL / SUPABASE_PROD_URL');
+  console.error('   SUPABASE_SERVICE_ROLE_KEY / SUPABASE_PROD_SERVICE_ROLE_KEY');
   process.exit(1);
 }
+
+console.log(`📡 Conectado a: ${isProd ? 'PRODUCCIÓN (' + SUPABASE_URL + ')' : 'LOCAL (' + SUPABASE_URL + ')'}`);
 
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 const DRY_RUN = process.argv.includes('--dry-run');

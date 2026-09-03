@@ -9,8 +9,9 @@
  *   Sin pagos completos → join_date + 1 mes
  *
  * Uso:
- *   node scripts/fix-clients.mjs          → audita y corrige automáticamente
- *   node scripts/fix-clients.mjs --dry-run → solo muestra qué cambiaría, sin tocar la BD
+ *   node scripts/recalculate-payment-dates.mjs          → audita y corrige automáticamente en local
+ *   node scripts/recalculate-payment-dates.mjs --dry-run → solo muestra qué cambiaría, sin tocar la BD
+ *   node scripts/recalculate-payment-dates.mjs --prod    → ejecuta en producción
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -24,15 +25,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Cargar .env.local desde la raíz del proyecto
 config({ path: resolve(__dirname, '../.env.local') });
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const isProd = process.argv.includes('--prod');
+const SUPABASE_URL = isProd
+  ? (process.env.SUPABASE_PROD_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
+  : process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+const SUPABASE_KEY = isProd
+  ? (process.env.SUPABASE_PROD_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ Faltan variables de entorno. Verifica tu .env.local:');
-  console.error('   NEXT_PUBLIC_SUPABASE_URL');
-  console.error('   SUPABASE_SERVICE_ROLE_KEY');
+  console.error('   NEXT_PUBLIC_SUPABASE_URL / SUPABASE_PROD_URL');
+  console.error('   SUPABASE_SERVICE_ROLE_KEY / SUPABASE_PROD_SERVICE_ROLE_KEY');
   process.exit(1);
 }
+
+console.log(`📡 Conectado a: ${isProd ? 'PRODUCCIÓN (' + SUPABASE_URL + ')' : 'LOCAL (' + SUPABASE_URL + ')'}`);
 
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -66,10 +75,18 @@ function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
 }
 
 /**
- * Calcula la next_payment_date correcta para un cliente según su ciclo cronológico de pagos.
+ * Calcula la next_payment_date correcta para un cliente según su historial cronológico de pagos.
+ *
+ * Reglas:
+ * - El corte siempre corresponde al día del join_date (o fin de mes si el mes es más corto).
+ * - Renovaciones continuas: Si un cliente activo paga antes o el día de su vencimiento, se extiende su cobertura.
+ * - Reactivaciones tras inactividad: Si un cliente regresa tras meses sin pagar, su pago reactiva el servicio
+ *   hasta su próximo día de corte ancla (no se arrastran cortes en el pasado).
+ * - Pagos Parciales: El saldo se acumula hasta completar el precio de 1 ciclo antes de extender la fecha.
+ * - Sin pagos: Proyecta el primer vencimiento a 1 mes desde join_date.
  *
  * @param {string} joinDate       - Fecha de ingreso (YYYY-MM-DD)
- * @param {Array}  payments       - Pagos del cliente para su plan, ordenados por payment_date asc
+ * @param {Array}  payments       - Pagos del cliente para su plan
  * @param {number} planPrice      - Precio del plan
  * @returns {string|null}
  */
@@ -147,7 +164,7 @@ function daysUntil(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const target = new Date(y, m - 1, d); target.setHours(0, 0, 0, 0);
   const today  = new Date();             today.setHours(0, 0, 0, 0);
-  return Math.ceil((target - today) / 86400000);
+  return Math.round((target - today) / 86400000);
 }
 
 function statusLabel(days) {

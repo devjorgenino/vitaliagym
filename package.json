@@ -16,8 +16,13 @@
     "test:coverage": "vitest run --coverage",
     "db:recalculate-dates": "node scripts/recalculate-payment-dates.mjs",
     "db:recalculate-dates:dry": "node scripts/recalculate-payment-dates.mjs --dry-run",
+    "db:recalculate-dates:prod": "node scripts/recalculate-payment-dates.mjs --prod",
+    "db:recalculate-dates:prod:dry": "node scripts/recalculate-payment-dates.mjs --prod --dry-run",
     "db:fix-statuses": "node scripts/fix-client-statuses.mjs",
-    "db:fix-statuses:dry": "node scripts/fix-client-statuses.mjs --dry-run"
+    "db:fix-statuses:dry": "node scripts/fix-client-statuses.mjs --dry-run",
+    "db:fix-statuses:prod": "node scripts/fix-client-statuses.mjs --prod",
+    "db:fix-statuses:prod:dry": "node scripts/fix-client-statuses.mjs --prod --dry-run",
+    "db:sync-from-prod": "node scripts/sync-prod-to-local.mjs"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

@@ -50,3 +50,11 @@ public/worker-*.js
 # supabase
 supabase/*
 *.sql
+
+# Playwright MCP
+.playwright-mcp/
+
+# Claude
+.claude/
+.freebuff/
+.agents/
