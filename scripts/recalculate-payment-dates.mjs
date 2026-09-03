@@ -9,8 +9,9 @@
  *   Sin pagos completos → join_date + 1 mes
  *
  * Uso:
- *   node scripts/fix-clients.mjs          → audita y corrige automáticamente
- *   node scripts/fix-clients.mjs --dry-run → solo muestra qué cambiaría, sin tocar la BD
+ *   node scripts/recalculate-payment-dates.mjs          → audita y corrige automáticamente en local
+ *   node scripts/recalculate-payment-dates.mjs --dry-run → solo muestra qué cambiaría, sin tocar la BD
+ *   node scripts/recalculate-payment-dates.mjs --prod    → ejecuta en producción
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -47,21 +48,14 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 // ─── Lógica de negocio ────────────────────────────────────────────────────────
 
-/**
- * Obtiene la fecha YYYY-MM-DD para un año y mes específicos respetando el día ancla.
- */
 function getAnchorDateForTargetMonth(anchorDay, year, month) {
   const lastDay = new Date(year, month, 0).getDate();
   const day = Math.min(anchorDay, lastDay);
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-/**
- * Agrega N meses a una fecha base manteniendo intacto el día ancla original.
- */
 function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
   if (!baseDateStr || monthsToAdd === null || monthsToAdd === undefined || monthsToAdd < 0) return null;
-
   const [y, m, d] = baseDateStr.split('-').map(Number);
   const anchor = anchorDay || d;
 
@@ -74,7 +68,7 @@ function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
   }
   while (targetMonth < 1) {
     targetMonth += 12;
-    targetYear += 1;
+    targetYear -= 1;
   }
 
   return getAnchorDateForTargetMonth(anchor, targetYear, targetMonth);

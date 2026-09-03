@@ -9,20 +9,33 @@ import {
 } from '../utils/paymentCalculations';
 
 describe('paymentCalculations - addMonthsPreservingAnchor & getAnchorDateForTargetMonth', () => {
-  it('obtiene la fecha correcta para un mes y ancla dados', () => {
+  it('obtiene la fecha correcta para un mes y ancla dados respetando la cantidad de días del mes', () => {
+    expect(getAnchorDateForTargetMonth(15, 2026, 8)).toBe('2026-08-15');
     expect(getAnchorDateForTargetMonth(31, 2026, 8)).toBe('2026-08-31');
     expect(getAnchorDateForTargetMonth(31, 2026, 9)).toBe('2026-09-30'); // Septiembre tiene 30 días
+    expect(getAnchorDateForTargetMonth(31, 2026, 10)).toBe('2026-10-31');
+    expect(getAnchorDateForTargetMonth(31, 2026, 11)).toBe('2026-11-30');
     expect(getAnchorDateForTargetMonth(31, 2026, 2)).toBe('2026-02-28'); // Febrero no bisiesto
+    expect(getAnchorDateForTargetMonth(29, 2026, 2)).toBe('2026-02-28');
     expect(getAnchorDateForTargetMonth(31, 2024, 2)).toBe('2024-02-29'); // Febrero bisiesto
+    expect(getAnchorDateForTargetMonth(29, 2024, 2)).toBe('2024-02-29');
     expect(getAnchorDateForTargetMonth(29, 2026, 9)).toBe('2026-09-29');
   });
 
-  it('agrega meses preservando el día ancla en saltos sucesivos', () => {
+  it('agrega meses preservando el día ancla en saltos sucesivos de meses variables', () => {
+    // Aug 31 -> Sep 30 -> Oct 31 -> Nov 30 -> Dec 31 -> Jan 31 -> Feb 28 -> Mar 31
     expect(addMonthsPreservingAnchor('2026-08-31', 1, 31)).toBe('2026-09-30');
     expect(addMonthsPreservingAnchor('2026-08-31', 2, 31)).toBe('2026-10-31');
     expect(addMonthsPreservingAnchor('2026-08-31', 3, 31)).toBe('2026-11-30');
+    expect(addMonthsPreservingAnchor('2026-08-31', 4, 31)).toBe('2026-12-31');
+    expect(addMonthsPreservingAnchor('2026-08-31', 5, 31)).toBe('2027-01-31');
     expect(addMonthsPreservingAnchor('2026-08-31', 6, 31)).toBe('2027-02-28');
     expect(addMonthsPreservingAnchor('2026-08-31', 7, 31)).toBe('2027-03-31');
+  });
+
+  it('maneja transiciones de cambio de año', () => {
+    expect(addMonthsPreservingAnchor('2025-11-15', 2, 15)).toBe('2026-01-15');
+    expect(addMonthsPreservingAnchor('2025-12-10', 1, 10)).toBe('2026-01-10');
   });
 });
 
@@ -59,20 +72,32 @@ describe('paymentCalculations - addMonthsToDate', () => {
 describe('paymentCalculations - computeNextPaymentDate', () => {
   const planPrice = 30;
 
-  it('caso reportado 1 (Cesar Vicent): ingreso 31 de agosto, pago tardío el 02 de septiembre -> vence 30 de septiembre', () => {
+  it('retorna join_date + 1 mes si no hay pagos registrados', () => {
+    expect(computeNextPaymentDate('2026-08-31', [], planPrice)).toBe('2026-09-30');
+    expect(computeNextPaymentDate('2026-01-15', null, planPrice)).toBe('2026-02-15');
+  });
+
+  it('caso reportado 1: ingreso 31 de agosto, pago tardío el 02 de septiembre -> vence 30 de septiembre', () => {
     const joinDate = '2026-08-31';
     const payments = [
       { id: '1', amount_usd: 30, payment_date: '2026-09-02' }
     ];
 
     const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
-    // Debe cubrir el ciclo de septiembre hasta su día ancla: 30 de septiembre
     expect(nextDate).toBe('2026-09-30');
   });
 
-  it('caso reportado 2 (Judelis Fernandez): ingreso 29 de enero, pagos con meses inactivos en el medio, pago reciente el 03 de septiembre -> vence 29 de septiembre', () => {
+  it('siguiente pago puntual el 30 de septiembre extiende a 31 de octubre', () => {
+    const payments = [
+      { id: '1', amount_usd: 30, payment_date: '2026-09-02' },
+      { id: '2', amount_usd: 30, payment_date: '2026-09-30' }
+    ];
+    const nextDate = computeNextPaymentDate('2026-08-31', payments, planPrice);
+    expect(nextDate).toBe('2026-10-31');
+  });
+
+  it('caso reportado 2 (Judelis Fernandez): ingreso 29 de enero, inactividad en agosto, pago 03 de septiembre -> vence 29 de septiembre', () => {
     const joinDate = '2026-01-29';
-    // Pagó enero, marzo, mayo, junio, julio... y luego reactiva pagando el 3 de septiembre
     const payments = [
       { id: '1', amount_usd: 30, payment_date: '2026-01-29' },
       { id: '2', amount_usd: 30, payment_date: '2026-03-01' },
@@ -83,7 +108,6 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
     ];
 
     const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
-    // El pago del 03 de septiembre debe reactivar su membresía para el mes corriente con vencimiento el 29 de septiembre
     expect(nextDate).toBe('2026-09-29');
   });
 
@@ -91,7 +115,6 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
     const joinDate = '2026-01-15';
     const payments = [
       { id: '1', amount_usd: 30, payment_date: '2026-01-15' },
-      // Estuvo inactivo meses y regresa pagando el 20 de septiembre
       { id: '2', amount_usd: 30, payment_date: '2026-09-20' },
     ];
 
@@ -102,19 +125,13 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
   it('renovaciones continuas y puntuales extienden la fecha secuencialmente', () => {
     const joinDate = '2026-01-15';
     const payments = [
-      { id: '1', amount_usd: 30, payment_date: '2026-01-15' }, // vence 2026-02-15
-      { id: '2', amount_usd: 30, payment_date: '2026-02-14' }, // vence 2026-03-15
-      { id: '3', amount_usd: 30, payment_date: '2026-03-15' }, // vence 2026-04-15
+      { id: '1', amount_usd: 30, payment_date: '2026-01-15' },
+      { id: '2', amount_usd: 30, payment_date: '2026-02-14' },
+      { id: '3', amount_usd: 30, payment_date: '2026-03-15' },
     ];
 
     const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
     expect(nextDate).toBe('2026-04-15');
-  });
-
-  it('si no hay pagos registrados, proyecta el primer vencimiento a 1 mes del ingreso', () => {
-    const joinDate = '2026-08-31';
-    const nextDate = computeNextPaymentDate(joinDate, [], planPrice);
-    expect(nextDate).toBe('2026-09-30');
   });
 
   it('maneja pagos adelantados de múltiples meses (ej: 3 meses = $90)', () => {
@@ -159,7 +176,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
 });
 
 describe('paymentCalculations - calculateDaysUntilPayment & getPaymentStatusColor', () => {
-  it('calcula correctamente los días de diferencia', () => {
+  it('calcula correctamente los días de diferencia y colores de estado', () => {
     const today = new Date();
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, '0');
@@ -170,12 +187,17 @@ describe('paymentCalculations - calculateDaysUntilPayment & getPaymentStatusColo
     expect(getPaymentStatusColor(0)).toBe('text-yellow-500');
 
     // Días negativos (vencido)
+    expect(calculateDaysUntilPayment('2020-01-01')).toBeLessThan(0);
     expect(getPaymentStatusColor(-5)).toBe('text-red-500');
 
     // Días próximos a vencer (1-7 días)
     expect(getPaymentStatusColor(5)).toBe('text-orange-500');
 
+    // Días próximos a vencer (8-15 días)
+    expect(getPaymentStatusColor(12)).toBe('text-yellow-500');
+
     // Días activos (>15 días)
+    expect(calculateDaysUntilPayment('2099-01-01')).toBeGreaterThan(15);
     expect(getPaymentStatusColor(20)).toBe('text-green-500');
   });
 });

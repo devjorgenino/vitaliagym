@@ -3,7 +3,7 @@ import path from 'path';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {
-    root: path.resolve('.'),
+    root: process.cwd(),
   },
   images: {
     formats: ['image/webp', 'image/avif'],
