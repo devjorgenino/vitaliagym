@@ -39,13 +39,34 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 // ─── Lógica de negocio ────────────────────────────────────────────────────────
 
+function getAnchorDateForTargetMonth(anchorDay, year, month) {
+  const lastDay = new Date(year, month, 0).getDate();
+  const day = Math.min(anchorDay, lastDay);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
+  if (!baseDateStr || monthsToAdd === null || monthsToAdd === undefined || monthsToAdd < 0) return null;
+  const [y, m, d] = baseDateStr.split('-').map(Number);
+  const anchor = anchorDay || d;
+
+  let targetMonth = m + monthsToAdd;
+  let targetYear = y;
+
+  while (targetMonth > 12) {
+    targetMonth -= 12;
+    targetYear += 1;
+  }
+  while (targetMonth < 1) {
+    targetMonth += 12;
+    targetYear -= 1;
+  }
+
+  return getAnchorDateForTargetMonth(anchor, targetYear, targetMonth);
+}
+
 /**
- * Calcula la next_payment_date correcta para un cliente.
- *
- * Reglas:
- * - El DÍA siempre es el mismo que el join_date (ej: día 13 si se unió el 13)
- * - El MES es el mes siguiente al mes del ÚLTIMO pago registrado con ciclo completo
- * - Sin ciclos completos: join_date + 1 mes (primer vencimiento)
+ * Calcula la next_payment_date correcta para un cliente según su ciclo cronológico de pagos.
  *
  * @param {string} joinDate       - Fecha de ingreso (YYYY-MM-DD)
  * @param {Array}  payments       - Pagos del cliente para su plan, ordenados por payment_date asc
@@ -54,28 +75,71 @@ const DRY_RUN = process.argv.includes('--dry-run');
  */
 function computeNextPaymentDate(joinDate, payments, planPrice) {
   if (!joinDate || planPrice <= 0) return null;
+  const anchorDay = parseInt(joinDate.split('-')[2], 10);
 
-  const joinDay   = parseInt(joinDate.split('-')[2], 10);
-  const totalPaid = (payments || []).reduce((s, p) => s + (parseFloat(p.amount_usd) || 0), 0);
-  const cycles    = Math.floor(totalPaid / planPrice);
-
-  if (cycles === 0) {
-    // Sin ciclos completos → join_date + 1 mes
-    const [y, m, d] = joinDate.split('-').map(Number);
-    let ty = y, tm = m; // tm es 1-indexed
-    tm += 1;
-    if (tm > 12) { tm = 1; ty++; }
-    const lastDay = new Date(ty, tm, 0).getDate();
-    return `${ty}-${String(tm).padStart(2,'0')}-${String(Math.min(d, lastDay)).padStart(2,'0')}`;
+  if (!payments || payments.length === 0) {
+    return addMonthsPreservingAnchor(joinDate, 1, anchorDay);
   }
 
-  // Con ciclos: día(join_date) en el mes siguiente al último pago
-  const lastPay = payments[payments.length - 1];
-  const [ly, lm] = lastPay.payment_date.split('-').map(Number);
-  let ty = ly, tm = lm + 1;
-  if (tm > 12) { tm = 1; ty++; }
-  const lastDay = new Date(ty, tm, 0).getDate();
-  return `${ty}-${String(tm).padStart(2,'0')}-${String(Math.min(joinDay, lastDay)).padStart(2,'0')}`;
+  const sortedPayments = [...payments].sort(
+    (a, b) => new Date(a.payment_date) - new Date(b.payment_date)
+  );
+
+  let currentDueDate = null;
+  let accumulatedBalance = 0;
+
+  for (const p of sortedPayments) {
+    const amount = parseFloat(p.amount_usd) || 0;
+    if (amount <= 0) continue;
+
+    accumulatedBalance += amount;
+    const cycles = Math.floor(accumulatedBalance / planPrice);
+    if (cycles <= 0) continue;
+
+    accumulatedBalance -= cycles * planPrice;
+    const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
+
+    if (!currentDueDate) {
+      const firstTarget = addMonthsPreservingAnchor(joinDate, cycles, anchorDay);
+      if (p.payment_date > firstTarget) {
+        if (payDay <= anchorDay) {
+          let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+          if (cycles > 1) {
+            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+          }
+          currentDueDate = target;
+        } else {
+          currentDueDate = addMonthsPreservingAnchor(
+            getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
+            cycles,
+            anchorDay
+          );
+        }
+      } else {
+        currentDueDate = firstTarget;
+      }
+    } else {
+      if (p.payment_date <= currentDueDate) {
+        currentDueDate = addMonthsPreservingAnchor(currentDueDate, cycles, anchorDay);
+      } else {
+        if (payDay <= anchorDay) {
+          let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+          if (cycles > 1) {
+            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+          }
+          currentDueDate = target;
+        } else {
+          currentDueDate = addMonthsPreservingAnchor(
+            getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
+            cycles,
+            anchorDay
+          );
+        }
+      }
+    }
+  }
+
+  return currentDueDate || addMonthsPreservingAnchor(joinDate, 1, anchorDay);
 }
 
 function daysUntil(dateStr) {
