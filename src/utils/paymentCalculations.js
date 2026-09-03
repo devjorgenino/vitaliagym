@@ -1,116 +1,186 @@
 /**
  * Utilidades para el cálculo de fechas de próximo pago
  *
- * LÓGICA DEL SISTEMA:
- * - El DÍA de pago siempre es el mismo día del join_date (ej: día 13 si se unió el 13)
- * - next_payment_date = día(join_date) en el mes siguiente al último pago registrado
- * - Pago puntual: día 13 del mes siguiente al mes de pago
- * - Pago atrasado: igual, día 13 del mes siguiente al mes en que pagó (no se penaliza con más)
- * - Pagos parciales: no modifica la fecha hasta completar el precio del plan
- * - Primera inscripción: Próximo pago = join_date + 1 mes
+ * LÓGICA DEL SISTEMA (Ciclo de Vida Cronológico con Ancla de Día):
+ * - El DÍA de corte siempre se ancla al join_date (ej: día 29 si se unió el 29, día 31 si se unió el 31).
+ * - Procesamiento cronológico de pagos:
+ *   1. Si el pago se realiza dentro de la vigencia activa (payment_date <= currentDueDate),
+ *      extiende la cobertura N ciclos a partir del vencimiento actual (renovación puntual/anticipada).
+ *   2. Si el pago se realiza después de un período de inactividad (payment_date > currentDueDate),
+ *      se reactiva la membresía cubriendo el mes corriente según su día ancla:
+ *      - Si payDay <= anchorDay: vence el día ancla del mes de pago (ej: pagó 3 Sep con ancla 29 -> vence 29 Sep).
+ *      - Si payDay > anchorDay: vence el día ancla del mes siguiente (ej: pagó 30 Sep con ancla 29 -> vence 29 Oct).
+ * - Pagos parciales: acumula saldo hasta completar el costo del plan antes de extender ciclos.
+ * - Primera inscripción / sin pagos: Próximo pago = join_date + 1 mes (anclado).
  */
 
 import client from '../api/client';
 
 /**
- * Calcula una fecha agregando N meses, manejando casos especiales de días.
+ * Obtiene la fecha YYYY-MM-DD para un año y mes específicos respetando el día ancla.
+ * Si el mes destino tiene menos días que el ancla (ej: 31 en febrero o septiembre),
+ * se ajusta al último día disponible de ese mes.
+ *
+ * @param {number} anchorDay - Día ancla original del cliente (1-31)
+ * @param {number} year - Año destino
+ * @param {number} month - Mes destino (1-12)
+ * @returns {string} - Fecha en formato YYYY-MM-DD
+ */
+export function getAnchorDateForTargetMonth(anchorDay, year, month) {
+  const lastDay = new Date(year, month, 0).getDate();
+  const day = Math.min(anchorDay, lastDay);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Agrega N meses a una fecha base manteniendo intacto el día ancla original.
+ *
  * Ejemplos:
- * - 31 enero + 1 mes = 28/29 febrero
- * - 31 agosto + 1 mes = 30 septiembre
- * 
+ * - 2026-08-31 + 1 mes (ancla 31) = 2026-09-30
+ * - 2026-08-31 + 2 meses (ancla 31) = 2026-10-31 (recupera el 31)
+ * - 2026-01-31 + 1 mes (ancla 31) = 2026-02-28 (o 29 en bisiesto)
+ *
+ * @param {string} baseDateStr - Fecha base en formato YYYY-MM-DD
+ * @param {number} monthsToAdd - Cantidad de meses a agregar
+ * @param {number} [anchorDay] - Día ancla (opcional, si no se pasa se extrae de baseDateStr)
+ * @returns {string|null} - Nueva fecha en formato YYYY-MM-DD
+ */
+export function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
+  if (!baseDateStr || monthsToAdd === null || monthsToAdd === undefined || monthsToAdd < 0) return null;
+
+  const [y, m, d] = baseDateStr.split('-').map(Number);
+  const anchor = anchorDay || d;
+
+  let targetMonth = m + monthsToAdd;
+  let targetYear = y;
+
+  while (targetMonth > 12) {
+    targetMonth -= 12;
+    targetYear += 1;
+  }
+  while (targetMonth < 1) {
+    targetMonth += 12;
+    targetYear -= 1;
+  }
+
+  return getAnchorDateForTargetMonth(anchor, targetYear, targetMonth);
+}
+
+/**
+ * Función legacy / utilitaria para sumar meses a una fecha.
+ *
  * @param {string|Date} baseDate - Fecha base (formato YYYY-MM-DD o Date)
  * @param {number} monthsToAdd - Cantidad de meses a agregar
- * @returns {string} - Nueva fecha en formato YYYY-MM-DD
+ * @returns {string|null} - Nueva fecha en formato YYYY-MM-DD
  */
 export function addMonthsToDate(baseDate, monthsToAdd) {
   if (!baseDate || monthsToAdd < 0) return null;
 
-  // Parsear la fecha correctamente evitando problemas de zona horaria
-  let year, month, day;
-  
+  let baseStr;
   if (typeof baseDate === 'string') {
-    const parts = baseDate.split('-');
-    year = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10) - 1; // Los meses en JS son 0-indexados
-    day = parseInt(parts[2], 10);
+    baseStr = baseDate;
   } else {
-    year = baseDate.getFullYear();
-    month = baseDate.getMonth();
-    day = baseDate.getDate();
+    const y = baseDate.getFullYear();
+    const m = String(baseDate.getMonth() + 1).padStart(2, '0');
+    const d = String(baseDate.getDate()).padStart(2, '0');
+    baseStr = `${y}-${m}-${d}`;
   }
 
-  const originalDay = day;
-
-  // Calcular el mes y año destino
-  let targetMonth = month + monthsToAdd;
-  let targetYear = year;
-
-  while (targetMonth > 11) {
-    targetMonth -= 12;
-    targetYear += 1;
-  }
-
-  // Obtener el último día del mes destino
-  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-
-  // Usar el día original o el último día del mes si el original no existe
-  const finalDay = Math.min(originalDay, lastDayOfTargetMonth);
-
-  // Formatear la fecha como YYYY-MM-DD
-  const formattedYear = targetYear;
-  const formattedMonth = String(targetMonth + 1).padStart(2, '0');
-  const formattedDay = String(finalDay).padStart(2, '0');
-
-  return `${formattedYear}-${formattedMonth}-${formattedDay}`;
+  const anchorDay = parseInt(baseStr.split('-')[2], 10);
+  return addMonthsPreservingAnchor(baseStr, monthsToAdd, anchorDay);
 }
 
 /**
- * Calcula la next_payment_date correcta para un cliente.
+ * Calcula la next_payment_date correcta para un cliente según su historial cronológico de pagos.
  *
- * REGLA DE NEGOCIO:
- * - El DÍA siempre es el mismo que el join_date (ej: si se unió el 13, siempre paga el 13)
- * - El MES es el mes siguiente al mes del último pago registrado
- *
- * Ejemplo: join_date=2025-11-13, último pago=2026-02-25 → next=2026-03-13
- * Ejemplo: join_date=2026-01-17, último pago=2026-02-25 → next=2026-03-17
- * Ejemplo: join_date=2026-01-05, pagos=[ene, feb]      → next=2026-03-05
+ * REGLAS DE NEGOCIO:
+ * 1. Preservación del Día Ancla: El corte siempre corresponde al día del join_date (o fin de mes si el mes es más corto).
+ * 2. Renovaciones continuas: Si un cliente activo paga antes o el día de su vencimiento, se extiende su cobertura.
+ * 3. Reactivaciones tras inactividad: Si un cliente regresa tras meses sin pagar, su pago reactiva el servicio
+ *    hasta su próximo día de corte ancla (no se arrastran cortes en el pasado).
+ * 4. Pagos Parciales: El saldo se acumula hasta completar el precio de 1 ciclo antes de extender la fecha.
+ * 5. Sin pagos: Proyecta el primer vencimiento a 1 mes desde join_date.
  *
  * @param {string} joinDate        - Fecha de ingreso del cliente (YYYY-MM-DD)
- * @param {Array}  clientPayments  - Pagos del plan actual, ordenados por payment_date asc
- * @param {number} planPrice       - Precio del plan
- * @returns {string|null}          - Fecha calculada en formato YYYY-MM-DD
+ * @param {Array}  clientPayments  - Pagos del plan actual del cliente
+ * @param {number} planPrice       - Precio del plan mensual
+ * @returns {string|null}          - Próxima fecha de pago calculada (YYYY-MM-DD)
  */
 export function computeNextPaymentDate(joinDate, clientPayments, planPrice) {
   if (!joinDate || planPrice <= 0) return null;
+  const anchorDay = parseInt(joinDate.split('-')[2], 10);
 
-  const joinParts = joinDate.split('-');
-  const joinDay   = parseInt(joinParts[2], 10); // el día ancla (ej: 13)
-
-  const totalPaid   = (clientPayments || []).reduce((s, p) => s + (parseFloat(p.amount_usd) || 0), 0);
-  const totalCycles = Math.floor(totalPaid / planPrice);
-
-  // Sin ciclos completos → primer vencimiento = join_date + 1 mes
-  if (totalCycles === 0) {
-    return addMonthsToDate(joinDate, 1);
+  if (!clientPayments || clientPayments.length === 0) {
+    return addMonthsPreservingAnchor(joinDate, 1, anchorDay);
   }
 
-  // Con ciclos completos:
-  // - Tomar el último pago registrado
-  // - El mes siguiente a ese pago, en el día del join_date
-  const lastPayment = clientPayments[clientPayments.length - 1];
-  const lastPayParts = lastPayment.payment_date.split('-');
-  let targetYear  = parseInt(lastPayParts[0], 10);
-  let targetMonth = parseInt(lastPayParts[1], 10); // ya es 1-indexado, y queremos MES SIGUIENTE
+  // Ordenar pagos cronológicamente
+  const sortedPayments = [...clientPayments].sort(
+    (a, b) => new Date(a.payment_date) - new Date(b.payment_date)
+  );
 
-  // Avanzar 1 mes
-  targetMonth += 1;
-  if (targetMonth > 12) { targetMonth = 1; targetYear += 1; }
+  let currentDueDate = null;
+  let accumulatedBalance = 0;
 
-  // Ajustar el día si el mes destino tiene menos días (ej: 31 en febrero)
-  const lastDayOfTarget = new Date(targetYear, targetMonth, 0).getDate();
-  const finalDay = Math.min(joinDay, lastDayOfTarget);
+  for (const p of sortedPayments) {
+    const amount = parseFloat(p.amount_usd) || 0;
+    if (amount <= 0) continue;
 
-  return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`;
+    accumulatedBalance += amount;
+    const cycles = Math.floor(accumulatedBalance / planPrice);
+    if (cycles <= 0) continue;
+
+    // Descontar los ciclos completos aplicados
+    accumulatedBalance -= cycles * planPrice;
+
+    const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
+
+    if (!currentDueDate) {
+      // Primer pago registrado
+      const firstTarget = addMonthsPreservingAnchor(joinDate, cycles, anchorDay);
+      if (p.payment_date > firstTarget) {
+        // Pago inicial tardío tras la primera fecha esperada
+        if (payDay <= anchorDay) {
+          let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+          if (cycles > 1) {
+            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+          }
+          currentDueDate = target;
+        } else {
+          currentDueDate = addMonthsPreservingAnchor(
+            getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
+            cycles,
+            anchorDay
+          );
+        }
+      } else {
+        currentDueDate = firstTarget;
+      }
+    } else {
+      // Pagos subsecuentes
+      if (p.payment_date <= currentDueDate) {
+        // Renovación dentro de vigencia activa: extiende desde el vencimiento actual
+        currentDueDate = addMonthsPreservingAnchor(currentDueDate, cycles, anchorDay);
+      } else {
+        // Reactivación tras inactividad: reactiva el ciclo actual anclado al día del cliente
+        if (payDay <= anchorDay) {
+          let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+          if (cycles > 1) {
+            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+          }
+          currentDueDate = target;
+        } else {
+          currentDueDate = addMonthsPreservingAnchor(
+            getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
+            cycles,
+            anchorDay
+          );
+        }
+      }
+    }
+  }
+
+  return currentDueDate || addMonthsPreservingAnchor(joinDate, 1, anchorDay);
 }
 
 /**
@@ -460,32 +530,27 @@ export function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
   if (!nextPaymentDate) return null;
 
   try {
-    const nextParts = nextPaymentDate.split('-');
-    const nextYear = parseInt(nextParts[0], 10);
-    const nextMonth = parseInt(nextParts[1], 10) - 1;
-    const nextDay = parseInt(nextParts[2], 10);
-    const nextPayment = new Date(nextYear, nextMonth, nextDay);
-    
+    let targetYear, targetMonth, targetDay;
+    if (typeof nextPaymentDate === 'string') {
+      const nextParts = nextPaymentDate.split('-');
+      targetYear = parseInt(nextParts[0], 10);
+      targetMonth = parseInt(nextParts[1], 10) - 1;
+      targetDay = parseInt(nextParts[2], 10);
+    } else {
+      targetYear = nextPaymentDate.getFullYear();
+      targetMonth = nextPaymentDate.getMonth();
+      targetDay = nextPaymentDate.getDate();
+    }
+
+    const nextPayment = new Date(targetYear, targetMonth, targetDay);
+    nextPayment.setHours(0, 0, 0, 0);
+
     const today = new Date();
     const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    
-    // Si próximo pago = hoy, mostrar 0 días
-    if (nextPayment.getTime() === todayLocal.getTime()) {
-      return 0;
-    }
-    
-    // Si próximo pago < hoy (vencido), días negativos desde hoy
-    if (nextPayment < todayLocal) {
-      const diffTime = nextPayment - todayLocal;
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    }
-    
-    // Próximo pago > hoy, calcular desde mañana
-    const diffTime = nextPayment - tomorrow;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    todayLocal.setHours(0, 0, 0, 0);
 
-    return diffDays;
+    const diffTime = nextPayment.getTime() - todayLocal.getTime();
+    return Math.round(diffTime / (1000 * 60 * 60 * 24));
   } catch (error) {
     console.error('Error calculating days until payment:', error);
     return null;
