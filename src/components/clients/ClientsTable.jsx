@@ -952,7 +952,6 @@ export function ClientsTable() {
 
                     // Calcular días hasta el próximo pago
                     const today = new Date();
-                    const today = new Date();
                     today.setHours(0, 0, 0, 0);
 
                     const daysUntilPayment = client.daysUntilPayment;
