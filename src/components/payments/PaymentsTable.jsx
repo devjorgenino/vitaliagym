@@ -29,6 +29,10 @@ import {
   FileText,
   Eye,
   Copy,
+  Edit2Icon,
+  CheckIcon,
+  X,
+  CreditCard as BCVCardIcon,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -171,6 +175,7 @@ export function PaymentsTable({
     discount_value: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingRate, setIsEditingRate] = useState(false);
   const [partialValidationError, setPartialValidationError] = useState("");
 
   // Estados para modo de pago restante
@@ -2288,18 +2293,57 @@ export function PaymentsTable({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="exchange_rate" className="text-sm font-medium">
-                          Tasa de Cambio <span className="text-xs">(Bs/$)</span>
+                        <Label
+                          htmlFor="exchange_rate"
+                          className="text-sm font-medium flex items-center justify-between"
+                        >
+                          Tasa de Cambio (Bs/$)
+                          <div className="flex items-center gap-1 bg-secondary rounded-full px-2 py-0.5 text-xs text-muted-foreground mr-1">
+                            <BCVCardIcon className="h-3 w-3" />
+                            {parseFloat(formData.exchange_rate) === parseFloat(rate)
+                              ? "Auto"
+                              : "Manual"}
+                          </div>
                         </Label>
-                        <Input
-                          id="exchange_rate"
-                          type="number"
-                          step="0.0001"
-                          name="exchange_rate"
-                          value={formData.exchange_rate}
-                          onChange={handleInputChange}
-                          placeholder="Ej: 35.00"
-                        />
+                        {!isEditingRate ? (
+                          <div className="flex items-center bg-background border rounded-md">
+                            <Input
+                              id="exchange_rate"
+                              type="number"
+                              disabled
+                              value={parseFloat(formData.exchange_rate).toFixed(2)}
+                              className="border-0 bg-transparent"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-9 w-9 p-0 hover:bg-transparent"
+                              onClick={() => setIsEditingRate(true)}
+                            >
+                              <Edit2Icon className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              step="0.0001"
+                              name="exchange_rate"
+                              value={formData.exchange_rate}
+                              onChange={handleInputChange}
+                              className="flex-1"
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => setIsEditingRate(false)}
+                              size="sm"
+                              className="h-9 px-2"
+                            >
+                              <CheckIcon className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </>

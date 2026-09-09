@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Dumbbell } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Dumbbell, Edit2Icon, CheckIcon, CreditCard as BCVCardIcon } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
   getPlanCurrency,
@@ -78,6 +78,7 @@ export function PlansTable() {
     exchange_rate: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingRate, setIsEditingRate] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, plan: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -449,27 +450,87 @@ export function PlansTable() {
             </div>
 
             {/* Moneda y Precio */}
-            <div className="space-y-2">
-              <Label htmlFor="plan-currency">
-                Moneda <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.currency}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, currency: value }))
-                }
-              >
-                <SelectTrigger id="plan-currency" aria-label="Moneda del plan">
-                  <SelectValue placeholder="Seleccionar moneda" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">Dólares (USD)</SelectItem>
-                  <SelectItem value="BS">Bolívares (Bs)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                El precio se mantiene fijo en esta moneda hasta que lo cambies
-              </p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="plan-currency">
+                  Moneda <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.currency}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, currency: value }))
+                  }
+                >
+                  <SelectTrigger id="plan-currency" aria-label="Moneda del plan">
+                    <SelectValue placeholder="Seleccionar moneda" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">Dólares (USD)</SelectItem>
+                    <SelectItem value="BS">Bolívares (Bs)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formData.currency === "BS" && (
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="exchange_rate"
+                    className="text-sm font-medium flex items-center justify-between"
+                  >
+                    Tasa de cambio local (Bs/$)
+                    <div className="flex items-center gap-1 bg-secondary rounded-full px-2 py-0.5 text-xs text-muted-foreground mr-1">
+                      <BCVCardIcon className="h-3 w-3" />
+                      {parseFloat(formData.exchange_rate) === parseFloat(rate)
+                        ? "Auto"
+                        : "Manual"}
+                    </div>
+                  </Label>
+                  {!isEditingRate ? (
+                    <div className="flex items-center bg-background border rounded-md">
+                      <Input
+                        id="exchange_rate"
+                        type="number"
+                        disabled
+                        value={parseFloat(formData.exchange_rate).toFixed(2)}
+                        className="border-0 bg-transparent"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 hover:bg-transparent"
+                        onClick={() => setIsEditingRate(true)}
+                      >
+                        <Edit2Icon className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        name="exchange_rate"
+                        value={formData.exchange_rate}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            exchange_rate: e.target.value,
+                          }))
+                        }
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => setIsEditingRate(false)}
+                        size="sm"
+                        className="h-9 px-2"
+                      >
+                        <CheckIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Precio */}
@@ -494,11 +555,11 @@ export function PlansTable() {
                   ? formData.currency === "BS"
                     ? `≈ ${getPlanPriceInUSD(
                         { price: formData.price, currency: "BS" },
-                        rate,
+                        parseFloat(formData.exchange_rate || rate),
                       ).toFixed(2)} USD al cambio actual`
                     : `≈ ${getPlanPriceInBS(
                         { price: formData.price, currency: "USD" },
-                        rate,
+                        parseFloat(formData.exchange_rate || rate),
                       ).toLocaleString("es-VE", {
                         maximumFractionDigits: 2,
                       })} Bs al cambio actual`
