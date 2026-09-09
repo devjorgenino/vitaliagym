@@ -119,7 +119,7 @@ function computeNextPaymentDate(joinDate, payments, planPrice) {
     if (!currentDueDate) {
       const firstTarget = addMonthsPreservingAnchor(joinDate, cycles, anchorDay);
       if (p.payment_date > firstTarget) {
-        if (payDay <= anchorDay) {
+        if (payDay < anchorDay) {
           let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
           if (cycles > 1) {
             target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
@@ -139,7 +139,7 @@ function computeNextPaymentDate(joinDate, payments, planPrice) {
       if (p.payment_date <= currentDueDate) {
         currentDueDate = addMonthsPreservingAnchor(currentDueDate, cycles, anchorDay);
       } else {
-        if (payDay <= anchorDay) {
+        if (payDay < anchorDay) {
           let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
           if (cycles > 1) {
             target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);

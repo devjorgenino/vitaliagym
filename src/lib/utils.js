@@ -5,6 +5,27 @@ export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
+export function normalizeText(text) {
+  if (!text) return "";
+  return text
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+export function matchesSearch(searchTerm, ...fields) {
+  if (!searchTerm || !searchTerm.trim()) return true;
+
+  const searchTokens = normalizeText(searchTerm).trim().split(/\s+/);
+  const combinedText = fields
+    .filter(Boolean)
+    .map((field) => normalizeText(field))
+    .join(" ");
+
+  return searchTokens.every((token) => combinedText.includes(token));
+}
+
 export function formatDate(dateString) {
   if (!dateString) return "N/A";
   let date;

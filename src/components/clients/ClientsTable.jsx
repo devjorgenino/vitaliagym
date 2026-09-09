@@ -4,7 +4,7 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
-import { formatDate } from "@/lib/utils";
+import { formatDate, matchesSearch } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 
 const INSCRIPTION_PRICE = 5;
@@ -543,12 +543,15 @@ export function ClientsTable() {
 
   // Lógica de filtrado
   const filteredClients = clients.filter((client) => {
-    // Filtrar por término de búsqueda (nombre o cédula)
-    const matchesSearch =
-      searchTerm === "" ||
-      client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.cedula.toLowerCase().includes(searchTerm.toLowerCase());
+    // Filtrar por término de búsqueda (nombre, apellido, cédula, email, teléfono)
+    const matchesSearchTerm = matchesSearch(
+      searchTerm,
+      client.first_name,
+      client.last_name,
+      client.cedula,
+      client.email,
+      client.phone
+    );
 
     // Filtrar por plan
     const matchesPlan = selectedPlan === "" || client.plan_id === selectedPlan;
@@ -577,7 +580,7 @@ export function ClientsTable() {
       matchesStatus = clientStatus.status === statusFilter;
     }
 
-    return matchesSearch && matchesPlan && matchesPayment && matchesStatus;
+    return matchesSearchTerm && matchesPlan && matchesPayment && matchesStatus;
   });
 
   // Filtrar por mes
@@ -992,15 +995,16 @@ export function ClientsTable() {
                     // - Cliente activo + sin pagar este mes
                     // Deshabilitar cuando:
                     // - Cliente activo + NO vencido + YA pagó este mes
+                    // Calcular el status del cliente
+                    const clientStatus = getClientStatus(client);
+
                     const shouldDisableButton =
-                      client.status === "activo" &&
+                      clientStatus.status === "activo" &&
                       !isOverdue &&
                       hasPaymentThisMonth;
 
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
-                    // Calcular el status del cliente
-                    const clientStatus = getClientStatus(client);
 
                     return (
                       <TableRow key={client.id}>

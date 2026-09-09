@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { matchesSearch } from "@/lib/utils";
 import useExpenses from "@/hooks/useExpenses";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { VENEZUELAN_BANKS } from "@/lib/venezuelanData";
@@ -136,13 +137,16 @@ export default function ExpensesTable() {
   // Filtrar gastos
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
-      const matchesSearch =
-        e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.vendor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.category.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearchTerm = matchesSearch(
+        searchTerm,
+        e.description,
+        e.vendor,
+        e.category,
+        e.reference_number
+      );
       const matchesCategory = categoryFilter === "all" || e.category === categoryFilter;
       const matchesStatus = statusFilter === "all" || e.status === statusFilter;
-      return matchesSearch && matchesCategory && matchesStatus;
+      return matchesSearchTerm && matchesCategory && matchesStatus;
     });
   }, [expenses, searchTerm, categoryFilter, statusFilter]);
 
