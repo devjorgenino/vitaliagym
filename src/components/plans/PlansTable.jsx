@@ -4,6 +4,11 @@ import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Dumbbell } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import {
+  getPlanCurrency,
+  getPlanPriceInBS,
+  getPlanPriceInUSD,
+} from "@/lib/planUtils";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -38,12 +43,19 @@ import {
   TableRow,
 } from "../ui/table";
 import { Pagination, usePagination } from "../ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 export function PlansTable() {
   const { plans, loading, error, refetch, createPlan, updatePlan, deletePlan } =
     usePlans();
 
-  const { formatMultiCurrency, loading: rateLoading } = useExchangeRate();
+  const { formatMultiCurrency, rate, setManualRate, loading: rateLoading } = useExchangeRate();
 
   // Estados para paginación
   const { currentPage, pageSize, setCurrentPage, setPageSize, paginateData } =
@@ -62,6 +74,8 @@ export function PlansTable() {
     name: "",
     description: "",
     price: "",
+    currency: "USD",
+    exchange_rate: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, plan: null });
@@ -73,10 +87,12 @@ export function PlansTable() {
       name: "",
       description: "",
       price: "",
+      currency: "USD",
+      exchange_rate: rate ? rate.toFixed(2) : "",
     });
     setSelectedPlan(null);
     setIsEditing(false);
-  }, []);
+  }, [rate]);
 
   // Abrir modal para crear
   const handleOpenCreateDialog = useCallback(() => {
@@ -91,10 +107,12 @@ export function PlansTable() {
       name: plan.name || "",
       description: plan.description || "",
       price: plan.price?.toString() || "",
+      currency: getPlanCurrency(plan),
+      exchange_rate: rate ? rate.toFixed(2) : "",
     });
     setIsEditing(true);
     setIsDialogOpen(true);
-  }, []);
+  }, [rate]);
 
   // Cerrar modal
   const handleCloseDialog = useCallback(() => {
@@ -317,18 +335,20 @@ export function PlansTable() {
                             ) : (
                               <div className="text-sm">
                                 <div className="font-medium">
-                                  {
-                                    formatMultiCurrency(
-                                      parseFloat(plan.price) || 0,
-                                    ).usd
-                                  }
+                                  {getPlanCurrency(plan) === "BS"
+                                    ? `${(parseFloat(plan.price) || 0).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`
+                                    : formatMultiCurrency(
+                                        parseFloat(plan.price) || 0,
+                                      ).usd}
                                 </div>
                                 <div className="text-muted-foreground">
-                                  {
-                                    formatMultiCurrency(
-                                      parseFloat(plan.price) || 0,
-                                    ).bs
-                                  }
+                                  {getPlanCurrency(plan) === "BS"
+                                    ? formatMultiCurrency(
+                                        getPlanPriceInUSD(plan, rate),
+                                      ).usd
+                                    : formatMultiCurrency(
+                                        parseFloat(plan.price) || 0,
+                                      ).bs}
                                 </div>
                               </div>
                             )}
@@ -428,10 +448,35 @@ export function PlansTable() {
               />
             </div>
 
+            {/* Moneda y Precio */}
+            <div className="space-y-2">
+              <Label htmlFor="plan-currency">
+                Moneda <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={formData.currency}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, currency: value }))
+                }
+              >
+                <SelectTrigger id="plan-currency" aria-label="Moneda del plan">
+                  <SelectValue placeholder="Seleccionar moneda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">Dólares (USD)</SelectItem>
+                  <SelectItem value="BS">Bolívares (Bs)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                El precio se mantiene fijo en esta moneda hasta que lo cambies
+              </p>
+            </div>
+
             {/* Precio */}
             <div className="space-y-2">
               <Label htmlFor="plan-price">
-                Precio (USD) <span className="text-destructive">*</span>
+                Precio {formData.currency === "BS" ? "(Bs)" : "(USD)"}{" "}
+                <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="plan-price"
@@ -445,7 +490,19 @@ export function PlansTable() {
                 aria-required="true"
               />
               <p className="text-xs text-muted-foreground">
-                El precio se mostrará en USD y Bs automáticamente
+                {formData.price && rate
+                  ? formData.currency === "BS"
+                    ? `≈ ${getPlanPriceInUSD(
+                        { price: formData.price, currency: "BS" },
+                        rate,
+                      ).toFixed(2)} USD al cambio actual`
+                    : `≈ ${getPlanPriceInBS(
+                        { price: formData.price, currency: "USD" },
+                        rate,
+                      ).toLocaleString("es-VE", {
+                        maximumFractionDigits: 2,
+                      })} Bs al cambio actual`
+                  : "El precio se mantiene fijo en la moneda seleccionada"}
               </p>
             </div>
 

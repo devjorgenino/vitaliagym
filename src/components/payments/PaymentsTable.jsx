@@ -6,6 +6,7 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, formatDateTime, matchesSearch } from "@/lib/utils";
+import { getPlanCurrency, getPlanPriceInBS, getPlanPriceInUSD } from "@/lib/planUtils";
 import { DatePicker } from "@/components/ui/date-picker";
 
 const INSCRIPTION_PRICE = 5;
@@ -267,13 +268,18 @@ export function PaymentsTable({
       // Modo normal: solo preseleccionar cliente y abrir modal
       const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
       let planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
+      // Si el plan es en Bs, la base de cálculo del monto es el precio en Bs
+      const planIsBS = getPlanCurrency(clientPlan) === "BS";
 
       // Si el cliente ya tiene inscripción pagada, el precio es solo el plan
       // Si NO tiene inscripción pagada Y viene del registro, se suma la inscripción
       const hasEnrollmentPaid = preselectedClient?.enrollment_paid === true;
       if (!hasEnrollmentPaid && isRegisterMode && initialAmount) {
         // Modo registro sin inscripción pagada: sumar inscripción
-        planPrice = planPrice + INSCRIPTION_PRICE;
+        // La inscripción es $5 USD: para planes en Bs se convierte a la moneda base
+        planPrice = planIsBS
+          ? planPrice + INSCRIPTION_PRICE * (rate || 1)
+          : planPrice + INSCRIPTION_PRICE;
         setIncludeInscription(true);
       } else {
         // Ya tiene inscripción pagada o no es modo registro: solo el plan
@@ -281,14 +287,15 @@ export function PaymentsTable({
       }
 
       // Si es modo registro y tiene amount en URL, usar ese monto
+      // Plan en BS: el monto base es el precio fijo en Bs; el USD se calcula con la tasa activa
       const amountUSD = planPrice > 0 ? planPrice.toFixed(2) : "";
       const amountBS = planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "";
 
       setFormData({
         client_id: preselectedClient.id,
         plan_id: preselectedClient.plan_id || "",
-        amount_usd: amountUSD,
-        amount_bs: amountBS,
+        amount_usd: planIsBS ? (rate ? (planPrice / rate).toFixed(2) : "") : amountUSD,
+        amount_bs: planIsBS ? planPrice.toFixed(2) : amountBS,
         exchange_rate: rate || 1,
         payment_date: new Date().toISOString().split("T")[0],
         reference: "",
