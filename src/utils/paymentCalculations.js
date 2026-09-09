@@ -140,7 +140,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, planPrice) {
       const firstTarget = addMonthsPreservingAnchor(joinDate, cycles, anchorDay);
       if (p.payment_date > firstTarget) {
         // Pago inicial tardío tras la primera fecha esperada
-        if (payDay <= anchorDay) {
+        if (payDay < anchorDay) {
           let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
           if (cycles > 1) {
             target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
@@ -163,7 +163,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, planPrice) {
         currentDueDate = addMonthsPreservingAnchor(currentDueDate, cycles, anchorDay);
       } else {
         // Reactivación tras inactividad: reactiva el ciclo actual anclado al día del cliente
-        if (payDay <= anchorDay) {
+        if (payDay < anchorDay) {
           let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
           if (cycles > 1) {
             target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);

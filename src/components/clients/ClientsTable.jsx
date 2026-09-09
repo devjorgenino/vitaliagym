@@ -992,15 +992,16 @@ export function ClientsTable() {
                     // - Cliente activo + sin pagar este mes
                     // Deshabilitar cuando:
                     // - Cliente activo + NO vencido + YA pagó este mes
+                    // Calcular el status del cliente
+                    const clientStatus = getClientStatus(client);
+
                     const shouldDisableButton =
-                      client.status === "activo" &&
+                      clientStatus.status === "activo" &&
                       !isOverdue &&
                       hasPaymentThisMonth;
 
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
-                    // Calcular el status del cliente
-                    const clientStatus = getClientStatus(client);
 
                     return (
                       <TableRow key={client.id}>

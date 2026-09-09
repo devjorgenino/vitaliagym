@@ -173,6 +173,22 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
     expect(computeNextPaymentDate('2026-08-31', [], 0)).toBeNull();
     expect(computeNextPaymentDate('2026-08-31', [], -10)).toBeNull();
   });
+
+  it('calcula correctamente la cobertura cuando se paga exactamente en el dia de vencimiento (Sebastian Villaroel)', () => {
+    const planPrice = 20;
+    const joinDate = '2026-01-16';
+    const payments = [
+      { id: '1', amount_usd: 20, payment_date: '2026-02-09' },
+      { id: '2', amount_usd: 20, payment_date: '2026-03-16' },
+      { id: '3', amount_usd: 20, payment_date: '2026-04-16' },
+      { id: '4', amount_usd: 20, payment_date: '2026-05-16' },
+      { id: '5', amount_usd: 20, payment_date: '2026-06-16' },
+      { id: '6', amount_usd: 20, payment_date: '2026-07-16' },
+      { id: '7', amount_usd: 20, payment_date: '2026-08-16' },
+    ];
+    // Se espera que avance mes a mes y cubra hasta septiembre!
+    expect(computeNextPaymentDate(joinDate, payments, planPrice)).toBe('2026-09-16');
+  });
 });
 
 describe('paymentCalculations - calculateDaysUntilPayment & getPaymentStatusColor', () => {
