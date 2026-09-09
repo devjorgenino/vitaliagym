@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { matchesSearch } from "@/lib/utils";
 import useStaffPayments from "@/hooks/useStaffPayments";
 import useStaff from "@/hooks/useStaff";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -131,12 +132,15 @@ export default function StaffPaymentsTable() {
   // Filtrar pagos
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
-      const staffName = p.staff ? `${p.staff.first_name} ${p.staff.last_name}` : "";
-      const matchesSearch =
-        staffName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.staff?.position?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearchTerm = matchesSearch(
+        searchTerm,
+        p.staff?.first_name,
+        p.staff?.last_name,
+        p.staff?.position,
+        p.reference_number
+      );
       const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      return matchesSearchTerm && matchesStatus;
     });
   }, [payments, searchTerm, statusFilter]);
 

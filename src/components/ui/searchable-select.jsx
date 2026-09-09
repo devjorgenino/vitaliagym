@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, matchesSearch } from "@/lib/utils";
 
 /**
  * SearchableSelect - Un componente select con búsqueda integrada
@@ -51,20 +51,9 @@ export function SearchableSelect({
 
   // Filtrar opciones basado en búsqueda
   const filteredOptions = React.useMemo(() => {
-    if (!searchTerm.trim()) return options;
-    
-    const search = searchTerm.toLowerCase().trim();
-    return options.filter((opt) => {
-      // Buscar en label
-      if (opt.label.toLowerCase().includes(search)) return true;
-      // Buscar en searchTerms adicionales si existen
-      if (opt.searchTerms) {
-        return opt.searchTerms.some((term) =>
-          term.toLowerCase().includes(search)
-        );
-      }
-      return false;
-    });
+    return options.filter((opt) =>
+      matchesSearch(searchTerm, opt.label, ...(opt.searchTerms || []))
+    );
   }, [options, searchTerm]);
 
   // Reset highlighted index cuando cambian las opciones filtradas

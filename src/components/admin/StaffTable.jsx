@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { matchesSearch } from "@/lib/utils";
 import useStaff from "@/hooks/useStaff";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { VENEZUELAN_BANKS, BANK_ACCOUNT_TYPES, DOCUMENT_TYPES, PHONE_OPERATORS, formatCedula, parseCedula, formatPhone, parsePhone } from "@/lib/venezuelanData";
@@ -146,13 +147,18 @@ export default function StaffTable() {
   // Filtrar personal
   const filteredStaff = useMemo(() => {
     return staff.filter((s) => {
-      const matchesSearch =
-        `${s.first_name} ${s.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.position.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearchTerm = matchesSearch(
+        searchTerm,
+        s.first_name,
+        s.last_name,
+        s.email,
+        s.position,
+        s.cedula,
+        s.phone
+      );
       const matchesStatus = statusFilter === "all" || s.status === statusFilter;
       const matchesPosition = positionFilter === "all" || s.position === positionFilter;
-      return matchesSearch && matchesStatus && matchesPosition;
+      return matchesSearchTerm && matchesStatus && matchesPosition;
     });
   }, [staff, searchTerm, statusFilter, positionFilter]);
 

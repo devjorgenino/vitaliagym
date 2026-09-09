@@ -21,7 +21,7 @@ import {
   PhoneForwarded,
 } from "lucide-react";
 import { PHONE_OPERATORS, formatPhone, parsePhone } from "@/lib/venezuelanData";
-import { formatDate } from "@/lib/utils";
+import { formatDate, matchesSearch } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -472,13 +472,14 @@ export function UsersTable() {
 
   // Lógica de filtrado
   const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      searchTerm === "" ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.full_name &&
-        user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.phone &&
-        user.phone.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSearchTerm = matchesSearch(
+      searchTerm,
+      user.email,
+      user.full_name,
+      user.first_name,
+      user.last_name,
+      user.phone
+    );
 
     // Filtrar por rol
     let matchesRole = true;
@@ -487,7 +488,7 @@ export function UsersTable() {
       matchesRole = userRoles.some((r) => r.id === selectedRoleFilter);
     }
 
-    return matchesSearch && matchesRole;
+    return matchesSearchTerm && matchesRole;
   });
 
   const clearFilters = () => {

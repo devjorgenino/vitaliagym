@@ -5,7 +5,7 @@ import { usePayments } from "../../hooks/usePayments";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime, matchesSearch } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 
 const INSCRIPTION_PRICE = 5;
@@ -719,17 +719,12 @@ export function PaymentsTable({
   const filteredPayments = useMemo(() => {
     return payments.filter((payment) => {
       // Filtrar por término de búsqueda (nombre, apellido o cédula del cliente)
-      const matchesSearch =
-        searchTerm === "" ||
-        payment.clients?.first_name
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        payment.clients?.last_name
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
+      const matchesSearchTerm = matchesSearch(
+        searchTerm,
+        payment.clients?.first_name,
+        payment.clients?.last_name,
         payment.clients?.cedula
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase());
+      );
 
       // Filtrar por plan
       const matchesPlan =
@@ -758,7 +753,7 @@ export function PaymentsTable({
       }
 
       return (
-        matchesSearch &&
+        matchesSearchTerm &&
         matchesPlan &&
         matchesPaymentType &&
         matchesBank &&

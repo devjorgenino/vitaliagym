@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAttendance } from "../../../hooks/useAttendance";
-import { formatDate } from "@/lib/utils";
+import { formatDate, matchesSearch } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -399,18 +399,12 @@ const Asistencia = () => {
   // Lógica de filtrado para la tabla de asistencia
   const filteredAttendance = attendance.filter((record) => {
     // Filtrar por término de búsqueda
-    let matchesSearch = true;
-    if (tableSearchTerm.trim() !== "") {
-      const searchTermLower = tableSearchTerm.toLowerCase();
-      matchesSearch =
-        (record.clients?.first_name || "")
-          .toLowerCase()
-          .includes(searchTermLower) ||
-        (record.clients?.last_name || "")
-          .toLowerCase()
-          .includes(searchTermLower) ||
-        (record.clients?.cedula || "").toLowerCase().includes(searchTermLower);
-    }
+    const matchesSearchTerm = matchesSearch(
+      tableSearchTerm,
+      record.clients?.first_name,
+      record.clients?.last_name,
+      record.clients?.cedula
+    );
 
     // Filtrar por estado
     let matchesStatus = true;
@@ -418,7 +412,7 @@ const Asistencia = () => {
       matchesStatus = record.status === statusFilter;
     }
 
-    return matchesSearch && matchesStatus;
+    return matchesSearchTerm && matchesStatus;
   });
 
   // Estados para paginación de la tabla
