@@ -953,18 +953,8 @@ export function ClientsTable() {
                     // Calcular días hasta el próximo pago
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const nextPaymentDate = client.next_payment_date
-                      ? new Date(client.next_payment_date)
-                      : null;
 
-                    let daysUntilPayment = null;
-                    if (nextPaymentDate) {
-                      const diffTime =
-                        nextPaymentDate.getTime() - today.getTime();
-                      daysUntilPayment = Math.ceil(
-                        diffTime / (1000 * 60 * 60 * 24),
-                      );
-                    }
+                    const daysUntilPayment = client.daysUntilPayment;
 
                     const isOverdue =
                       daysUntilPayment !== null && daysUntilPayment < 0;

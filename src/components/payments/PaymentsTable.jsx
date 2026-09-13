@@ -7,6 +7,7 @@ import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, formatDateTime, matchesSearch } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
+import { addMonthsPreservingAnchor } from "@/utils/paymentCalculations";
 
 const INSCRIPTION_PRICE = 5;
 import {
@@ -152,6 +153,8 @@ export function PaymentsTable({
   const [isEditing, setIsEditing] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [paymentMode, setPaymentMode] = useState("full"); // "full" o "partial"
+  const [monthsCount, setMonthsCount] = useState(1); // Months to pay in "full" mode
+  const [isCustomMonths, setIsCustomMonths] = useState(false); // Custom months input toggle
 
   const [formData, setFormData] = useState({
     client_id: preselectedClient?.id || "",
@@ -591,7 +594,35 @@ export function PaymentsTable({
   const [editingField, setEditingField] = useState(null);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
-  // Actualizar amount_bs cuando cambia amount_usd o la tasa
+  // Recalculate the base full-payment amount when monthsCount or plan changes
+  useEffect(() => {
+    if (!isDialogOpen || isEditing || paymentMode !== "full" || !formData.plan_id) return;
+    if (isPayingRemaining) return;
+
+    const planPrice = getPlanPrice(formData.plan_id);
+    if (planPrice <= 0) return;
+
+    const months = Math.max(1, parseInt(monthsCount, 10) || 1);
+    const baseAmount = planPrice * months + (isRegisterMode && includeInscription ? INSCRIPTION_PRICE : 0);
+
+    setFormData((prev) => ({
+      ...prev,
+      amount_usd: baseAmount.toFixed(2),
+    }));
+    setDiscountedAmount(baseAmount);
+  }, [
+    isDialogOpen,
+    isEditing,
+    paymentMode,
+    monthsCount,
+    formData.plan_id,
+    isRegisterMode,
+    includeInscription,
+    isPayingRemaining,
+    getPlanPrice,
+  ]);
+
+  // Actualizar amount_bs cuando cambia amount_usd (recalculando con monthsCount)
   useEffect(() => {
     // No ejecutar hasta que termine la carga inicial
     if (!initialLoadDone) return;
@@ -667,9 +698,10 @@ export function PaymentsTable({
     if (!isDialogOpen || isEditing || paymentMode !== "full" || !formData.plan_id) return;
     if (isPayingRemaining) return;
 
-    // Calcular la base correcta: incluir inscripción si aplica
+    // Calcular la base correcta: incluir inscripción si aplica, multiplicado por meses
     const planPrice = getPlanPrice(formData.plan_id);
-    const baseAmount = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
+    const months = Math.max(1, parseInt(monthsCount, 10) || 1);
+    const baseAmount = planPrice * months + (isRegisterMode && includeInscription ? INSCRIPTION_PRICE : 0);
 
     if (!formData.discount_type || !formData.discount_value || parseFloat(formData.discount_value) <= 0) {
       // Sin descuento, usar el precio base completo
@@ -685,7 +717,7 @@ export function PaymentsTable({
       ...prev,
       amount_usd: discounted > 0 ? discounted.toString() : "0",
     }));
-  }, [isDialogOpen, isEditing, paymentMode, formData.plan_id, formData.discount_type, formData.discount_value, isRegisterMode, includeInscription, isPayingRemaining, getPlanPrice]);
+  }, [isDialogOpen, isEditing, paymentMode, monthsCount, formData.plan_id, formData.discount_type, formData.discount_value, isRegisterMode, includeInscription, isPayingRemaining, getPlanPrice]);
 
   // Validar monto parcial en tiempo real
   useEffect(() => {
@@ -893,6 +925,8 @@ export function PaymentsTable({
   // Abrir modal para crear
   const handleOpenCreateDialog = useCallback(() => {
     resetForm();
+    // Mark initial load as done so the USD/Bs conversion effects can run
+    setInitialLoadDone(true);
     setIsDialogOpen(true);
     setTimeout(() => setInitialLoadComplete(true), 50);
   }, [resetForm]);
@@ -2035,14 +2069,76 @@ export function PaymentsTable({
                   </div>
                 )}
 
-                {/* Sección de descuento - solo en modo completo, no editando, y no pagando restante */}
+                {/* Selector de Meses en modo Full */}
+                {paymentMode === "full" && formData.plan_id && !isEditing && !isPayingRemaining && (
+                  <div className="space-y-2 mt-4 p-4 border rounded-lg bg-muted/20">
+                    <Label className="text-sm font-semibold">Cantidad de meses a pagar</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[1, 2, 3, 6, 12].map((m) => (
+                        <Button
+                          key={m}
+                          type="button"
+                          variant={monthsCount === m && !isCustomMonths ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setMonthsCount(m);
+                            setIsCustomMonths(false);
+                          }}
+                        >
+                          {m} Mes{m > 1 ? "es" : ""}
+                        </Button>
+                      ))}
+                      <Button
+                        type="button"
+                        variant={isCustomMonths ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setIsCustomMonths(true)}
+                      >
+                        Personalizado
+                      </Button>
+                    </div>
+
+                    {isCustomMonths && (
+                      <div className="mt-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="Ingrese número de meses"
+                          value={monthsCount}
+                          onChange={(e) => setMonthsCount(Math.max(1, parseInt(e.target.value, 10)))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Preview: Next estimated due date when paying N months */}
+                {paymentMode === "full" && formData.plan_id && !isEditing && !isPayingRemaining && monthsCount > 0 && (() => {
+                  const selectedPlan = plans.find(p => p.id === formData.plan_id);
+                  if (!selectedPlan) return null;
+                  const client = clients.find(c => c.id === formData.client_id);
+                  const joinDate = client?.join_date || new Date().toISOString().split("T")[0];
+                  const anchorDay = parseInt(joinDate.split("-")[2], 10) || 1;
+                  const today = new Date();
+                  const y = today.getFullYear();
+                  const m = today.getMonth() + monthsCount;
+                  const d = Math.min(anchorDay, new Date(y, m + 1, 0).getDate());
+                  const previewDate = new Date(y, m, d);
+                  const fmt = previewDate.toISOString().split("T")[0];
+                  return (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                      <strong>Próximo vencimiento estimado:</strong> {fmt} (después de {monthsCount} mes{monthsCount > 1 ? "es" : ""})
+                    </div>
+                  );
+                })()}
+
                 {paymentMode === "full" && formData.plan_id && !isEditing && !isPayingRemaining && (
                   <div className="space-y-3 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <Label className="text-sm font-semibold text-green-900 dark:text-green-100 flex items-center gap-2">
                       <span className="text-lg">🏷️</span>
                       Aplicar Descuento
                     </Label>
-                    
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label htmlFor="discount_type" className="text-xs font-medium">
@@ -2100,7 +2196,8 @@ export function PaymentsTable({
                     {/* Mostrar información del descuento aplicado */}
                     {formData.discount_type && formData.discount_value && parseFloat(formData.discount_value) > 0 && (() => {
                       const planPrice = getPlanPrice(formData.plan_id);
-                      const baseAmount = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
+                      const months = Math.max(1, parseInt(monthsCount, 10) || 1);
+                      const baseAmount = planPrice * months + (isRegisterMode && includeInscription ? INSCRIPTION_PRICE : 0);
                       const discountValue = parseFloat(formData.discount_value) || 0;
                       let discountAmount = 0;
                       if (formData.discount_type === "percentage") {
