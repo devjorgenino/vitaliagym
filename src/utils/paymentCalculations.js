@@ -639,6 +639,8 @@ export async function updateClientStatus(clientId, planId) {
       newStatus = 'activo';
     } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
       newStatus = 'inactivo';
+    } else if (cycles < 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+      newStatus = 'pendiente';
     } else {
       newStatus = 'inactivo';
     }
@@ -735,6 +737,8 @@ export async function fixAllClientStatuses() {
           newStatus = 'activo';
         } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
           newStatus = 'inactivo';
+        } else if (cycles < 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+          newStatus = 'pendiente';
         } else {
           newStatus = 'inactivo';
         }

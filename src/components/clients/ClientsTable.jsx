@@ -243,17 +243,19 @@ export function ClientsTable() {
       ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
-    // Si el pago total es mayor o igual al precio total, está pagado
-    if (totalPaidSoFar >= totalPrice - 0.001) {
+    // Calcular cuánto se ha pagado en el ciclo actual
+    const currentCyclePaid = totalPaidSoFar % totalPrice;
+    const currentRemaining = totalPrice - currentCyclePaid;
+    const isFullyPaid = currentRemaining < 0.001;
+
+    // Si ya se completó el ciclo actual, no hay restante que mostrar
+    if (isFullyPaid) {
       return { isFullyPaid: true, remainingFormatted: "0.00" };
     }
 
-    const currentRemaining = totalPrice - totalPaidSoFar;
-    const isFullyPaid = currentRemaining < 0.001;
-
     return {
-      isFullyPaid: isFullyPaid,
-      remainingFormatted: (isFullyPaid ? 0 : currentRemaining).toFixed(2),
+      isFullyPaid: false,
+      remainingFormatted: currentRemaining.toFixed(2),
     };
   };
 
@@ -282,12 +284,14 @@ export function ClientsTable() {
       ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
-    // Si el pago total es mayor o igual al precio total, no hay restante
-    if (totalPaid >= totalPrice - 0.001) {
+    // Calcular cuánto se ha pagado en el ciclo actual
+    const currentCyclePaid = totalPaid % totalPrice;
+    const remainingAmount = totalPrice - currentCyclePaid;
+
+    // Si ya completó el ciclo actual, no hay restante
+    if (remainingAmount < 0.001) {
       return null;
     }
-
-    const remainingAmount = totalPrice - totalPaid;
 
     if (remainingAmount > 0) {
       // Encontrar el último pago para asociarlo con el saldo restante

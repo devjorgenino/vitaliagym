@@ -511,14 +511,22 @@ export function PaymentsTable({
       (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
     );
 
-    // Calcular el total pagado hasta ahora
+    // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
     const totalPaidSoFar = allClientPayments.reduce(
       (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
       0,
     );
 
-    // Si el pago total es mayor o igual al precio total, está pagado
-    if (totalPaidSoFar >= totalPrice - 0.001) {
+    // Calcular cuánto se ha pagado en el ciclo actual
+    // Usamos el operador % para obtener el remanente del total pagado respecto al precio del plan
+    const currentCyclePaid = totalPaidSoFar % totalPrice;
+
+    // El restante para este ciclo es el precio total menos lo pagado en este ciclo
+    const currentRemaining = totalPrice - currentCyclePaid;
+    const isFullyPaid = currentRemaining < 0.001;
+
+    // Si el pago total del ciclo actual es mayor o igual al precio total, está pagado
+    if (isFullyPaid) {
       return {
         planPrice: totalPrice,
         totalPaid: totalPaidSoFar,
@@ -529,16 +537,13 @@ export function PaymentsTable({
       };
     }
 
-    const currentRemaining = totalPrice - totalPaidSoFar;
-    const isFullyPaid = currentRemaining < 0.001;
-
     return {
       planPrice: totalPrice,
       totalPaid: totalPaidSoFar,
       currentPayment: parseFloat(payment.amount_usd) || 0,
-      remaining: isFullyPaid ? 0 : currentRemaining,
-      isFullyPaid: isFullyPaid,
-      remainingFormatted: (isFullyPaid ? 0 : currentRemaining).toFixed(2),
+      remaining: currentRemaining,
+      isFullyPaid: false,
+      remainingFormatted: currentRemaining.toFixed(2),
     };
   };
 
@@ -564,8 +569,9 @@ export function PaymentsTable({
       0,
     );
 
-    // Calcular el restante ANTES de hacer un nuevo pago
-    const remainingForNewPayment = Math.max(0, totalPrice - totalPaidBefore);
+    // Calcular el restante del ciclo actual ANTES de hacer un nuevo pago
+    const currentCyclePaidBefore = totalPaidBefore % totalPrice;
+    const remainingForNewPayment = Math.max(0, totalPrice - currentCyclePaidBefore);
 
     return {
       planPrice: totalPrice,
