@@ -19,6 +19,7 @@ import {
 import {
   auditNextPaymentDates,
   recalculateNextPaymentDate,
+  getEffectiveAmount,
 } from "../../utils/paymentCalculations";
 import { toast } from "sonner";
 import {
@@ -157,8 +158,9 @@ export function ClientsTable() {
   };
 
   // Calcular el status del cliente basado en sus pagos
-  // Activo: tiene días restantes positivos o ha pagado su membresía
-  // Inactivo: tiene días vencidos (negativos)
+  // Activo: tiene días restantes positivos o ha pagado su membresía completa
+  // Pendiente: tiene pagos parciales (pago fraccionado) pero no completó el ciclo
+  // Inactivo: tiene días vencidos (negativos) o no tiene pagos
   const getClientStatus = (client) => {
     if (!client || !client.plan_id) {
       return { status: "inactivo", label: "Inactivo" };
@@ -195,18 +197,21 @@ export function ClientsTable() {
     }
 
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
-    // Calcular el ciclo actual de pago
-    let paidForCurrentCycle = totalPaidSoFar % planPrice;
+    // Calcular el ciclo actual de pago (considerar inscripción si está pagada)
+    const hasEnrollmentPaid = client.enrollment_paid === true;
+    const totalPrice = hasEnrollmentPaid ? planPrice + INSCRIPTION_PRICE : planPrice;
+
+    let paidForCurrentCycle = totalPaidSoFar % totalPrice;
 
     if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
-      paidForCurrentCycle = planPrice;
+      paidForCurrentCycle = totalPrice;
     }
 
-    const currentRemaining = planPrice - paidForCurrentCycle;
+    const currentRemaining = totalPrice - paidForCurrentCycle;
     const isFullyPaid = currentRemaining < 0.001;
 
     // Si pagó completo el ciclo actual, está activo
@@ -214,7 +219,12 @@ export function ClientsTable() {
       return { status: "activo", label: "Activo" };
     }
 
-    // Por defecto, si tiene pagos pero no está al día, inactivo
+    // Si tiene pagos parciales (pago fraccionado), está pendiente
+    if (totalPaidSoFar > 0 && currentRemaining > 0) {
+      return { status: "pendiente", label: "Pendiente" };
+    }
+
+    // Por defecto, si no tiene pagos, está inactivo
     return { status: "inactivo", label: "Inactivo" };
   };
 
@@ -233,7 +243,7 @@ export function ClientsTable() {
     );
 
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
@@ -244,7 +254,10 @@ export function ClientsTable() {
       : planPrice;
 
     // Calcular cuánto se ha pagado en el ciclo actual
-    const currentCyclePaid = totalPaidSoFar % totalPrice;
+    let currentCyclePaid = totalPaidSoFar % totalPrice;
+    if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
+      currentCyclePaid = totalPrice;
+    }
     const currentRemaining = totalPrice - currentCyclePaid;
     const isFullyPaid = currentRemaining < 0.001;
 
@@ -274,7 +287,7 @@ export function ClientsTable() {
 
     const planPrice = getPlanPrice(client.plan_id);
     const totalPaid = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
@@ -285,7 +298,10 @@ export function ClientsTable() {
       : planPrice;
 
     // Calcular cuánto se ha pagado en el ciclo actual
-    const currentCyclePaid = totalPaid % totalPrice;
+    let currentCyclePaid = totalPaid % totalPrice;
+    if (currentCyclePaid < 0.001 && totalPaid > 0) {
+      currentCyclePaid = totalPrice;
+    }
     const remainingAmount = totalPrice - currentCyclePaid;
 
     // Si ya completó el ciclo actual, no hay restante

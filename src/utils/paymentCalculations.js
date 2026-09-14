@@ -17,6 +17,28 @@
 import client from '../api/client';
 
 /**
+ * Calcula el monto efectivo cubierto por un pago considerando descuentos aplicados.
+ * Si un cliente pagó $21.25 con un descuento del 15% por un plan de $25,
+ * el monto efectivo cubierto es de $25.00.
+ *
+ * @param {Object} payment - Registro de pago
+ * @returns {number} - Monto efectivo en USD
+ */
+export function getEffectiveAmount(payment) {
+  if (!payment) return 0;
+  let amount = parseFloat(payment.amount_usd) || 0;
+  if (payment.discount_type === 'percentage' && payment.discount_value) {
+    const disc = parseFloat(payment.discount_value) || 0;
+    if (disc > 0 && disc < 100) {
+      amount = amount / (1 - disc / 100);
+    }
+  } else if (payment.discount_type === 'fixed' && payment.discount_value) {
+    amount += parseFloat(payment.discount_value) || 0;
+  }
+  return Math.round(amount * 100) / 100;
+}
+
+/**
  * Determina el campo de monto a usar para los pagos de un plan según su moneda base.
  * - Plan en USD  → acumulamos `amount_usd` de los pagos.
  * - Plan en BS   → acumulamos `amount_bs` de los pagos (bolívares fijos históricos,
@@ -129,13 +151,13 @@ export function addMonthsToDate(baseDate, monthsToAdd) {
  *
  * @param {string} joinDate        - Fecha de ingreso del cliente (YYYY-MM-DD)
  * @param {Array}  clientPayments  - Pagos del plan actual del cliente
+ * @param {Object} plan            - Plan del cliente
  * @param {number} planPrice       - Precio del plan mensual
  * @returns {string|null}          - Próxima fecha de pago calculada (YYYY-MM-DD)
  */
 export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice) {
   if (!joinDate || planPrice <= 0) return null;
   const anchorDay = parseInt(joinDate.split('-')[2], 10);
-  const amountField = getPaymentAmountField(plan);
 
   if (!clientPayments || clientPayments.length === 0) {
     return addMonthsPreservingAnchor(joinDate, 1, anchorDay);
@@ -150,7 +172,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
   let accumulatedBalance = 0;
 
   for (const p of sortedPayments) {
-    const amount = parseFloat(p[amountField]) || 0;
+    const amount = getEffectiveAmount(p);
     if (amount <= 0) continue;
 
     accumulatedBalance += amount;
@@ -252,7 +274,7 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     // 2. Pagos del cliente para su plan actual, ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, payment_date')
+      .select('id, amount_usd, discount_type, discount_value, payment_date')
       .eq('client_id', clientId)
       .eq('plan_id', clientData.plan_id)
       .order('payment_date', { ascending: true });
@@ -310,7 +332,7 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
 /**
  * Recalcula las fechas de próximo pago para TODOS los clientes.
  * Útil para mantenimiento o migración de datos.
- * 
+ *
  * @returns {Promise<{success: boolean, updated: number, total: number, errors: string[]}>}
  */
 export async function recalculateAllNextPaymentDates() {
@@ -319,8 +341,8 @@ export async function recalculateAllNextPaymentDates() {
     const { data: allClients, error: fetchError } = await client
       .from('clients')
       .select(`
-        id, 
-        join_date, 
+        id,
+        join_date,
         next_payment_date,
         plan_id,
         plans (
@@ -338,7 +360,7 @@ export async function recalculateAllNextPaymentDates() {
     // 2. Obtener todos los pagos ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_date')
+      .select('id, client_id, plan_id, amount_usd, discount_type, discount_value, payment_date')
       .order('payment_date', { ascending: true });
 
     if (paymentsError) throw paymentsError;
@@ -389,7 +411,7 @@ export async function recalculateAllNextPaymentDates() {
     if (updates.length > 0) {
       const batchSize = 50;
       let updatedCount = 0;
-      
+
       for (let i = 0; i < updates.length; i += batchSize) {
         const chunk = updates.slice(i, i + batchSize);
         await Promise.all(chunk.map(async (u) => {
@@ -397,7 +419,7 @@ export async function recalculateAllNextPaymentDates() {
             .from('clients')
             .update({ next_payment_date: u.next_payment_date })
             .eq('id', u.id);
-          
+
           if (error) {
             errors.push(`Error actualizando ${u.id}: ${error.message}`);
           } else {
@@ -405,12 +427,12 @@ export async function recalculateAllNextPaymentDates() {
           }
         }));
       }
-      
-      return { 
-        success: errors.length === 0, 
-        updated: updatedCount, 
-        total: allClients.length, 
-        errors 
+
+      return {
+        success: errors.length === 0,
+        updated: updatedCount,
+        total: allClients.length,
+        errors
       };
     }
 
@@ -463,7 +485,7 @@ export async function auditNextPaymentDates() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_date')
+      .select('id, client_id, plan_id, amount_usd, discount_type, discount_value, payment_date')
       .order('payment_date', { ascending: true });
 
     if (paymentsError) throw paymentsError;
@@ -486,7 +508,10 @@ export async function auditNextPaymentDates() {
       const clientPayments = (allPayments || []).filter(
         p => p.client_id === c.id && p.plan_id === c.plan_id
       );
-      const totalPaid = sumPaymentsInPlanCurrency(clientPayments, c.plans);
+      const totalPaid = clientPayments.reduce(
+        (sum, p) => sum + getEffectiveAmount(p),
+        0
+      );
       const cycles   = Math.floor(totalPaid / planPrice);
       const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice);
 
@@ -550,7 +575,7 @@ export async function fixAuditDiscrepancies(discrepancies) {
 /**
  * Calcula los días restantes hasta el próximo pago.
  * Retorna número negativo si está vencido.
- * 
+ *
  * @param {string} nextPaymentDate - Fecha del próximo pago (YYYY-MM-DD)
  * @returns {number} - Días restantes (negativo si vencido)
  */
@@ -587,7 +612,7 @@ export function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
 
 /**
  * Obtiene el color del estado de pago según días restantes.
- * 
+ *
  * @param {number} daysLeft - Días restantes
  * @returns {string} - Clase CSS de color
  */
@@ -643,7 +668,7 @@ export async function updateClientStatus(clientId, planId) {
 
     const { data: payments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, payment_date')
+      .select('id, amount_usd, discount_type, discount_value, payment_date')
       .eq('client_id', clientId)
       .eq('plan_id', planId);
 
@@ -652,22 +677,39 @@ export async function updateClientStatus(clientId, planId) {
       return { success: false, error: paymentsError };
     }
 
-    const totalPaid = sumPaymentsInPlanCurrency(payments || [], clientData.plans);
+    // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
+    const totalPaid = (payments || []).reduce(
+      (sum, p) => sum + getEffectiveAmount(p),
+      0
+    );
 
-    const cycles = Math.floor(totalPaid / planPrice);
+    // Calcular cuánto se ha pagado en el ciclo actual.
+    // Si el total pagado es 0 o múltiplo exacto del planPrice, está al día o inactivo.
+    // Si hay un sobrante (totalPaid % planPrice > 0), está pendiente.
+    let paidForCurrentCycle = totalPaid % planPrice;
+    if (paidForCurrentCycle < 0.001 && totalPaid > 0) {
+      paidForCurrentCycle = planPrice;
+    }
+
+    const currentRemaining = planPrice - paidForCurrentCycle;
+    const isFullyPaid = currentRemaining < 0.001;
     const daysUntilPayment = calculateDaysUntilPayment(
       clientData.next_payment_date,
       clientData.join_date
     );
 
     let newStatus;
-    if (cycles >= 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+    if (isFullyPaid && daysUntilPayment !== null && daysUntilPayment >= 0) {
+      // Si pagó el ciclo completo y no está vencido
       newStatus = 'activo';
-    } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
-      newStatus = 'inactivo';
-    } else if (cycles < 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+    } else if (totalPaid > 0 && !isFullyPaid) {
+      // Tiene pagos parciales (pago fraccionado)
       newStatus = 'pendiente';
+    } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
+      // Pasó la fecha de pago y no está al día
+      newStatus = 'inactivo';
     } else {
+      // Sin pagos o estado no claro
       newStatus = 'inactivo';
     }
 
@@ -704,7 +746,7 @@ export async function updateClientStatus(clientId, planId) {
 /**
  * Corrige el status de TODOS los clientes basándose en sus pagos.
  * Útil para arreglar clientes existentes con status incorrecto.
- * 
+ *
  * @returns {Promise<{success: boolean, updated: number, total: number, errors: string[]}>}
  */
 export async function fixAllClientStatuses() {
@@ -731,7 +773,7 @@ export async function fixAllClientStatuses() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs');
+      .select('id, client_id, plan_id, amount_usd, discount_type, discount_value');
 
     if (paymentsError) throw paymentsError;
 
@@ -748,7 +790,10 @@ export async function fixAllClientStatuses() {
           p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
         );
 
-        const totalPaid = sumPaymentsInPlanCurrency(clientPayments, clientData.plans);
+        const totalPaid = clientPayments.reduce(
+          (sum, p) => sum + getEffectiveAmount(p),
+          0
+        );
 
         const cycles = Math.floor(totalPaid / planPrice);
         const daysUntilPayment = calculateDaysUntilPayment(
@@ -761,6 +806,8 @@ export async function fixAllClientStatuses() {
           newStatus = 'activo';
         } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
           newStatus = 'inactivo';
+        } else if (totalPaid > 0 && totalPaid % planPrice > 0.001) {
+          newStatus = 'pendiente';
         } else if (cycles < 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
           newStatus = 'pendiente';
         } else {
@@ -782,7 +829,7 @@ export async function fixAllClientStatuses() {
 
     if (updates.length > 0) {
       let updatedCount = 0;
-      
+
       for (const u of updates) {
         const { error } = await client
           .from('clients')
@@ -795,12 +842,12 @@ export async function fixAllClientStatuses() {
           updatedCount++;
         }
       }
-      
-      return { 
-        success: errors.length === 0, 
-        updated: updatedCount, 
-        total: allClients.length, 
-        errors 
+
+      return {
+        success: errors.length === 0,
+        updated: updatedCount,
+        total: allClients.length,
+        errors
       };
     }
 

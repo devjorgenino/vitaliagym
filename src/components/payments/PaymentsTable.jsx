@@ -8,7 +8,7 @@ import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, formatDateTime, matchesSearch } from "@/lib/utils";
 import { getPlanCurrency, getPlanPriceInBS, getPlanPriceInUSD } from "@/lib/planUtils";
 import { DatePicker } from "@/components/ui/date-picker";
-import { addMonthsPreservingAnchor } from "@/utils/paymentCalculations";
+import { addMonthsPreservingAnchor, getEffectiveAmount } from "@/utils/paymentCalculations";
 
 const INSCRIPTION_PRICE = 5;
 import {
@@ -204,6 +204,7 @@ export function PaymentsTable({
   const [selectedPlan, setSelectedPlan] = useState("");
   const [selectedPaymentType, setSelectedPaymentType] = useState("");
   const [selectedBank, setSelectedBank] = useState("");
+  const [showOnlyRemaining, setShowOnlyRemaining] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [displayPayments, setDisplayPayments] = useState([]);
@@ -360,7 +361,7 @@ export function PaymentsTable({
         );
 
         const totalPaid = allClientPayments.reduce(
-          (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+          (sum, p) => sum + getEffectiveAmount(p),
           0,
         );
 
@@ -470,7 +471,7 @@ export function PaymentsTable({
         (p) => p.client_id === formData.client_id && p.plan_id === planId,
       );
       totalPaidSoFar = allClientPayments.reduce(
-        (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+        (sum, p) => sum + getEffectiveAmount(p),
         0,
       );
     }
@@ -494,7 +495,7 @@ export function PaymentsTable({
       (p) => p.client_id === clientId && p.plan_id === planId,
     );
     const totalPaid = clientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
     return totalPaid;
@@ -525,13 +526,16 @@ export function PaymentsTable({
 
     // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
     // Calcular cuánto se ha pagado en el ciclo actual
     // Usamos el operador % para obtener el remanente del total pagado respecto al precio del plan
-    const currentCyclePaid = totalPaidSoFar % totalPrice;
+    let currentCyclePaid = totalPaidSoFar % totalPrice;
+    if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
+      currentCyclePaid = totalPrice;
+    }
 
     // El restante para este ciclo es el precio total menos lo pagado en este ciclo
     const currentRemaining = totalPrice - currentCyclePaid;
@@ -577,7 +581,7 @@ export function PaymentsTable({
 
     // Calcular el total pagado ANTES del pago actual
     const totalPaidBefore = previousPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
@@ -601,7 +605,7 @@ export function PaymentsTable({
     );
 
     return allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
   };
@@ -802,13 +806,20 @@ export function PaymentsTable({
         matchesDateTo = new Date(payment.payment_date) <= toDate;
       }
 
+      // Filtrar por pago restante
+      let matchesRemaining = true;
+      if (showOnlyRemaining) {
+        matchesRemaining = !calculatePaymentStatus(payment).isFullyPaid;
+      }
+
       return (
         matchesSearchTerm &&
         matchesPlan &&
         matchesPaymentType &&
         matchesBank &&
         matchesDateFrom &&
-        matchesDateTo
+        matchesDateTo &&
+        matchesRemaining
       );
     }).sort((a, b) => {
       const aValue = new Date(a.payment_date).getTime();
@@ -828,6 +839,7 @@ export function PaymentsTable({
     selectedBank,
     dateFrom,
     dateTo,
+    showOnlyRemaining,
     sortField,
     sortDirection,
   ]);
@@ -855,7 +867,7 @@ export function PaymentsTable({
           p.client_id === formData.client_id && p.plan_id === formData.plan_id,
       );
       const totalPaid = allClientPayments.reduce(
-        (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+        (sum, p) => sum + getEffectiveAmount(p),
         0,
       );
       const planPrice = getPlanPrice(formData.plan_id);
@@ -953,7 +965,7 @@ export function PaymentsTable({
   const handleOpenEditDialog = useCallback((payment) => {
     setSelectedPayment(payment);
     const isFullPayment =
-      payment.amount_usd === parseFloat(payment.plans?.price || 0);
+      (parseFloat(payment.amount_usd) || 0) >= (parseFloat(payment.plans?.price || 0) - 0.001);
     setPaymentMode(isFullPayment ? "full" : "partial");
     // Parse phone to separate operator and number
     const { operator, number } = parsePhone(payment.phone_payment || "");
@@ -973,8 +985,13 @@ export function PaymentsTable({
       discount_type: payment.discount_type || "",
       discount_value: payment.discount_value ? payment.discount_value.toString() : "",
     });
+    // Cuando se entra en edición, intentar calcular si hubo descuento para restaurar descuento
+    // ... ya tenemos discount_type y discount_value en formData ...
+
     setIsEditing(true);
     setIsDialogOpen(true);
+    // Establecer el modo basado en la lógica completa vs parcial
+    // Aquí es donde puede estar el problema cuando cambias modos luego
     setInitialLoadComplete(true);
   }, []);
 
@@ -1057,13 +1074,13 @@ export function PaymentsTable({
       }));
     } else if (mode === "full" && formData.plan_id) {
       // Resetear al monto completo (plan + inscripción si aplica)
-      let fullAmount = currentPaymentInfo.remainingAmount;
-      
+      const planPrice = getPlanPrice(formData.plan_id);
+      let fullAmount = planPrice;
+
       if (isRegisterMode && includeInscription) {
-        const planPrice = getPlanPrice(formData.plan_id);
         fullAmount = planPrice + INSCRIPTION_PRICE;
       }
-      
+
       setFormData((prev) => ({
         ...prev,
         amount_usd: fullAmount > 0 ? fullAmount.toString() : "",
@@ -1193,7 +1210,7 @@ export function PaymentsTable({
       (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
     );
     const totalPaid = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
     const planPrice = getPlanPrice(payment.plan_id);
@@ -1304,6 +1321,7 @@ export function PaymentsTable({
     setSelectedBank("");
     setDateFrom("");
     setDateTo("");
+    setShowOnlyRemaining(false);
     resetPage();
   };
 
@@ -1317,6 +1335,7 @@ export function PaymentsTable({
     selectedBank,
     dateFrom,
     dateTo,
+    showOnlyRemaining,
     resetPage,
   ]);
 
@@ -1332,6 +1351,7 @@ export function PaymentsTable({
     selectedBank,
     dateFrom,
     dateTo,
+    showOnlyRemaining ? "true" : "",
   ].filter((filter) => filter !== "").length;
 
   if (loading && displayPayments.length === 0) {
@@ -1570,6 +1590,20 @@ export function PaymentsTable({
                 className="px-1.5 sm:px-2 py-1 border rounded text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Fecha hasta"
               />
+            </div>
+
+            {/* Filtro pagos restantes */}
+            <div className="flex items-center gap-2 mr-2">
+              <input
+                type="checkbox"
+                id="showRemaining"
+                checked={showOnlyRemaining}
+                onChange={(e) => setShowOnlyRemaining(e.target.checked)}
+                className="h-4 w-4 bg-background border-input rounded focus:ring-2"
+              />
+              <label htmlFor="showRemaining" className="text-xs sm:text-sm font-medium cursor-pointer">
+                Pagos Fraccionados
+              </label>
             </div>
 
             {/* Botón para limpiar filtros */}
@@ -2804,6 +2838,12 @@ export function PaymentsTable({
                   <p className="text-muted-foreground">Monto (USD)</p>
                   <p className="font-medium text-green-600">
                     ${parseFloat(detailsPayment.amount_usd || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Restante</p>
+                  <p className={`font-medium ${calculatePaymentStatus(detailsPayment).isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                    ${calculatePaymentStatus(detailsPayment).remainingFormatted}
                   </p>
                 </div>
                 <div>
