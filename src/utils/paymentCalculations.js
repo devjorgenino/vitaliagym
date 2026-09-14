@@ -17,6 +17,32 @@
 import client from '../api/client';
 
 /**
+ * Determina el campo de monto a usar para los pagos de un plan según su moneda base.
+ * - Plan en USD  → acumulamos `amount_usd` de los pagos.
+ * - Plan en BS   → acumulamos `amount_bs` de los pagos (bolívares fijos históricos,
+ *   inmunes a la fluctuación de la tasa BCV).
+ *
+ * @param {Object} plan - Plan con posible campo `currency` ('USD' | 'BS')
+ * @returns {'amount_usd'|'amount_bs'}
+ */
+function getPaymentAmountField(plan) {
+  const currency = (plan?.currency || 'USD').toUpperCase();
+  return currency === 'BS' ? 'amount_bs' : 'amount_usd';
+}
+
+/**
+ * Suma los pagos en la moneda base del plan.
+ * @param {Array} clientPayments - Pagos del cliente
+ * @param {Object} plan - Plan del cliente
+ * @returns {number} Total pagado en la moneda base del plan
+ */
+export function sumPaymentsInPlanCurrency(clientPayments, plan) {
+  if (!clientPayments || clientPayments.length === 0) return 0;
+  const field = getPaymentAmountField(plan);
+  return clientPayments.reduce((sum, p) => sum + (parseFloat(p[field]) || 0), 0);
+}
+
+/**
  * Obtiene la fecha YYYY-MM-DD para un año y mes específicos respetando el día ancla.
  * Si el mes destino tiene menos días que el ancla (ej: 31 en febrero o septiembre),
  * se ajusta al último día disponible de ese mes.
@@ -106,9 +132,10 @@ export function addMonthsToDate(baseDate, monthsToAdd) {
  * @param {number} planPrice       - Precio del plan mensual
  * @returns {string|null}          - Próxima fecha de pago calculada (YYYY-MM-DD)
  */
-export function computeNextPaymentDate(joinDate, clientPayments, planPrice) {
+export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice) {
   if (!joinDate || planPrice <= 0) return null;
   const anchorDay = parseInt(joinDate.split('-')[2], 10);
+  const amountField = getPaymentAmountField(plan);
 
   if (!clientPayments || clientPayments.length === 0) {
     return addMonthsPreservingAnchor(joinDate, 1, anchorDay);
@@ -123,7 +150,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, planPrice) {
   let accumulatedBalance = 0;
 
   for (const p of sortedPayments) {
-    const amount = parseFloat(p.amount_usd) || 0;
+    const amount = parseFloat(p[amountField]) || 0;
     if (amount <= 0) continue;
 
     accumulatedBalance += amount;
@@ -203,14 +230,15 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
         plan_id,
         plans (
           id,
-          price
+          price,
+          currency
         )
       `)
       .eq('id', clientId)
       .single();
 
     if (clientError || !clientData) {
-      console.error('Error fetching client for recalculation:', clientError);
+      console.error('Error fetching client for recalculation: ', clientError);
       return { success: false, error: clientError };
     }
 
@@ -224,7 +252,7 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     // 2. Pagos del cliente para su plan actual, ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, payment_date')
+      .select('id, amount_usd, amount_bs, payment_date')
       .eq('client_id', clientId)
       .eq('plan_id', clientData.plan_id)
       .order('payment_date', { ascending: true });
@@ -238,6 +266,7 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     const newNextPaymentDate = computeNextPaymentDate(
       clientData.join_date,
       allPayments || [],
+      clientData.plans,
       planPrice
     );
 
@@ -296,7 +325,8 @@ export async function recalculateAllNextPaymentDates() {
         plan_id,
         plans (
           id,
-          price
+          price,
+          currency
         )
       `);
 
@@ -308,7 +338,7 @@ export async function recalculateAllNextPaymentDates() {
     // 2. Obtener todos los pagos ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, payment_date')
+      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_date')
       .order('payment_date', { ascending: true });
 
     if (paymentsError) throw paymentsError;
@@ -322,10 +352,10 @@ export async function recalculateAllNextPaymentDates() {
         errors.push(`Cliente ${clientData.id}: sin fecha de ingreso`);
         continue;
       }
-      
+
       try {
         const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
-        
+
         if (planPrice <= 0) {
           errors.push(`Cliente ${clientData.id}: precio de plan inválido`);
           continue;
@@ -340,6 +370,7 @@ export async function recalculateAllNextPaymentDates() {
         const newNextPaymentDate = computeNextPaymentDate(
           clientData.join_date,
           clientPayments,
+          clientData.plans,
           planPrice
         );
 
@@ -422,7 +453,7 @@ export async function auditNextPaymentDates() {
         join_date,
         next_payment_date,
         plan_id,
-        plans ( id, price )
+        plans ( id, price, currency )
       `);
 
     if (fetchError) throw fetchError;
@@ -432,7 +463,7 @@ export async function auditNextPaymentDates() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, payment_date')
+      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_date')
       .order('payment_date', { ascending: true });
 
     if (paymentsError) throw paymentsError;
@@ -455,12 +486,9 @@ export async function auditNextPaymentDates() {
       const clientPayments = (allPayments || []).filter(
         p => p.client_id === c.id && p.plan_id === c.plan_id
       );
-      const totalPaid = clientPayments.reduce(
-        (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-        0
-      );
+      const totalPaid = sumPaymentsInPlanCurrency(clientPayments, c.plans);
       const cycles   = Math.floor(totalPaid / planPrice);
-      const expected = computeNextPaymentDate(c.join_date, clientPayments, planPrice);
+      const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice);
 
       if (expected !== c.next_payment_date) {
         discrepancies.push({
@@ -595,14 +623,15 @@ export async function updateClientStatus(clientId, planId) {
         plan_id,
         plans (
           id,
-          price
+          price,
+          currency
         )
       `)
       .eq('id', clientId)
       .single();
 
     if (clientError || !clientData) {
-      console.error('Error fetching client for status update:', clientError);
+      console.error('Error fetching client for status update: ', clientError);
       return { success: false, error: clientError };
     }
 
@@ -614,7 +643,7 @@ export async function updateClientStatus(clientId, planId) {
 
     const { data: payments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, payment_date')
+      .select('id, amount_usd, amount_bs, payment_date')
       .eq('client_id', clientId)
       .eq('plan_id', planId);
 
@@ -623,10 +652,7 @@ export async function updateClientStatus(clientId, planId) {
       return { success: false, error: paymentsError };
     }
 
-    const totalPaid = (payments || []).reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-      0
-    );
+    const totalPaid = sumPaymentsInPlanCurrency(payments || [], clientData.plans);
 
     const cycles = Math.floor(totalPaid / planPrice);
     const daysUntilPayment = calculateDaysUntilPayment(
@@ -693,7 +719,8 @@ export async function fixAllClientStatuses() {
         plan_id,
         plans (
           id,
-          price
+          price,
+          currency
         )
       `);
 
@@ -704,7 +731,7 @@ export async function fixAllClientStatuses() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd');
+      .select('id, client_id, plan_id, amount_usd, amount_bs');
 
     if (paymentsError) throw paymentsError;
 
@@ -714,17 +741,14 @@ export async function fixAllClientStatuses() {
     for (const clientData of allClients) {
       try {
         const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
-        
+
         if (planPrice <= 0) continue;
 
         const clientPayments = (allPayments || []).filter(
           p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
         );
 
-        const totalPaid = clientPayments.reduce(
-          (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-          0
-        );
+        const totalPaid = sumPaymentsInPlanCurrency(clientPayments, clientData.plans);
 
         const cycles = Math.floor(totalPaid / planPrice);
         const daysUntilPayment = calculateDaysUntilPayment(

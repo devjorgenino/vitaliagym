@@ -6,6 +6,7 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, formatDateTime, matchesSearch } from "@/lib/utils";
+import { getPlanCurrency, getPlanPriceInBS, getPlanPriceInUSD } from "@/lib/planUtils";
 import { DatePicker } from "@/components/ui/date-picker";
 import { addMonthsPreservingAnchor } from "@/utils/paymentCalculations";
 
@@ -29,6 +30,10 @@ import {
   FileText,
   Eye,
   Copy,
+  Edit2Icon,
+  CheckIcon,
+  X,
+  CreditCard as BCVCardIcon,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -173,6 +178,7 @@ export function PaymentsTable({
     discount_value: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingRate, setIsEditingRate] = useState(false);
   const [partialValidationError, setPartialValidationError] = useState("");
 
   // Estados para modo de pago restante
@@ -270,13 +276,18 @@ export function PaymentsTable({
       // Modo normal: solo preseleccionar cliente y abrir modal
       const clientPlan = plans.find((p) => p.id === preselectedClient.plan_id);
       let planPrice = clientPlan ? parseFloat(clientPlan.price) || 0 : 0;
+      // Si el plan es en Bs, la base de cálculo del monto es el precio en Bs
+      const planIsBS = getPlanCurrency(clientPlan) === "BS";
 
       // Si el cliente ya tiene inscripción pagada, el precio es solo el plan
       // Si NO tiene inscripción pagada Y viene del registro, se suma la inscripción
       const hasEnrollmentPaid = preselectedClient?.enrollment_paid === true;
       if (!hasEnrollmentPaid && isRegisterMode && initialAmount) {
         // Modo registro sin inscripción pagada: sumar inscripción
-        planPrice = planPrice + INSCRIPTION_PRICE;
+        // La inscripción es $5 USD: para planes en Bs se convierte a la moneda base
+        planPrice = planIsBS
+          ? planPrice + INSCRIPTION_PRICE * (rate || 1)
+          : planPrice + INSCRIPTION_PRICE;
         setIncludeInscription(true);
       } else {
         // Ya tiene inscripción pagada o no es modo registro: solo el plan
@@ -284,14 +295,15 @@ export function PaymentsTable({
       }
 
       // Si es modo registro y tiene amount en URL, usar ese monto
+      // Plan en BS: el monto base es el precio fijo en Bs; el USD se calcula con la tasa activa
       const amountUSD = planPrice > 0 ? planPrice.toFixed(2) : "";
       const amountBS = planPrice > 0 ? (planPrice * (rate || 1)).toFixed(2) : "";
 
       setFormData({
         client_id: preselectedClient.id,
         plan_id: preselectedClient.plan_id || "",
-        amount_usd: amountUSD,
-        amount_bs: amountBS,
+        amount_usd: planIsBS ? (rate ? (planPrice / rate).toFixed(2) : "") : amountUSD,
+        amount_bs: planIsBS ? planPrice.toFixed(2) : amountBS,
         exchange_rate: rate || 1,
         payment_date: new Date().toISOString().split("T")[0],
         reference: "",
@@ -2384,18 +2396,57 @@ export function PaymentsTable({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="exchange_rate" className="text-sm font-medium">
-                          Tasa de Cambio <span className="text-xs">(Bs/$)</span>
+                        <Label
+                          htmlFor="exchange_rate"
+                          className="text-sm font-medium flex items-center justify-between"
+                        >
+                          Tasa de Cambio (Bs/$)
+                          <div className="flex items-center gap-1 bg-secondary rounded-full px-2 py-0.5 text-xs text-muted-foreground mr-1">
+                            <BCVCardIcon className="h-3 w-3" />
+                            {parseFloat(formData.exchange_rate) === parseFloat(rate)
+                              ? "Auto"
+                              : "Manual"}
+                          </div>
                         </Label>
-                        <Input
-                          id="exchange_rate"
-                          type="number"
-                          step="0.0001"
-                          name="exchange_rate"
-                          value={formData.exchange_rate}
-                          onChange={handleInputChange}
-                          placeholder="Ej: 35.00"
-                        />
+                        {!isEditingRate ? (
+                          <div className="flex items-center bg-background border rounded-md">
+                            <Input
+                              id="exchange_rate"
+                              type="number"
+                              disabled
+                              value={parseFloat(formData.exchange_rate).toFixed(2)}
+                              className="border-0 bg-transparent"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-9 w-9 p-0 hover:bg-transparent"
+                              onClick={() => setIsEditingRate(true)}
+                            >
+                              <Edit2Icon className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              step="0.0001"
+                              name="exchange_rate"
+                              value={formData.exchange_rate}
+                              onChange={handleInputChange}
+                              className="flex-1"
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => setIsEditingRate(false)}
+                              size="sm"
+                              className="h-9 px-2"
+                            >
+                              <CheckIcon className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </>
