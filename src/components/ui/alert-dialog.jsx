@@ -15,7 +15,7 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal
 
 // Hook para combinar refs
 function useCombinedRefs(...refs) {
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- Combining multiple refs into one callback
+   
   return React.useCallback((element) => {
     refs.forEach((ref) => {
       if (!ref) return
