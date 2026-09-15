@@ -1,3 +1,12 @@
+
+function calculateMonthsFromDates(fromStr, toStr) {
+  if (!fromStr || !toStr) return 1;
+  const from = new Date(fromStr);
+  const to = new Date(toStr);
+  if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) return 1;
+  const diffDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.max(1, Math.round(diffDays / 30));
+}
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import client from "../../api/client";
@@ -21,6 +30,8 @@ import {
 } from "../../lib/venezuelanData";
 import { toast } from "sonner";
 import {
+  Landmark,
+  Banknote,
   Loader2,
   Phone,
   CreditCard,
@@ -176,6 +187,8 @@ export function PaymentsTable({
     payment_detail: "",
     discount_type: "",
     discount_value: "",
+    date_from: "",
+    date_to: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditingRate, setIsEditingRate] = useState(false);
@@ -1058,7 +1071,13 @@ export function PaymentsTable({
       setDiscountedAmount(0);
     }
 
-    if (mode === "partial" && formData.plan_id) {
+    if (mode === "maintenance") {
+      setFormData((prev) => ({
+        ...prev,
+        amount_usd: "",
+        amount_bs: "",
+      }));
+    } else if (mode === "partial" && formData.plan_id) {
       let amountToSuggest = currentPaymentInfo.remainingAmount;
       
       // En modo registro con inscripción, agregar el monto de inscripción
@@ -1119,20 +1138,33 @@ export function PaymentsTable({
 
     setIsSubmitting(true);
     try {
+      // Format period detail if dates were specified
+      const dateRangeNote = (formData.date_from && formData.date_to) 
+        ? `Periodo: ${formData.date_from} al ${formData.date_to}`
+        : (formData.date_from ? `Desde: ${formData.date_from}` : "");
+        
+      const combinedDetail = [dateRangeNote, formData.payment_detail?.trim()]
+        .filter(Boolean)
+        .join(" - ");
+
       const paymentData = {
         ...formData,
-        amount_usd: parseFloat(formData.amount_usd),
-        amount_bs: parseFloat(formData.amount_bs),
-        exchange_rate: parseFloat(formData.exchange_rate),
+        amount_usd: parseFloat(formData.amount_usd) || 0,
+        amount_bs: parseFloat(formData.amount_bs) || 0,
+        exchange_rate: parseFloat(formData.exchange_rate) || 1,
         phone_payment: formData.phone_payment
           ? formatPhone(formData.phone_operator, formData.phone_payment)
           : "",
-        payment_detail: formData.payment_type === "otro" ? formData.payment_detail?.trim() : "",
+        payment_detail: combinedDetail,
         discount_type: formData.discount_type || null,
         discount_value: formData.discount_value ? parseFloat(formData.discount_value) : null,
       };
-      // Remove phone_operator from payload as it's only for UI
+      // Remove UI-only fields to avoid schema cache errors
       delete paymentData.phone_operator;
+      delete paymentData.date_from;
+      delete paymentData.date_to;
+      delete paymentData.payment_period_start;
+      delete paymentData.payment_period_end;
 
       let result;
       if (isEditing && selectedPayment) {
@@ -2117,6 +2149,16 @@ export function PaymentsTable({
                           <p className="text-xs text-muted-foreground">Monto personalizado</p>
                         </div>
                       </label>
+                      <label className={`flex-1 flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${paymentMode === "maintenance" ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-input hover:border-primary/50"}`}>
+                        <input type="radio" name="payment_mode" value="maintenance" checked={paymentMode === "maintenance"} onChange={() => handlePaymentModeChange("maintenance")} className="sr-only" />
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMode === "maintenance" ? "border-primary" : "border-muted-foreground"}`}>
+                          {paymentMode === "maintenance" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Mantenimiento</p>
+                          <p className="text-xs text-muted-foreground">Mantener activo</p>
+                        </div>
+                      </label>
                     </div>
                   </div>
                 )}
@@ -2151,14 +2193,50 @@ export function PaymentsTable({
                     </div>
 
                     {isCustomMonths && (
-                      <div className="mt-2">
-                        <Input
-                          type="number"
-                          min="1"
-                          placeholder="Ingrese número de meses"
-                          value={monthsCount}
-                          onChange={(e) => setMonthsCount(Math.max(1, parseInt(e.target.value, 10)))}
-                        />
+                      <div className="mt-2 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Fecha Desde</Label>
+                                <DatePicker
+                                  value={formData.date_from}
+                                  onChange={(val) => {
+                                    setFormData(prev => ({ ...prev, date_from: val }));
+                                    if (formData.date_to && val) {
+                                      const m = calculateMonthsFromDates(val, formData.date_to);
+                                      setMonthsCount(m);
+                                    }
+                                  }}
+                                  placeholder="Desde"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Fecha Hasta</Label>
+                                <DatePicker
+                                  value={formData.date_to}
+                                  onChange={(val) => {
+                                    setFormData(prev => ({ ...prev, date_to: val }));
+                                    if (formData.date_from && val) {
+                                      const m = calculateMonthsFromDates(formData.date_from, val);
+                                      setMonthsCount(m);
+                                    }
+                                  }}
+                                  placeholder="Hasta"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-xs">Detalle / Concepto (Opcional)</Label>
+                            <Input
+                              placeholder="Ej: Meses acumulados Julio - Septiembre"
+                              value={formData.payment_detail}
+                              onChange={(e) => setFormData(prev => ({...prev, payment_detail: e.target.value}))}
+                            />
+                        </div>
+                        {formData.date_from && formData.date_to && (
+                          <p className="text-xs text-muted-foreground">
+                            Periodo seleccionado: equivale a <strong>{monthsCount} mes{monthsCount > 1 ? 'es' : ''}</strong> de cobertura.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2294,83 +2372,7 @@ export function PaymentsTable({
                   </div>
                 )}
 
-                {formData.payment_type === "efectivo_dolares" ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Monto USD */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="amount_usd"
-                        className="text-sm font-medium"
-                      >
-                        Monto en USD{" "}
-                        <span className="text-destructive" aria-hidden="true">
-                          *
-                        </span>
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
-                          $
-                        </span>
-                        <Input
-                          id="amount_usd"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          name="amount_usd"
-                          value={formData.amount_usd}
-                          onChange={handleInputChange}
-                          placeholder="0.00"
-                          disabled={
-                            paymentMode === "full" &&
-                            formData.plan_id &&
-                            !isEditing
-                          }
-                          className={`pl-7 ${partialValidationError ? "border-destructive focus-visible:ring-destructive/30" : ""} ${
-                            paymentMode === "full" &&
-                            formData.plan_id &&
-                            !isEditing
-                              ? "bg-muted"
-                              : ""
-                          }`}
-                          aria-invalid={!!partialValidationError}
-                          aria-describedby={
-                            partialValidationError ? "amount-error" : undefined
-                          }
-                        />
-                      </div>
-                      {partialValidationError && (
-                        <p
-                          id="amount-error"
-                          className="text-destructive text-xs flex items-center gap-1"
-                          role="alert"
-                        >
-                          <span aria-hidden="true">!</span>{" "}
-                          {partialValidationError}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Monto en Bs */}
-                    <div className="space-y-2">
-                      <Label htmlFor="amount_bs" className="text-sm font-medium">
-                        Monto en Bs
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
-                        <Input
-                          id="amount_bs"
-                          type="text"
-                          name="amount_bs"
-                          value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString("es-VE") : ""}
-                          onChange={handleInputChange}
-                          placeholder="0.00"
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
+                
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label htmlFor="amount_usd" className="text-sm font-medium">
@@ -2406,9 +2408,11 @@ export function PaymentsTable({
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">Bs</span>
                           <Input
                             id="amount_bs"
-                            type="text"
+                            type="number"
+                            step="0.01"
+                            min="0"
                             name="amount_bs"
-                            value={formData.amount_bs ? parseFloat(formData.amount_bs).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
+                            value={formData.amount_bs || ""}
                             onChange={handleInputChange}
                             placeholder="0.00"
                             className="pl-10"
@@ -2483,8 +2487,7 @@ export function PaymentsTable({
                         )}
                       </div>
                     </div>
-                  </>
-                )}
+                  
 
                 {/* Resumen de inscripción si aplica - solo en pago completo */}
                 {isRegisterMode && includeInscription && formData.plan_id && paymentMode === "full" && (
@@ -2573,7 +2576,7 @@ export function PaymentsTable({
                       </SelectItem>
                       <SelectItem value="transferencia">
                         <div className="flex items-center gap-2">
-                          <CreditCard className="h-4 w-4" aria-hidden="true" />
+                          <Landmark className="h-4 w-4" aria-hidden="true" />
                           <span>Transferencia Bancaria</span>
                         </div>
                       </SelectItem>
@@ -2594,10 +2597,7 @@ export function PaymentsTable({
                       </SelectItem>
                       <SelectItem value="efectivo_bolivares">
                         <div className="flex items-center gap-2">
-                          <DollarSignIcon
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
+                          <Banknote className="h-4 w-4" aria-hidden="true" />
                           <span>Efectivo en Bolívares</span>
                         </div>
                       </SelectItem>
