@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
@@ -6,6 +6,7 @@ import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, matchesSearch } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
+import supabase from "../../api/client";
 
 const INSCRIPTION_PRICE = 5;
 import {
@@ -30,12 +31,15 @@ import {
   RefreshCw,
   Copy,
   Mail,
+  X,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { TruncatedCell } from "../ui/truncated-cell";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { getInitials } from "@/lib/getInitials";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
@@ -115,8 +119,13 @@ export function ClientsTable() {
     plan_id: "",
     join_date: new Date().toISOString().split("T")[0],
     enrollment_paid: false,
+      avatar_url: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
@@ -355,7 +364,11 @@ export function ClientsTable() {
       plan_id: "",
       join_date: new Date().toISOString().split("T")[0],
       enrollment_paid: false,
+      avatar_url: "",
     });
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setSelectedClient(null);
     setIsEditing(false);
   }, []);
@@ -387,7 +400,11 @@ export function ClientsTable() {
       plan_id: client.plan_id || "",
       join_date: client.join_date || "",
       enrollment_paid: client.enrollment_paid || false,
+      avatar_url: client.avatar_url || "",
     });
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setIsEditing(true);
     setIsDialogOpen(true);
   }, []);
@@ -422,6 +439,71 @@ export function ClientsTable() {
       ...prev,
       enrollment_paid: checked,
     }));
+  };
+
+
+  // Manejar selección de archivo de foto
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo
+    if (!file.type.startsWith("image/")) {
+      toast.error("Por favor selecciona una imagen válida");
+      return;
+    }
+    // Validar tamaño (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no debe superar los 5MB");
+      return;
+    }
+
+    setPhotoFile(file);
+    // Generar preview
+    const reader = new FileReader();
+    reader.onload = (ev) => setPhotoPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  // Subir foto a Supabase Storage y devolver la URL pública
+  const uploadPhotoToStorage = async (file) => {
+    if (!file) return null;
+    setUploadingPhoto(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${crypto.randomUUID()}.${ext}`;
+      const filePath = `clients/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from("client-avatars")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage
+        .from("client-avatars")
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (err) {
+      console.error("Error uploading photo:", err);
+      toast.error("Error al subir la foto: " + err.message);
+      return null;
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Eliminar foto seleccionada (no la guardada en DB)
+  const clearPhotoSelection = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // Enviar formulario (crear o editar)
@@ -465,6 +547,19 @@ export function ClientsTable() {
         planPrice = planPrice + INSCRIPTION_PRICE;
       }
 
+      // Subir foto si se seleccionó una nueva
+      let finalAvatarUrl = formData.avatar_url || null;
+      if (photoFile) {
+        const uploadedUrl = await uploadPhotoToStorage(photoFile);
+        if (uploadedUrl) {
+          finalAvatarUrl = uploadedUrl;
+        } else if (!isEditing) {
+          // En modo crear, si falla el upload, abortar
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const dataToSave = {
         first_name: formData.first_name,
         last_name: formData.last_name,
@@ -476,6 +571,7 @@ export function ClientsTable() {
           : "",
         address: formData.address,
         observations: formData.observations,
+        avatar_url: finalAvatarUrl,
         plan_id: formData.plan_id,
         join_date: formData.join_date,
         enrollment_paid: formData.enrollment_paid,
@@ -1022,11 +1118,26 @@ export function ClientsTable() {
                           {realIndex}
                         </TableCell>
                         <TableCell>
-                          <TruncatedCell
-                            value={`${client.first_name} ${client.last_name}`}
-                            maxWidth="150px"
-                            className="font-medium"
-                          />
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9 flex-shrink-0">
+                              {client.avatar_url ? (
+                                <AvatarImage
+                                  src={client.avatar_url}
+                                  alt={`${client.first_name} ${client.last_name}`}
+                                />
+                              ) : null}
+                              <AvatarFallback className="text-xs">
+                                {getInitials(
+                                  `${client.first_name} ${client.last_name}`,
+                                )}
+                              </AvatarFallback>
+                            </Avatar>
+                            <TruncatedCell
+                              value={`${client.first_name} ${client.last_name}`}
+                              maxWidth="150px"
+                              className="font-medium"
+                            />
+                          </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell whitespace-nowrap">
                           <div className="flex items-center gap-1">
@@ -1413,6 +1524,57 @@ export function ClientsTable() {
                 rows={3}
                 placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="avatar">Foto de Perfil</Label>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  {photoPreview || formData.avatar_url ? (
+                    <img
+                      src={photoPreview || formData.avatar_url}
+                      alt="Vista previa"
+                      className="w-20 h-20 rounded-full object-cover border-2 border-muted"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
+                      <Users className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Input
+                    ref={fileInputRef}
+                    id="avatar"
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoSelect}
+                    disabled={uploadingPhoto}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sube una imagen para la foto de perfil del cliente (JPG, PNG, WEBP. Max 5MB)
+                  </p>
+                  {uploadingPhoto && (
+                    <p className="text-xs text-primary flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Subiendo foto...
+                    </p>
+                  )}
+                </div>
+                {(photoPreview || formData.avatar_url) && !uploadingPhoto && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      clearPhotoSelection();
+                      setFormData((prev) => ({ ...prev, avatar_url: "" }));
+                    }}
+                    className="h-8 w-8 p-0 text-destructive"
+                    aria-label="Quitar foto"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="plan_id">Plan</Label>
