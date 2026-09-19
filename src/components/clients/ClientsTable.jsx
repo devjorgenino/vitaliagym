@@ -28,10 +28,12 @@ import {
   IdCard,
   Phone,
   Users,
+  RotateCcw,
   RefreshCw,
   Copy,
   Mail,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -64,6 +66,7 @@ import {
   SearchIcon,
   FilterXIcon,
   DollarSignIcon,
+
 } from "../ui/icons";
 import {
   Table,
@@ -93,6 +96,7 @@ export function ClientsTable() {
     createClient,
     updateClient,
     deleteClient,
+    resetClientHistory,
     recalculateAllNextPaymentDates,
     fixAllPhones,
   } = useClients();
@@ -129,6 +133,10 @@ export function ClientsTable() {
 
   // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
+  const [resettingId, setResettingId] = useState(null);
+  const [clientToReset, setClientToReset] = useState(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetDate, setResetDate] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
 
@@ -636,6 +644,41 @@ export function ClientsTable() {
     setDeleteDialogOpen(true);
   };
 
+  const handleResetHistory = async () => {
+    if (!clientToReset) return;
+    setResettingId(clientToReset.id);
+    try {
+      const result = await resetClientHistory(clientToReset.id, { newJoinDate: resetDate || new Date().toISOString().split("T")[0] });
+      if (result.success) {
+        toast.success("Historial reiniciado exitosamente. Redirigiendo al pago de reactivación...");
+        setIsResetDialogOpen(false);
+        
+        const planPrice = getPlanPrice(clientToReset.plan_id);
+        
+        if (planPrice > 0) {
+          router.push(`/pagos/${clientToReset.id}?amount=${planPrice}&enrollment=${INSCRIPTION_PRICE}&register=true`);
+        } else {
+          router.push(`/pagos/${clientToReset.id}?register=true`);
+        }
+        
+        setClientToReset(null);
+      } else {
+        toast.error("Error al reiniciar historial: " + result.error);
+      }
+    } catch (err) {
+      console.error("Error resetting client history:", err);
+      toast.error("Error al reiniciar historial: " + err.message);
+    } finally {
+      setResettingId(null);
+    }
+  };
+
+  const openResetDialog = (client) => {
+    setClientToReset(client);
+    setResetDate(new Date().toISOString().split("T")[0]);
+    setIsResetDialogOpen(true);
+  };
+
   const handleDeleteClient = async () => {
     if (!clientToDelete) return;
 
@@ -1075,6 +1118,10 @@ export function ClientsTable() {
                     const isOverdue =
                       daysUntilPayment !== null && daysUntilPayment < 0;
 
+                    // Condición para clientes con más de 2 meses (60 días) de inactividad
+                    const isLongTimeInactive =
+                      daysUntilPayment !== null && daysUntilPayment <= -60;
+
                     // Verificar si hay pago este mes
                     const currentYear = today.getFullYear();
                     const currentMonth = today.getMonth();
@@ -1132,11 +1179,30 @@ export function ClientsTable() {
                                 )}
                               </AvatarFallback>
                             </Avatar>
-                            <TruncatedCell
-                              value={`${client.first_name} ${client.last_name}`}
-                              maxWidth="150px"
-                              className="font-medium"
-                            />
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <TruncatedCell
+                                value={`${client.first_name} ${client.last_name}`}
+                                maxWidth="150px"
+                                className="font-medium"
+                              />
+                              {isLongTimeInactive && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="relative inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold tracking-wide bg-red-600 text-white cursor-help shrink-0 shadow-sm">
+                                      <span className="absolute flex h-2 w-2 -top-1 -right-1">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
+                                      </span>
+                                      <AlertTriangle className="h-3.5 w-3.5 stroke-[2.5]" />
+                                      &gt;2 meses
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Cliente con más de 60 días vencido.</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell whitespace-nowrap">
@@ -1295,6 +1361,29 @@ export function ClientsTable() {
                                 <p>Editar cliente</p>
                               </TooltipContent>
                             </Tooltip>
+                            {isLongTimeInactive && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    onClick={() => openResetDialog(client)}
+                                    variant="outline"
+                                    size="icon-sm"
+                                    className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 border-amber-200 dark:border-amber-800"
+                                    disabled={resettingId === client.id}
+                                    aria-label={`Reiniciar historial de ${client.first_name} ${client.last_name}`}
+                                  >
+                                    {resettingId === client.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <RotateCcw className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Reinicio de historial (Borrón y cuenta nueva)</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -1338,6 +1427,55 @@ export function ClientsTable() {
       </div>
 
       {/* Dialog de confirmación de eliminación */}
+      {/* Modal para reiniciar historial */}
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              Reiniciar Historial
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas reiniciar el historial de pagos para <span className="font-semibold text-foreground">{clientToReset?.first_name} {clientToReset?.last_name}</span>?
+              Esto actualizará su fecha de ingreso y recalculará los pagos desde cero sin borrar el perfil.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="reset_date" className="text-sm font-medium">
+              Nueva Fecha de Inicio de Ciclo
+            </Label>
+            <Input
+              id="reset_date"
+              type="date"
+              value={resetDate}
+              onChange={(e) => setResetDate(e.target.value)}
+              className="mt-2 text-sm"
+              disabled={resettingId === clientToReset?.id}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsResetDialogOpen(false)}
+              disabled={resettingId === clientToReset?.id}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleResetHistory}
+              className="bg-amber-600 hover:bg-amber-700"
+              disabled={resettingId === clientToReset?.id || !resetDate}
+            >
+              {resettingId === clientToReset?.id ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Reiniciando...</>
+              ) : (
+                <><RotateCcw className="h-4 w-4 mr-2" /> Reiniciar Historial</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}

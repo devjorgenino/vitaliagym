@@ -17,7 +17,7 @@ import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, formatDateTime, matchesSearch } from "@/lib/utils";
 import { getPlanCurrency, getPlanPriceInBS, getPlanPriceInUSD } from "@/lib/planUtils";
 import { DatePicker } from "@/components/ui/date-picker";
-import { addMonthsPreservingAnchor, getEffectiveAmount } from "@/utils/paymentCalculations";
+import { addMonthsPreservingAnchor, getEffectiveAmount, computeNextPaymentDate } from "@/utils/paymentCalculations";
 
 const INSCRIPTION_PRICE = 5;
 import {
@@ -1179,12 +1179,12 @@ export function PaymentsTable({
           try {
             const clientUpdateResult = await client
               .from('clients')
-              .update({ 
+              .update({
                 status: 'activo',
                 enrollment_paid: includeInscription ? true : preselectedClient.enrollment_paid
               })
               .eq('id', preselectedClient.id);
-            
+
             if (clientUpdateResult.error) {
               console.error('Error updating client status:', clientUpdateResult.error);
             }

@@ -271,12 +271,13 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
       return { success: false, error: 'Plan price is invalid' };
     }
 
-    // 2. Pagos del cliente para su plan actual, ordenados por fecha
+    // 2. Pagos del cliente para su plan actual, excluyendo archivados y ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
       .select('id, amount_usd, discount_type, discount_value, payment_date')
       .eq('client_id', clientId)
       .eq('plan_id', clientData.plan_id)
+      .eq('is_archived', false)
       .order('payment_date', { ascending: true });
 
     if (paymentsError) {
@@ -670,7 +671,8 @@ export async function updateClientStatus(clientId, planId) {
       .from('payments')
       .select('id, amount_usd, discount_type, discount_value, payment_date')
       .eq('client_id', clientId)
-      .eq('plan_id', planId);
+      .eq('plan_id', planId)
+      .eq('is_archived', false);
 
     if (paymentsError) {
       console.error('Error fetching payments for status update:', paymentsError);

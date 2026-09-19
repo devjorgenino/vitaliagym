@@ -132,6 +132,15 @@ export function usePayments({ onClientUpdate } = {}) {
 
   const deletePayment = async (id, { clientId, planId } = {}) => {
     try {
+      // 1. Obtener pago antes de borrar
+      const { data: paymentToDelete, error: fetchErr } = await client
+        .from('payments')
+        .select('client_id, plan_id, is_archived')
+        .eq('id', id)
+        .single();
+
+      if (fetchErr) throw fetchErr;
+
       const { error } = await executeWithSync({
         table: 'payments',
         type: 'DELETE',
@@ -140,6 +149,47 @@ export function usePayments({ onClientUpdate } = {}) {
 
       if (error) {
         throw error;
+      }
+
+      // 2. Verificar si hay que hacer Rollback del reinicio
+      if (paymentToDelete && paymentToDelete.client_id) {
+        // ¿Quedan pagos activos?
+        const { data: remainingPayments } = await client
+          .from('payments')
+          .select('id')
+          .eq('client_id', paymentToDelete.client_id)
+          .eq('is_archived', false);
+
+        const { data: clientData } = await client
+          .from('clients')
+          .select('original_join_date')
+          .eq('id', paymentToDelete.client_id)
+          .single();
+
+        if ((!remainingPayments || remainingPayments.length === 0) && clientData && clientData.original_join_date) {
+            // ROLLBACK TRIGGERED
+            // - Unarchive all payments
+            await executeWithSync({
+                table: 'payments',
+                type: 'UPDATE',
+                data: { is_archived: false },
+                match: { client_id: paymentToDelete.client_id, is_archived: true }
+            });
+            // - Unarchive attendance
+            await executeWithSync({
+                table: 'attendance',
+                type: 'UPDATE',
+                data: { is_archived: false },
+                match: { client_id: paymentToDelete.client_id, is_archived: true }
+            });
+            // - Restore client join_date
+            await executeWithSync({
+                table: 'clients',
+                type: 'UPDATE',
+                data: { join_date: clientData.original_join_date, original_join_date: null },
+                match: { id: paymentToDelete.client_id }
+            });
+        }
       }
 
       // Recalculate next_payment_date after removing a payment
