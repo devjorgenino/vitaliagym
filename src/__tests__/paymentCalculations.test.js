@@ -70,11 +70,12 @@ describe('paymentCalculations - addMonthsToDate', () => {
 });
 
 describe('paymentCalculations - computeNextPaymentDate', () => {
+  const plan = { price: 30, currency: 'USD' };
   const planPrice = 30;
 
   it('retorna join_date + 1 mes si no hay pagos registrados', () => {
-    expect(computeNextPaymentDate('2026-08-31', [], planPrice)).toBe('2026-09-30');
-    expect(computeNextPaymentDate('2026-01-15', null, planPrice)).toBe('2026-02-15');
+    expect(computeNextPaymentDate('2026-08-31', [], plan, planPrice)).toBe('2026-09-30');
+    expect(computeNextPaymentDate('2026-01-15', null, plan, planPrice)).toBe('2026-02-15');
   });
 
   it('caso reportado 1: ingreso 31 de agosto, pago tardío el 02 de septiembre -> vence 30 de septiembre', () => {
@@ -83,7 +84,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       { id: '1', amount_usd: 30, payment_date: '2026-09-02' }
     ];
 
-    const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
+    const nextDate = computeNextPaymentDate(joinDate, payments, plan, planPrice);
     expect(nextDate).toBe('2026-09-30');
   });
 
@@ -92,7 +93,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       { id: '1', amount_usd: 30, payment_date: '2026-09-02' },
       { id: '2', amount_usd: 30, payment_date: '2026-09-30' }
     ];
-    const nextDate = computeNextPaymentDate('2026-08-31', payments, planPrice);
+    const nextDate = computeNextPaymentDate('2026-08-31', payments, plan, planPrice);
     expect(nextDate).toBe('2026-10-31');
   });
 
@@ -107,7 +108,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       { id: '6', amount_usd: 30, payment_date: '2026-09-03' },
     ];
 
-    const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
+    const nextDate = computeNextPaymentDate(joinDate, payments, plan, planPrice);
     expect(nextDate).toBe('2026-09-29');
   });
 
@@ -118,7 +119,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       { id: '2', amount_usd: 30, payment_date: '2026-09-20' },
     ];
 
-    const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
+    const nextDate = computeNextPaymentDate(joinDate, payments, plan, planPrice);
     expect(nextDate).toBe('2026-10-15');
   });
 
@@ -130,7 +131,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       { id: '3', amount_usd: 30, payment_date: '2026-03-15' },
     ];
 
-    const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
+    const nextDate = computeNextPaymentDate(joinDate, payments, plan, planPrice);
     expect(nextDate).toBe('2026-04-15');
   });
 
@@ -140,8 +141,23 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       { id: '1', amount_usd: 90, payment_date: '2026-08-31' }
     ];
 
-    const nextDate = computeNextPaymentDate(joinDate, payments, planPrice);
+    const nextDate = computeNextPaymentDate(joinDate, payments, plan, planPrice);
     expect(nextDate).toBe('2026-11-30');
+  });
+
+  it('maneja planes en BS (bolívares) correctamente', () => {
+    const plan = { price: 1500, currency: 'BS' };
+    const joinDate = '2026-08-31';
+    // Tasa de cambio de prueba
+    const rate = 300; // 1500 Bs / 300 = 5 USD equivalentes
+
+    // El usuario paga 5 USD, que deberían ser 1500 Bs a tasa 300
+    const payments = [
+      { id: '1', amount_bs: 1500, payment_date: '2026-09-01' }
+    ];
+
+    const nextDate = computeNextPaymentDate(joinDate, payments, plan, 1500);
+    expect(nextDate).toBe('2026-09-30');
   });
 
   it('maneja pagos parciales acumulativos', () => {
@@ -151,27 +167,27 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
     const partialPayment1 = [
       { id: '1', amount_usd: 15, payment_date: '2026-09-01' }
     ];
-    expect(computeNextPaymentDate(joinDate, partialPayment1, planPrice)).toBe('2026-09-30');
+    expect(computeNextPaymentDate(joinDate, partialPayment1, plan, planPrice)).toBe('2026-09-30');
 
     // Pago 2: otro $15 (completa $30 = 1 ciclo)
     const fullPayment1 = [
       { id: '1', amount_usd: 15, payment_date: '2026-09-01' },
       { id: '2', amount_usd: 15, payment_date: '2026-09-05' }
     ];
-    expect(computeNextPaymentDate(joinDate, fullPayment1, planPrice)).toBe('2026-09-30');
+    expect(computeNextPaymentDate(joinDate, fullPayment1, plan, planPrice)).toBe('2026-09-30');
 
     // Pago 3: otro $30 (completa $60 = 2 ciclos)
     const fullPayment2 = [
       ...fullPayment1,
       { id: '3', amount_usd: 30, payment_date: '2026-09-29' }
     ];
-    expect(computeNextPaymentDate(joinDate, fullPayment2, planPrice)).toBe('2026-10-31');
+    expect(computeNextPaymentDate(joinDate, fullPayment2, plan, planPrice)).toBe('2026-10-31');
   });
 
   it('retorna null para parámetros inválidos', () => {
-    expect(computeNextPaymentDate(null, [], 30)).toBeNull();
-    expect(computeNextPaymentDate('2026-08-31', [], 0)).toBeNull();
-    expect(computeNextPaymentDate('2026-08-31', [], -10)).toBeNull();
+    expect(computeNextPaymentDate(null, [], plan, 30)).toBeNull();
+    expect(computeNextPaymentDate('2026-08-31', [], plan, 0)).toBeNull();
+    expect(computeNextPaymentDate('2026-08-31', [], plan, -10)).toBeNull();
   });
 
   it('calcula correctamente la cobertura cuando se paga exactamente en el dia de vencimiento (Sebastian Villaroel)', () => {
@@ -187,7 +203,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       { id: '7', amount_usd: 20, payment_date: '2026-08-16' },
     ];
     // Se espera que avance mes a mes y cubra hasta septiembre!
-    expect(computeNextPaymentDate(joinDate, payments, planPrice)).toBe('2026-09-16');
+    expect(computeNextPaymentDate(joinDate, payments, plan, planPrice)).toBe('2026-09-16');
   });
 });
 

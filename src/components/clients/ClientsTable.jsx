@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
@@ -6,6 +6,7 @@ import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, matchesSearch } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
+import supabase from "../../api/client";
 
 const INSCRIPTION_PRICE = 5;
 import {
@@ -19,6 +20,7 @@ import {
 import {
   auditNextPaymentDates,
   recalculateNextPaymentDate,
+  getEffectiveAmount,
 } from "../../utils/paymentCalculations";
 import { toast } from "sonner";
 import {
@@ -26,15 +28,20 @@ import {
   IdCard,
   Phone,
   Users,
+  RotateCcw,
   RefreshCw,
   Copy,
   Mail,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { TruncatedCell } from "../ui/truncated-cell";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { getInitials } from "@/lib/getInitials";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
@@ -59,6 +66,7 @@ import {
   SearchIcon,
   FilterXIcon,
   DollarSignIcon,
+
 } from "../ui/icons";
 import {
   Table,
@@ -88,6 +96,7 @@ export function ClientsTable() {
     createClient,
     updateClient,
     deleteClient,
+    resetClientHistory,
     recalculateAllNextPaymentDates,
     fixAllPhones,
   } = useClients();
@@ -114,11 +123,20 @@ export function ClientsTable() {
     plan_id: "",
     join_date: new Date().toISOString().split("T")[0],
     enrollment_paid: false,
+      avatar_url: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Estado para eliminación
   const [deletingId, setDeletingId] = useState(null);
+  const [resettingId, setResettingId] = useState(null);
+  const [clientToReset, setClientToReset] = useState(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetDate, setResetDate] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
 
@@ -157,8 +175,9 @@ export function ClientsTable() {
   };
 
   // Calcular el status del cliente basado en sus pagos
-  // Activo: tiene días restantes positivos o ha pagado su membresía
-  // Inactivo: tiene días vencidos (negativos)
+  // Activo: tiene días restantes positivos o ha pagado su membresía completa
+  // Pendiente: tiene pagos parciales (pago fraccionado) pero no completó el ciclo
+  // Inactivo: tiene días vencidos (negativos) o no tiene pagos
   const getClientStatus = (client) => {
     if (!client || !client.plan_id) {
       return { status: "inactivo", label: "Inactivo" };
@@ -195,18 +214,21 @@ export function ClientsTable() {
     }
 
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
-    // Calcular el ciclo actual de pago
-    let paidForCurrentCycle = totalPaidSoFar % planPrice;
+    // Calcular el ciclo actual de pago (considerar inscripción si está pagada)
+    const hasEnrollmentPaid = client.enrollment_paid === true;
+    const totalPrice = hasEnrollmentPaid ? planPrice + INSCRIPTION_PRICE : planPrice;
+
+    let paidForCurrentCycle = totalPaidSoFar % totalPrice;
 
     if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
-      paidForCurrentCycle = planPrice;
+      paidForCurrentCycle = totalPrice;
     }
 
-    const currentRemaining = planPrice - paidForCurrentCycle;
+    const currentRemaining = totalPrice - paidForCurrentCycle;
     const isFullyPaid = currentRemaining < 0.001;
 
     // Si pagó completo el ciclo actual, está activo
@@ -214,7 +236,12 @@ export function ClientsTable() {
       return { status: "activo", label: "Activo" };
     }
 
-    // Por defecto, si tiene pagos pero no está al día, inactivo
+    // Si tiene pagos parciales (pago fraccionado), está pendiente
+    if (totalPaidSoFar > 0 && currentRemaining > 0) {
+      return { status: "pendiente", label: "Pendiente" };
+    }
+
+    // Por defecto, si no tiene pagos, está inactivo
     return { status: "inactivo", label: "Inactivo" };
   };
 
@@ -233,7 +260,7 @@ export function ClientsTable() {
     );
 
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
@@ -243,17 +270,22 @@ export function ClientsTable() {
       ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
-    // Si el pago total es mayor o igual al precio total, está pagado
-    if (totalPaidSoFar >= totalPrice - 0.001) {
+    // Calcular cuánto se ha pagado en el ciclo actual
+    let currentCyclePaid = totalPaidSoFar % totalPrice;
+    if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
+      currentCyclePaid = totalPrice;
+    }
+    const currentRemaining = totalPrice - currentCyclePaid;
+    const isFullyPaid = currentRemaining < 0.001;
+
+    // Si ya se completó el ciclo actual, no hay restante que mostrar
+    if (isFullyPaid) {
       return { isFullyPaid: true, remainingFormatted: "0.00" };
     }
 
-    const currentRemaining = totalPrice - totalPaidSoFar;
-    const isFullyPaid = currentRemaining < 0.001;
-
     return {
-      isFullyPaid: isFullyPaid,
-      remainingFormatted: (isFullyPaid ? 0 : currentRemaining).toFixed(2),
+      isFullyPaid: false,
+      remainingFormatted: currentRemaining.toFixed(2),
     };
   };
 
@@ -272,7 +304,7 @@ export function ClientsTable() {
 
     const planPrice = getPlanPrice(client.plan_id);
     const totalPaid = allClientPayments.reduce(
-      (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+      (sum, p) => sum + getEffectiveAmount(p),
       0,
     );
 
@@ -282,12 +314,17 @@ export function ClientsTable() {
       ? planPrice + INSCRIPTION_PRICE
       : planPrice;
 
-    // Si el pago total es mayor o igual al precio total, no hay restante
-    if (totalPaid >= totalPrice - 0.001) {
+    // Calcular cuánto se ha pagado en el ciclo actual
+    let currentCyclePaid = totalPaid % totalPrice;
+    if (currentCyclePaid < 0.001 && totalPaid > 0) {
+      currentCyclePaid = totalPrice;
+    }
+    const remainingAmount = totalPrice - currentCyclePaid;
+
+    // Si ya completó el ciclo actual, no hay restante
+    if (remainingAmount < 0.001) {
       return null;
     }
-
-    const remainingAmount = totalPrice - totalPaid;
 
     if (remainingAmount > 0) {
       // Encontrar el último pago para asociarlo con el saldo restante
@@ -335,7 +372,11 @@ export function ClientsTable() {
       plan_id: "",
       join_date: new Date().toISOString().split("T")[0],
       enrollment_paid: false,
+      avatar_url: "",
     });
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setSelectedClient(null);
     setIsEditing(false);
   }, []);
@@ -367,7 +408,11 @@ export function ClientsTable() {
       plan_id: client.plan_id || "",
       join_date: client.join_date || "",
       enrollment_paid: client.enrollment_paid || false,
+      avatar_url: client.avatar_url || "",
     });
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setIsEditing(true);
     setIsDialogOpen(true);
   }, []);
@@ -402,6 +447,71 @@ export function ClientsTable() {
       ...prev,
       enrollment_paid: checked,
     }));
+  };
+
+
+  // Manejar selección de archivo de foto
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo
+    if (!file.type.startsWith("image/")) {
+      toast.error("Por favor selecciona una imagen válida");
+      return;
+    }
+    // Validar tamaño (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no debe superar los 5MB");
+      return;
+    }
+
+    setPhotoFile(file);
+    // Generar preview
+    const reader = new FileReader();
+    reader.onload = (ev) => setPhotoPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  // Subir foto a Supabase Storage y devolver la URL pública
+  const uploadPhotoToStorage = async (file) => {
+    if (!file) return null;
+    setUploadingPhoto(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${crypto.randomUUID()}.${ext}`;
+      const filePath = `clients/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from("client-avatars")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage
+        .from("client-avatars")
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (err) {
+      console.error("Error uploading photo:", err);
+      toast.error("Error al subir la foto: " + err.message);
+      return null;
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Eliminar foto seleccionada (no la guardada en DB)
+  const clearPhotoSelection = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // Enviar formulario (crear o editar)
@@ -445,6 +555,19 @@ export function ClientsTable() {
         planPrice = planPrice + INSCRIPTION_PRICE;
       }
 
+      // Subir foto si se seleccionó una nueva
+      let finalAvatarUrl = formData.avatar_url || null;
+      if (photoFile) {
+        const uploadedUrl = await uploadPhotoToStorage(photoFile);
+        if (uploadedUrl) {
+          finalAvatarUrl = uploadedUrl;
+        } else if (!isEditing) {
+          // En modo crear, si falla el upload, abortar
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const dataToSave = {
         first_name: formData.first_name,
         last_name: formData.last_name,
@@ -456,6 +579,7 @@ export function ClientsTable() {
           : "",
         address: formData.address,
         observations: formData.observations,
+        avatar_url: finalAvatarUrl,
         plan_id: formData.plan_id,
         join_date: formData.join_date,
         enrollment_paid: formData.enrollment_paid,
@@ -518,6 +642,41 @@ export function ClientsTable() {
   const handleDeleteClick = (client) => {
     setClientToDelete(client);
     setDeleteDialogOpen(true);
+  };
+
+  const handleResetHistory = async () => {
+    if (!clientToReset) return;
+    setResettingId(clientToReset.id);
+    try {
+      const result = await resetClientHistory(clientToReset.id, { newJoinDate: resetDate || new Date().toISOString().split("T")[0] });
+      if (result.success) {
+        toast.success("Historial reiniciado exitosamente. Redirigiendo al pago de reactivación...");
+        setIsResetDialogOpen(false);
+        
+        const planPrice = getPlanPrice(clientToReset.plan_id);
+        
+        if (planPrice > 0) {
+          router.push(`/pagos/${clientToReset.id}?amount=${planPrice}&enrollment=${INSCRIPTION_PRICE}&register=true`);
+        } else {
+          router.push(`/pagos/${clientToReset.id}?register=true`);
+        }
+        
+        setClientToReset(null);
+      } else {
+        toast.error("Error al reiniciar historial: " + result.error);
+      }
+    } catch (err) {
+      console.error("Error resetting client history:", err);
+      toast.error("Error al reiniciar historial: " + err.message);
+    } finally {
+      setResettingId(null);
+    }
+  };
+
+  const openResetDialog = (client) => {
+    setClientToReset(client);
+    setResetDate(new Date().toISOString().split("T")[0]);
+    setIsResetDialogOpen(true);
   };
 
   const handleDeleteClient = async () => {
@@ -953,21 +1112,15 @@ export function ClientsTable() {
                     // Calcular días hasta el próximo pago
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const nextPaymentDate = client.next_payment_date
-                      ? new Date(client.next_payment_date)
-                      : null;
 
-                    let daysUntilPayment = null;
-                    if (nextPaymentDate) {
-                      const diffTime =
-                        nextPaymentDate.getTime() - today.getTime();
-                      daysUntilPayment = Math.ceil(
-                        diffTime / (1000 * 60 * 60 * 24),
-                      );
-                    }
+                    const daysUntilPayment = client.daysUntilPayment;
 
                     const isOverdue =
                       daysUntilPayment !== null && daysUntilPayment < 0;
+
+                    // Condición para clientes con más de 2 meses (60 días) de inactividad
+                    const isLongTimeInactive =
+                      daysUntilPayment !== null && daysUntilPayment <= -60;
 
                     // Verificar si hay pago este mes
                     const currentYear = today.getFullYear();
@@ -1012,11 +1165,45 @@ export function ClientsTable() {
                           {realIndex}
                         </TableCell>
                         <TableCell>
-                          <TruncatedCell
-                            value={`${client.first_name} ${client.last_name}`}
-                            maxWidth="150px"
-                            className="font-medium"
-                          />
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9 flex-shrink-0">
+                              {client.avatar_url ? (
+                                <AvatarImage
+                                  src={client.avatar_url}
+                                  alt={`${client.first_name} ${client.last_name}`}
+                                />
+                              ) : null}
+                              <AvatarFallback className="text-xs">
+                                {getInitials(
+                                  `${client.first_name} ${client.last_name}`,
+                                )}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <TruncatedCell
+                                value={`${client.first_name} ${client.last_name}`}
+                                maxWidth="150px"
+                                className="font-medium"
+                              />
+                              {isLongTimeInactive && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="relative inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold tracking-wide bg-red-600 text-white cursor-help shrink-0 shadow-sm">
+                                      <span className="absolute flex h-2 w-2 -top-1 -right-1">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
+                                      </span>
+                                      <AlertTriangle className="h-3.5 w-3.5 stroke-[2.5]" />
+                                      &gt;2 meses
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Cliente con más de 60 días vencido.</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell whitespace-nowrap">
                           <div className="flex items-center gap-1">
@@ -1174,6 +1361,29 @@ export function ClientsTable() {
                                 <p>Editar cliente</p>
                               </TooltipContent>
                             </Tooltip>
+                            {isLongTimeInactive && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    onClick={() => openResetDialog(client)}
+                                    variant="outline"
+                                    size="icon-sm"
+                                    className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 border-amber-200 dark:border-amber-800"
+                                    disabled={resettingId === client.id}
+                                    aria-label={`Reiniciar historial de ${client.first_name} ${client.last_name}`}
+                                  >
+                                    {resettingId === client.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <RotateCcw className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Reinicio de historial (Borrón y cuenta nueva)</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -1217,6 +1427,55 @@ export function ClientsTable() {
       </div>
 
       {/* Dialog de confirmación de eliminación */}
+      {/* Modal para reiniciar historial */}
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              Reiniciar Historial
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas reiniciar el historial de pagos para <span className="font-semibold text-foreground">{clientToReset?.first_name} {clientToReset?.last_name}</span>?
+              Esto actualizará su fecha de ingreso y recalculará los pagos desde cero sin borrar el perfil.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="reset_date" className="text-sm font-medium">
+              Nueva Fecha de Inicio de Ciclo
+            </Label>
+            <Input
+              id="reset_date"
+              type="date"
+              value={resetDate}
+              onChange={(e) => setResetDate(e.target.value)}
+              className="mt-2 text-sm"
+              disabled={resettingId === clientToReset?.id}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsResetDialogOpen(false)}
+              disabled={resettingId === clientToReset?.id}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleResetHistory}
+              className="bg-amber-600 hover:bg-amber-700"
+              disabled={resettingId === clientToReset?.id || !resetDate}
+            >
+              {resettingId === clientToReset?.id ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Reiniciando...</>
+              ) : (
+                <><RotateCcw className="h-4 w-4 mr-2" /> Reiniciar Historial</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -1403,6 +1662,57 @@ export function ClientsTable() {
                 rows={3}
                 placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="avatar">Foto de Perfil</Label>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  {photoPreview || formData.avatar_url ? (
+                    <img
+                      src={photoPreview || formData.avatar_url}
+                      alt="Vista previa"
+                      className="w-20 h-20 rounded-full object-cover border-2 border-muted"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
+                      <Users className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Input
+                    ref={fileInputRef}
+                    id="avatar"
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoSelect}
+                    disabled={uploadingPhoto}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sube una imagen para la foto de perfil del cliente (JPG, PNG, WEBP. Max 5MB)
+                  </p>
+                  {uploadingPhoto && (
+                    <p className="text-xs text-primary flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Subiendo foto...
+                    </p>
+                  )}
+                </div>
+                {(photoPreview || formData.avatar_url) && !uploadingPhoto && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      clearPhotoSelection();
+                      setFormData((prev) => ({ ...prev, avatar_url: "" }));
+                    }}
+                    className="h-8 w-8 p-0 text-destructive"
+                    aria-label="Quitar foto"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="plan_id">Plan</Label>

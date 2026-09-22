@@ -51,9 +51,9 @@ export default function AdministracionPage() {
               </div>
               <div>
                 <div className="relative inline-block">
-                  <h1 className="text-2xl font-bold text-foreground">
+                  <h2 className="text-2xl font-bold text-foreground">
                     Administración
-                  </h1>
+                  </h2>
                   <span className="absolute -top-0.5 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
                 </div>
                 <p className="text-muted-foreground">

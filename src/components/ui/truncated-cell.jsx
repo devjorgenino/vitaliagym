@@ -10,14 +10,14 @@ import {
 
 /**
  * TruncatedCell - A reusable component for table cells with long content
- * 
+ *
  * Features:
  * - Truncates text with ellipsis when content exceeds maxWidth
  * - Shows full content in tooltip on hover
  * - Only shows tooltip if content is actually truncated
  * - Accessible with proper ARIA attributes
  * - Supports custom className for styling
- * 
+ *
  * @param {string} value - The text content to display
  * @param {string} maxWidth - CSS max-width value (default: "150px")
  * @param {string} className - Additional CSS classes
@@ -33,6 +33,7 @@ function TruncatedCell({
 }) {
   const textRef = React.useRef(null);
   const [isTruncated, setIsTruncated] = React.useState(false);
+  const tooltipId = React.useId();
   const displayValue = value || fallback;
   const isEmpty = !value;
 
@@ -45,7 +46,7 @@ function TruncatedCell({
     };
 
     checkTruncation();
-    
+
     // Re-check on window resize
     window.addEventListener("resize", checkTruncation);
     return () => window.removeEventListener("resize", checkTruncation);
@@ -76,17 +77,17 @@ function TruncatedCell({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <div 
-            className="cursor-default"
-            role="button"
+          <button
+            className="cursor-help"
             tabIndex={0}
-            aria-label={value}
+            aria-describedby={tooltipId}
           >
             {content}
-          </div>
+          </button>
         </TooltipTrigger>
-        <TooltipContent 
-          side="top" 
+        <TooltipContent
+          id={tooltipId}
+          side="top"
           className="max-w-[300px] break-words"
           sideOffset={5}
         >

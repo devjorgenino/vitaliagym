@@ -1,165 +1,119 @@
-/**
- * Script de corrección de statuses de clientes.
- *
- * Lee las credenciales desde .env.local (nunca las expone en código).
- * Requiere: npm install dotenv @supabase/supabase-js
- *
- * REGLA DE NEGOCIO:
- *   - Si ciclos >= 1 Y próximo pago no vencido → "activo"
- *   - Si próximo pago vencido (días negativos) → "inactivo"
- *   - Si no tiene pagos suficientes → "inactivo"
- *
- * Uso:
- *   node scripts/fix-client-statuses.mjs          → corrige automáticamente
- *   node scripts/fix-client-statuses.mjs --dry-run → solo muestra qué cambiaría
- */
-
 import { createClient } from '@supabase/supabase-js';
-import { config }       from 'dotenv';
-import { resolve }      from 'path';
+import { config } from 'dotenv';
+import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { dirname }      from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
 config({ path: resolve(__dirname, '../.env.local') });
 
-const isProd = process.argv.includes('--prod');
-const SUPABASE_URL = isProd
-  ? (process.env.SUPABASE_PROD_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
-  : process.env.NEXT_PUBLIC_SUPABASE_URL;
+const LOCAL_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321';
+const LOCAL_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 
-const SUPABASE_KEY = isProd
-  ? (process.env.SUPABASE_PROD_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : process.env.SUPABASE_SERVICE_ROLE_KEY;
+const localDb = createClient(LOCAL_URL, LOCAL_KEY);
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('❌ Faltan variables de entorno. Verifica tu .env.local:');
-  console.error('   NEXT_PUBLIC_SUPABASE_URL / SUPABASE_PROD_URL');
-  console.error('   SUPABASE_SERVICE_ROLE_KEY / SUPABASE_PROD_SERVICE_ROLE_KEY');
-  process.exit(1);
+function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
+  if (!nextPaymentDate && !joinDate) return null;
+  
+  const referenceDate = nextPaymentDate ? new Date(nextPaymentDate) : new Date(joinDate);
+  const today = new Date();
+  
+  // Set both to midnight to count full days
+  referenceDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  
+  const diffTime = referenceDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
 }
 
-console.log(`📡 Conectado a: ${isProd ? 'PRODUCCIÓN (' + SUPABASE_URL + ')' : 'LOCAL (' + SUPABASE_URL + ')'}`);
-
-const db = createClient(SUPABASE_URL, SUPABASE_KEY);
-const DRY_RUN = process.argv.includes('--dry-run');
-
-function daysUntil(dateStr, joinDate) {
-  if (!dateStr) return null;
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const target = new Date(y, m - 1, d); target.setHours(0, 0, 0, 0);
-  const today  = new Date();             today.setHours(0, 0, 0, 0);
-  return Math.ceil((target - today) / 86400000);
-}
-
-function computeStatus(client, payments, planPrice) {
-  if (!client.plan_id || planPrice <= 0) return 'inactivo';
-
-  const totalPaid = payments.reduce((sum, p) => sum + (parseFloat(p.amount_usd) || 0), 0);
-  const cycles = Math.floor(totalPaid / planPrice);
-  const daysUntilPayment = daysUntil(client.next_payment_date, client.join_date);
-
-  if (cycles >= 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
-    return 'activo';
-  } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
-    return 'inactivo';
-  }
-  return 'inactivo';
-}
-
-async function main() {
-  const todayStr = new Date().toISOString().split('T')[0];
-  console.log(`\n📅 Fecha: ${todayStr}${DRY_RUN ? '  [DRY RUN — no se modificará nada]' : ''}\n`);
-
-  const { data: clients, error: cErr } = await db
-    .from('clients')
-    .select('id, first_name, last_name, cedula, plan_id, join_date, next_payment_date, status, plans(id, price)')
-    .not('plan_id', 'is', null)
-    .order('last_name', { ascending: true });
-
-  if (cErr) { console.error('Error al obtener clientes:', cErr.message); process.exit(1); }
-
-  const { data: payments, error: pErr } = await db
-    .from('payments')
-    .select('id, client_id, plan_id, amount_usd');
-
-  if (pErr) { console.error('Error al obtener pagos:', pErr.message); process.exit(1); }
-
-  console.log(`Clientes con plan: ${clients.length}  |  Total pagos: ${payments.length}\n`);
-
-  const toFix = [];
-  const correct = [];
-
-  for (const c of clients) {
-    if (!c.plans) continue;
-    const planPrice = parseFloat(c.plans.price) || 0;
-    if (planPrice <= 0) continue;
-
-    const cp = payments.filter(p => p.client_id === c.id && p.plan_id === c.plan_id);
-    const newStatus = computeStatus(c, cp, planPrice);
-
-    if (newStatus !== c.status) {
-      toFix.push({
-        id: c.id,
-        name: `${c.first_name} ${c.last_name}`,
-        cedula: c.cedula,
-        oldStatus: c.status,
-        newStatus,
-        payments: cp.length,
-        nextPayment: c.next_payment_date,
-      });
-    } else {
-      correct.push(c.id);
-    }
-  }
-
-  if (toFix.length === 0) {
-    console.log(`✅ Todos los clientes tienen status correcto. (${correct.length} verificados)\n`);
-    return;
-  }
-
-  console.log(`🔍 Clientes con status incorrecto: ${toFix.length}\n`);
-
-  for (const fix of toFix) {
-    const icon = fix.newStatus === 'activo' ? '🟢' : '🔴';
-    console.log(`  ${icon} ${fix.name.padEnd(35)} (${fix.cedula})`);
-    console.log(`     Pagos: ${fix.payments}  |  próximo: ${fix.nextPayment ?? 'NULL'}`);
-    console.log(`     ${fix.oldStatus} → ${fix.newStatus}`);
-  }
-
-  if (DRY_RUN) {
-    console.log('\n⚠️  Modo dry-run: no se realizaron cambios. Ejecuta sin --dry-run para aplicar.\n');
-    return;
-  }
-
-  console.log('\n🔧 Aplicando correcciones...\n');
-  let updated = 0;
-  const errors = [];
-
-  for (const fix of toFix) {
-    const { error } = await db
+async function fixAllClientStatuses() {
+  console.log('🔄 Arreglando estados de clientes...');
+  try {
+    const { data: allClients, error: fetchError } = await localDb
       .from('clients')
-      .update({ status: fix.newStatus })
-      .eq('id', fix.id);
+      .select(`
+        id,
+        first_name,
+        last_name,
+        status,
+        next_payment_date,
+        join_date,
+        plan_id,
+        plans (
+          id,
+          price
+        )
+      `);
 
-    if (error) {
-      errors.push(`${fix.name}: ${error.message}`);
-    } else {
-      updated++;
+    if (fetchError) throw fetchError;
+    if (!allClients || allClients.length === 0) {
+      console.log('No hay clientes.');
+      return;
     }
+
+    const { data: allPayments, error: paymentsError } = await localDb
+      .from('payments')
+      .select('id, client_id, plan_id, amount_usd');
+
+    if (paymentsError) throw paymentsError;
+
+    let updatedCount = 0;
+
+    for (const clientData of allClients) {
+      try {
+        // En supabase-js v2 un objeto anidado viene como array si es una relación one-to-many, 
+        // o un objeto directamente si es many-to-one, pero para estar seguros:
+        const plan = Array.isArray(clientData.plans) ? clientData.plans[0] : clientData.plans;
+        const planPrice = plan ? parseFloat(plan.price) || 0 : 0;
+        
+        if (planPrice <= 0) continue;
+
+        const clientPayments = (allPayments || []).filter(
+          p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
+        );
+
+        const totalPaid = clientPayments.reduce(
+          (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
+          0
+        );
+
+        const cycles = Math.floor(totalPaid / planPrice);
+        const daysUntilPayment = calculateDaysUntilPayment(
+          clientData.next_payment_date,
+          clientData.join_date
+        );
+
+        let newStatus;
+        if (cycles >= 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+          newStatus = 'activo';
+        } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
+          newStatus = 'inactivo';
+        } else if (cycles < 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+          newStatus = 'pendiente';
+        } else {
+          newStatus = 'inactivo';
+        }
+
+        if (newStatus !== clientData.status) {
+          console.log(`Actualizando ${clientData.first_name} ${clientData.last_name}: ${clientData.status} -> ${newStatus}`);
+          const { error } = await localDb
+            .from('clients')
+            .update({ status: newStatus })
+            .eq('id', clientData.id);
+            
+          if (error) console.error(error);
+          else updatedCount++;
+        }
+      } catch (err) {
+        console.error(`Error con cliente ${clientData.id}:`, err);
+      }
+    }
+    
+    console.log(`✅ Actualizados ${updatedCount} clientes.`);
+
+  } catch (e) {
+    console.error(e);
   }
-
-  const activados = toFix.filter(f => f.oldStatus === 'pendiente' && f.newStatus === 'activo').length;
-  const inactivados = toFix.filter(f => f.newStatus === 'inactivo').length;
-
-  console.log('─'.repeat(60));
-  console.log(`  ✅ Corregidos:              ${updated}`);
-  console.log(`  ❌ Errores:                 ${errors.length}`);
-  console.log(`  🟢 Pendiente → Activo:     ${activados}`);
-  console.log(`  🔴 others to Inactivo:     ${inactivados}`);
-  console.log('─'.repeat(60) + '\n');
-  if (errors.length) errors.forEach(e => console.log(`  ❌ ${e}`));
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+fixAllClientStatuses();

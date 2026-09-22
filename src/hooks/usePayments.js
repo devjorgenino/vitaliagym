@@ -132,14 +132,92 @@ export function usePayments({ onClientUpdate } = {}) {
 
   const deletePayment = async (id, { clientId, planId } = {}) => {
     try {
-      const { error } = await executeWithSync({
-        table: 'payments',
-        type: 'DELETE',
-        match: { id }
-      });
+      // Prefer the atomic server-side function when online. It performs
+      // delete + rollback decision + restore inside ONE Postgres
+      // transaction, so a concurrent insert for the same client cannot
+      // slip in between the delete and the remaining-payments count and
+      // cause a false rollback (race condition).
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-      if (error) {
-        throw error;
+      let atomicResult = null;
+      if (isOnline) {
+        const { data, error: rpcErr } = await client.rpc('delete_payment_atomic', {
+          p_payment_id: id,
+        });
+        if (rpcErr) {
+          // Fall back to the legacy client-side path if the function is
+          // not yet deployed (e.g. migration not applied).
+          console.warn('delete_payment_atomic unavailable, falling back:', rpcErr);
+        } else {
+          atomicResult = data;
+        }
+      }
+
+      if (!atomicResult) {
+        // 1. Obtener pago antes de borrar
+        const { data: paymentToDelete, error: fetchErr } = await client
+          .from('payments')
+          .select('client_id, plan_id, is_archived')
+          .eq('id', id)
+          .single();
+
+        if (fetchErr) throw fetchErr;
+
+        const { error } = await executeWithSync({
+          table: 'payments',
+          type: 'DELETE',
+          match: { id }
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        // 2. Verificar si que hacer Rollback del reinicio
+        if (paymentToDelete && paymentToDelete.client_id) {
+          // ¿Quedan pagos activos?
+          const { data: remainingPayments } = await client
+            .from('payments')
+            .select('id')
+            .eq('client_id', paymentToDelete.client_id)
+            .eq('is_archived', false);
+
+          const { data: clientData } = await client
+            .from('clients')
+            .select('original_join_date')
+            .eq('id', paymentToDelete.client_id)
+            .single();
+
+          if ((!remainingPayments || remainingPayments.length === 0) && clientData && clientData.original_join_date) {
+              // ROLLBACK TRIGGERED
+              // - Unarchive all payments
+              await executeWithSync({
+                  table: 'payments',
+                  type: 'UPDATE',
+                  data: { is_archived: false },
+                  match: { client_id: paymentToDelete.client_id, is_archived: true }
+              });
+              // - Unarchive attendance
+              await executeWithSync({
+                  table: 'attendance',
+                  type: 'UPDATE',
+                  data: { is_archived: false },
+                  match: { client_id: paymentToDelete.client_id, is_archived: true }
+              });
+              // - Restore client join_date
+              await executeWithSync({
+                  table: 'clients',
+                  type: 'UPDATE',
+                  data: { join_date: clientData.original_join_date, original_join_date: null },
+                  match: { id: paymentToDelete.client_id }
+              });
+          }
+        }
+      } // end if (!atomicResult) — legacy client-side path
+
+      if (atomicResult && atomicResult.client_id) {
+        clientId = clientId || atomicResult.client_id;
+        planId = planId || atomicResult.plan_id;
       }
 
       // Recalculate next_payment_date after removing a payment
@@ -149,7 +227,7 @@ export function usePayments({ onClientUpdate } = {}) {
       }
 
       // Refetch to reflect updated state
-      await fetchPayments();
+      await fetchPayments();      await fetchPayments();
 
       // Refrescar la lista de clientes para que el status se actualice en la tabla
       if (typeof onClientUpdate === 'function') {

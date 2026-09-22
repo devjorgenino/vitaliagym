@@ -170,7 +170,7 @@ function SelectItem({
         // Sizing
         "py-2 pr-8 pl-2 text-sm",
         // States
-        "outline-none select-none",
+        "focus-visible:outline-none select-none",
         "transition-colors duration-75",
         "focus:bg-accent focus:text-accent-foreground",
         "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",

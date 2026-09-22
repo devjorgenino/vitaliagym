@@ -55,9 +55,9 @@ export function PageHeader({
             )}
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">
                   {title}
-                </h1>
+                </h2>
                 {badge && (
                   <Badge variant={badge.variant || "secondary"} className="font-normal">
                     {badge.label}

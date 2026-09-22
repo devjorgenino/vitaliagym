@@ -125,9 +125,9 @@ const Login = () => {
 
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
               ¡Bienvenido de vuelta!
-            </h1>
+            </h2>
             <p className="text-[--muted-foreground] text-sm">
               Ingresa a tu cuenta para continuar
             </p>
@@ -147,6 +147,7 @@ const Login = () => {
                   id="email"
                   name="email"
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tu@email.com"
@@ -174,6 +175,7 @@ const Login = () => {
                   id="password"
                   name="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"

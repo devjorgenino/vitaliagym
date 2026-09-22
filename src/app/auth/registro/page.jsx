@@ -193,9 +193,9 @@ const Registro = () => {
 
           {/* Header */}
           <div className="text-center mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
               ¡Únete a VitaliaGym!
-            </h1>
+            </h2>
             <p className="text-[--muted-foreground] text-sm">
               Crea tu cuenta y comienza a entrenar
             </p>
@@ -216,6 +216,7 @@ const Registro = () => {
                   id="firstname"
                   name="firstname"
                   type="text"
+                  autoComplete="given-name"
                   placeholder="Tu nombre"
                   value={formData.firstname}
                   onChange={handleInputChange}
@@ -240,6 +241,7 @@ const Registro = () => {
                   id="lastname"
                   name="lastname"
                   type="text"
+                  autoComplete="family-name"
                   placeholder="Tu apellido"
                   value={formData.lastname}
                   onChange={handleInputChange}
@@ -267,6 +269,7 @@ const Registro = () => {
                 id="email"
                 name="email"
                 type="email"
+                autoComplete="email"
                 placeholder="tu@email.com"
                 value={formData.email}
                 onChange={handleInputChange}
@@ -319,6 +322,7 @@ const Registro = () => {
                     id="phone"
                     name="phone"
                     type="tel"
+                    autoComplete="tel"
                     placeholder="1234567"
                     maxLength={7}
                     value={formData.phone}
