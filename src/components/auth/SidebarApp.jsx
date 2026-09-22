@@ -57,6 +57,12 @@ export const AppSidebar = () => {
   const handleMobileNavClick = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
+      // Restaurar el foco al botón del sidebar para que el teclado
+      // no quede atrapado dentro del drawer cerrado
+      requestAnimationFrame(() => {
+        const trigger = document.querySelector('[data-sidebar="trigger"]');
+        if (trigger) trigger.focus();
+      });
     }
   }, [isMobile, setOpenMobile]);
 
@@ -160,6 +166,7 @@ export const AppSidebar = () => {
                           <Link
                             href={item.url}
                             onClick={handleMobileNavClick}
+                            aria-label={state === "collapsed" ? item.title : undefined}
                             className={cn(
                               "flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-left text-muted-foreground transition-all duration-200 rounded-xl hover:bg-[--primary]/5 hover:text-foreground",
                               "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:gap-0",

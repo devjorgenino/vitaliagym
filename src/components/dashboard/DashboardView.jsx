@@ -97,9 +97,9 @@ export function DashboardView() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 shrink-0">
         <div className="min-w-0">
           <div className="relative inline-block">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
               Dashboard
-            </h1>
+            </h2>
             <span className="absolute -top-1 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
           </div>
           <p className="text-sm sm:text-base text-muted-foreground">

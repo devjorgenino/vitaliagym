@@ -25,19 +25,17 @@ export async function getAccessToken() {
 export async function authPost(url, data) {
   try {
     const token = await getAccessToken();
-    
-    // Include token in the body instead of headers to avoid 431 errors
-    const bodyWithAuth = {
-      ...data,
-      _authToken: token,
-    };
-    
+
+    // Token goes in the Authorization header. It used to be sent in the
+    // body as `_authToken`, but that leaked it into server logs, browser
+    // history and Referer headers. The server now only accepts the header.
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(bodyWithAuth),
+      body: JSON.stringify(data),
     });
     
     const contentType = response.headers.get("content-type");
@@ -80,20 +78,16 @@ export async function authPost(url, data) {
 export async function authDelete(url, data = {}) {
   try {
     const token = await getAccessToken();
-    
-    // Send as POST with action flag and token in body
-    const bodyWithAuth = {
-      ...data,
-      _authToken: token,
-      _action: "delete",
-    };
-    
+
+    // Send as POST with action flag. Token goes in the Authorization
+    // header (not the body) so it never lands in logs/history/Referer.
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(bodyWithAuth),
+      body: JSON.stringify({ ...data, _action: "delete" }),
     });
     
     const contentType = response.headers.get("content-type");

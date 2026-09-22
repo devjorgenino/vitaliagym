@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 test.describe('Fractional Payment Flow', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/auth/login');
-    await page.locator('input[name="email"]').fill('test@admin.com');
-    await page.locator('input[name="password"]').fill('Password123!');
+    await page.locator('input[name="email"]').fill('test_fresh@admin.com');
+    await page.locator('input[name="password"]').fill('test123');
     await page.getByRole('button', { name: /Iniciar sesión/i }).click();
     await expect(page).toHaveURL(/.*dashboard.*/, { timeout: 15000 });
   });

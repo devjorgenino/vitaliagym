@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ShieldX, Home, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AccessDeniedPage() {
+  const router = useRouter();
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <div className="text-center max-w-md">
@@ -14,9 +17,9 @@ export default function AccessDeniedPage() {
         </div>
 
         {/* Título */}
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Acceso Denegado
-        </h1>
+        </h2>
 
         {/* Descripción */}
         <p className="text-gray-600 dark:text-gray-400 mb-8">
@@ -36,13 +39,11 @@ export default function AccessDeniedPage() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button
             variant="outline"
-            asChild
+            onClick={() => router.back()}
             className="flex items-center gap-2"
           >
-            <Link href="javascript:history.back()">
-              <ArrowLeft className="h-4 w-4" />
-              Volver
-            </Link>
+            <ArrowLeft className="h-4 w-4" />
+            Volver
           </Button>
           <Button asChild className="flex items-center gap-2">
             <Link href="/dashboard">

@@ -429,10 +429,12 @@
 /* Taller modals for payments and clients */
 .tall-modal {
   max-height: 95vh;
+  overflow-y: auto;
 }
 
 @media (max-width: 768px) {
   .tall-modal {
     max-height: 98vh;
+    overflow-y: auto;
   }
 }

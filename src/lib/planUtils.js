@@ -1,12 +1,17 @@
 export const INSCRIPTION_PRICE_USD = 5;
 
+// Tasa de respaldo usada cuando no se pasa una tasa explícita.
+// Se importa desde useExchangeRate para evitar que dos constantes
+// con el mismo valor mágico diverjan en el tiempo.
+import { FALLBACK_EXCHANGE_RATE } from "@/hooks/useExchangeRate";
+
 /**
  * Normaliza el precio de un plan según su moneda base.
  * Si el plan usa 'BS', usa el precio tal cual (bolívares fijos).
  * Si usa 'USD', usa el precio tal cual (dólares fijos).
  * Esto protege los cálculos de fluctuaciones del tipo de cambio.
  */
-export function getPlanPriceInBaseCurrency(plan, rate = 310) {
+export function getPlanPriceInBaseCurrency(plan, rate = FALLBACK_EXCHANGE_RATE) {
   if (!plan) return 0;
   const price = parseFloat(plan.price) || 0;
   const currency = (plan.currency || 'USD').toUpperCase();
@@ -24,7 +29,7 @@ export function getPlanCurrency(plan) {
  * (solo si necesitas comparar con la cuenta USD; para cálculos de ciclo
  * lo más seguro es usar la moneda base).
  */
-export function getPlanPriceInUSD(plan, rate = 310) {
+export function getPlanPriceInUSD(plan, rate = FALLBACK_EXCHANGE_RATE) {
   const currency = getPlanCurrency(plan);
   const price = getPlanPriceInBaseCurrency(plan);
   if (currency === 'USD') return price;
@@ -32,7 +37,7 @@ export function getPlanPriceInUSD(plan, rate = 310) {
   return rate > 0 ? price / rate : price;
 }
 
-export function getPlanPriceInBS(plan, rate = 310) {
+export function getPlanPriceInBS(plan, rate = FALLBACK_EXCHANGE_RATE) {
   const currency = getPlanCurrency(plan);
   const price = getPlanPriceInBaseCurrency(plan);
   if (currency === 'BS') return price;

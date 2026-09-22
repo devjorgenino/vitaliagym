@@ -37,6 +37,18 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => {
     const el = overlayRef.current;
     if (!el) return;
 
+    // Respetar prefers-reduced-motion: si el usuario pidió menos animaciones,
+    // mostramos el overlay de inmediato sin transición GSAP.
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReduced) {
+      el.style.opacity = "1";
+      return;
+    }
+
     // Animación ultra rápida
     gsap.fromTo(
       el,
@@ -75,6 +87,18 @@ const DialogContent = React.forwardRef(
       const el = contentRef.current;
       if (!el) return;
 
+      // Respetar prefers-reduced-motion: mostramos el contenido de inmediato
+      // sin animación GSAP si el usuario pidió menos movimientos.
+      const prefersReduced =
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (prefersReduced) {
+        el.style.opacity = "1";
+        return;
+      }
+
       gsap.fromTo(
         el,
         {
@@ -109,7 +133,7 @@ const DialogContent = React.forwardRef(
             "data-[state=closed]:fade-out-0",
             "data-[state=closed]:zoom-out-[0.98]",
             "data-[state=closed]:duration-75",
-            "focus:outline-none",
+            "focus-visible:outline-none",
             "motion-reduce:transform-none",
             className
           )}

@@ -360,6 +360,20 @@ export function PaymentsTable({
     [plans],
   );
 
+  // Buscar el plan asociado a un pago. getEffectiveAmount(p, getPlanForPayment(p)) sin plan asume
+  // USD y lee amount_usd; para pagos de planes en BS eso mezcla monedas y
+  // genera restantes absurdos (ej: $19,976.46 en un plan de 20,000 Bs).
+  const getPlanForPayment = (payment) =>
+    plans.find((p) => p.id === payment.plan_id) || null;
+
+  // Moneda base del plan seleccionado ('USD' | 'BS').
+  // Los efectos de conversión usan esto para saber en qué dirección
+  // ir: USD→BS (multiplicar) o BS→USD (dividir).
+  const selectedPlanCurrency = useMemo(() => {
+    const plan = plans.find((p) => p.id === formData.plan_id);
+    return plan ? getPlanCurrency(plan) : "USD";
+  }, [plans, formData.plan_id]);
+
   // Memo para calcular el restante y precio del plan actual de forma segura
   const currentPaymentInfo = useMemo(() => {
     if (isDialogOpen && formData.plan_id) {
@@ -374,7 +388,7 @@ export function PaymentsTable({
         );
 
         const totalPaid = allClientPayments.reduce(
-          (sum, p) => sum + getEffectiveAmount(p),
+          (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
           0,
         );
 
@@ -484,7 +498,7 @@ export function PaymentsTable({
         (p) => p.client_id === formData.client_id && p.plan_id === planId,
       );
       totalPaidSoFar = allClientPayments.reduce(
-        (sum, p) => sum + getEffectiveAmount(p),
+        (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
         0,
       );
     }
@@ -508,7 +522,7 @@ export function PaymentsTable({
       (p) => p.client_id === clientId && p.plan_id === planId,
     );
     const totalPaid = clientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
     return totalPaid;
@@ -517,6 +531,7 @@ export function PaymentsTable({
   // Calcular total pagado y restante para un cliente-plan
   const calculatePaymentStatus = (payment) => {
     const planPrice = getPlanPrice(payment.plan_id);
+    const currency = getPlanCurrency(getPlanForPayment(payment));
     if (planPrice <= 0) {
       return {
         planPrice: 0,
@@ -525,6 +540,7 @@ export function PaymentsTable({
         remaining: 0,
         isFullyPaid: true,
         remainingFormatted: "0.00",
+        currency,
       };
     }
 
@@ -539,7 +555,7 @@ export function PaymentsTable({
 
     // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
 
@@ -563,6 +579,7 @@ export function PaymentsTable({
         remaining: 0,
         isFullyPaid: true,
         remainingFormatted: "0.00",
+        currency,
       };
     }
 
@@ -573,6 +590,7 @@ export function PaymentsTable({
       remaining: currentRemaining,
       isFullyPaid: false,
       remainingFormatted: currentRemaining.toFixed(2),
+      currency,
     };
   };
 
@@ -594,7 +612,7 @@ export function PaymentsTable({
 
     // Calcular el total pagado ANTES del pago actual
     const totalPaidBefore = previousPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
 
@@ -618,7 +636,7 @@ export function PaymentsTable({
     );
 
     return allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
   };
@@ -710,23 +728,30 @@ export function PaymentsTable({
     }
   }, [formData.amount_bs, rate, editingField, initialLoadDone, isEditing]);
 
-  // Recalcular amount_bs cuando cambia la tasa de cambio (en vivo)
+    // Recalcular montos en vivo cuando cambia la tasa de cambio o los montos
   useEffect(() => {
-    // No ejecutar hasta que termine la carga inicial
     if (!initialLoadDone) return;
-    // Solo recalcular cuando el usuario cambia manualmente el campo exchange_rate
-    if (editingField !== "exchange_rate") return;
-    
-    // Solo recalcular si hay un monto en USD y una tasa válida
-    if (formData.amount_usd && formData.exchange_rate && parseFloat(formData.exchange_rate) > 0) {
-      const currentRate = parseFloat(formData.exchange_rate);
-      const usdAmount = parseFloat(formData.amount_usd);
-      setFormData((prev) => ({
-        ...prev,
-        amount_bs: (usdAmount * currentRate).toFixed(2),
-      }));
+    const currentRate = parseFloat(formData.exchange_rate) || 0;
+    if (currentRate <= 0) return;
+
+    if (editingField === "exchange_rate" || editingField === "amount_usd") {
+      if (formData.amount_usd && parseFloat(formData.amount_usd) > 0) {
+        const usdAmount = parseFloat(formData.amount_usd);
+        const newBs = (usdAmount * currentRate).toFixed(2);
+        if (newBs !== formData.amount_bs) {
+          setFormData((prev) => ({ ...prev, amount_bs: newBs }));
+        }
+      }
+    } else if (editingField === "amount_bs") {
+      if (formData.amount_bs && parseFloat(formData.amount_bs) > 0) {
+        const bsAmount = parseFloat(formData.amount_bs);
+        const newUsd = (bsAmount / currentRate).toFixed(2);
+        if (newUsd !== formData.amount_usd) {
+          setFormData((prev) => ({ ...prev, amount_usd: newUsd }));
+        }
+      }
     }
-  }, [formData.exchange_rate, editingField, initialLoadDone]);
+  }, [formData.exchange_rate, formData.amount_usd, formData.amount_bs, editingField, initialLoadDone]);
 
   // Efecto para aplicar descuento cuando cambia
   useEffect(() => {
@@ -880,7 +905,7 @@ export function PaymentsTable({
           p.client_id === formData.client_id && p.plan_id === formData.plan_id,
       );
       const totalPaid = allClientPayments.reduce(
-        (sum, p) => sum + getEffectiveAmount(p),
+        (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
         0,
       );
       const planPrice = getPlanPrice(formData.plan_id);
@@ -1242,7 +1267,7 @@ export function PaymentsTable({
       (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
     );
     const totalPaid = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
     const planPrice = getPlanPrice(payment.plan_id);
@@ -1754,7 +1779,7 @@ export function PaymentsTable({
                             className="font-medium"
                           />
                         </TableCell>
-                        <TableCell className="font-medium whitespace-nowrap">
+                        <TableCell className="font-medium whitespace-nowrap text-blue-600 dark:text-blue-400">
                           ${(parseFloat(payment.amount_usd) || 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
@@ -1779,7 +1804,9 @@ export function PaymentsTable({
                                 : "text-orange-600"
                             }`}
                           >
-                            ${paymentStatus.remainingFormatted}
+                            {paymentStatus.currency === "BS"
+                              ? `Bs. ${paymentStatus.remainingFormatted}`
+                              : `$${paymentStatus.remainingFormatted}`}
                           </span>
                         </TableCell>
                         <TableCell className="hidden xl:table-cell">
@@ -2074,11 +2101,21 @@ export function PaymentsTable({
                           totalAmount = planPrice + INSCRIPTION_PRICE;
                         }
                         
-                        setFormData((prev) => ({ 
-                          ...prev, 
+                                                // Para planes en BS el monto base es el precio fijo en Bs;
+                        // amount_usd se calcula dividiendo por la tasa activa para
+                        // no mezclar monedas (un plan de 20.000 Bs no debe mostrar $20.000).
+                        const planIsBS = getPlanCurrency(selectedPlan) === "BS";
+                        const usdAmount = planIsBS
+                          ? (totalAmount > 0 && rate ? (totalAmount / rate).toFixed(2) : "")
+                          : (totalAmount > 0 ? totalAmount.toFixed(2) : "");
+                        const bsAmount = planIsBS
+                          ? (totalAmount > 0 ? totalAmount.toFixed(2) : "")
+                          : (totalAmount > 0 ? (totalAmount * (rate || 1)).toFixed(2) : "");
+                        setFormData((prev) => ({
+                          ...prev,
                           plan_id: value,
-                          amount_usd: totalAmount > 0 ? totalAmount.toFixed(2) : "",
-                          amount_bs: totalAmount > 0 ? (totalAmount * (rate || 1)).toFixed(2) : ""
+                          amount_usd: usdAmount,
+                          amount_bs: bsAmount,
                         }));
                         
                         // Update URL with new amount
@@ -2103,9 +2140,6 @@ export function PaymentsTable({
                         {plans.map((plan) => (
                           <SelectItem key={plan.id} value={plan.id}>
                             <span className="font-medium">{plan.name}</span>
-                            <span className="text-primary font-semibold ml-2">
-                              ${plan.price}
-                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2131,11 +2165,17 @@ export function PaymentsTable({
                         </div>
                         <div>
                           <p className="font-medium text-sm">Pago Completo</p>
-                          <p className="text-xs text-muted-foreground">${(() => { 
-                            const selectedPlan = plans.find(p => p.id === formData.plan_id); 
+                          <p className="text-xs text-muted-foreground">{(() => {
+                            const selectedPlan = plans.find(p => p.id === formData.plan_id);
                             const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0;
                             const totalAmount = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
-                            return totalAmount > 0 ? totalAmount.toFixed(2) : "0.00"; 
+                            if (totalAmount <= 0) return "0.00";
+                            const planCurrency = getPlanCurrency(selectedPlan);
+                            // En planes BS la inscripción ($5 USD) se convierte a Bs con la tasa activa
+                            const amount = planCurrency === "BS"
+                              ? (isRegisterMode && includeInscription ? planPrice + INSCRIPTION_PRICE * (parseFloat(formData.exchange_rate) || 1) : planPrice)
+                              : totalAmount;
+                            return planCurrency === "BS" ? `Bs. ${amount.toFixed(2)}` : `$${amount.toFixed(2)}`;
                           })()}</p>
                         </div>
                       </label>
@@ -2521,7 +2561,6 @@ export function PaymentsTable({
                 {/* Restante después del pago */}
                 {paymentMode === "partial" &&
                   formData.plan_id &&
-                  formData.amount_usd &&
                   !partialValidationError && (
                     <div
                       className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg"
@@ -2532,13 +2571,15 @@ export function PaymentsTable({
                           Restante después de este pago:
                         </span>{" "}
                         <span className="font-bold">
-                          $
-                          {
-                            calculateRemainingAfterCurrentAmount(
-                              formData.plan_id,
-                              formData.amount_usd,
-                            ).formattedAmount
-                          }
+                          {selectedPlanCurrency === "BS"
+                            ? `Bs. ${calculateRemainingAfterCurrentAmount(
+                                formData.plan_id,
+                                formData.amount_bs,
+                              ).formattedAmount}`
+                            : `$${calculateRemainingAfterCurrentAmount(
+                                formData.plan_id,
+                                formData.amount_usd,
+                              ).formattedAmount}`}
                         </span>
                       </p>
                     </div>
@@ -2843,7 +2884,9 @@ export function PaymentsTable({
                 <div>
                   <p className="text-muted-foreground">Restante</p>
                   <p className={`font-medium ${calculatePaymentStatus(detailsPayment).isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
-                    ${calculatePaymentStatus(detailsPayment).remainingFormatted}
+                    {calculatePaymentStatus(detailsPayment).currency === "BS"
+                      ? `Bs. ${calculatePaymentStatus(detailsPayment).remainingFormatted}`
+                      : `$${calculatePaymentStatus(detailsPayment).remainingFormatted}`}
                   </p>
                 </div>
                 <div>

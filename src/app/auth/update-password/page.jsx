@@ -116,9 +116,9 @@ const UpdatePassword = () => {
               <Sparkles className="w-10 h-10 text-red-500" />
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-3">
               Enlace inválido o expirado
-            </h1>
+            </h2>
             <p className="text-[--muted-foreground] mb-6">
               El enlace de recuperación ha expirado o ya fue utilizado.
             </p>
@@ -202,9 +202,9 @@ const UpdatePassword = () => {
 
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
               Nueva contraseña
-            </h1>
+            </h2>
             <p className="text-[--muted-foreground] text-sm">
               Ingresa tu nueva contraseña
             </p>

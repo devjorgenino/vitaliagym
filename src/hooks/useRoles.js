@@ -252,37 +252,20 @@ const useRoles = () => {
     try {
       setError(null);
 
-      // Eliminar todos los permisos actuales
-      // This is a bulk delete. executeWithSync currently supports DELETE with match.
-      // But we are doing multiple operations (Delete All + Insert Many).
-      // For proper sync, each should be recorded.
-      // OR we just record them as online-only or try to batch.
-      // Since this is a restricted admin action, maybe we can assume online for safety?
-      // Or we just try to execute.
-      
-      // Let's rely on standard online execution for this complex transaction for now to avoid complexity in sync logic
-      // OR just wrap them.
-      
-      const { error: deleteError } = await client
-        .from('role_permissions')
-        .delete()
-        .eq('role_id', roleId);
+      // Route through the atomic server-side function so delete+insert run
+      // in ONE transaction and the call goes through executeWithSync, which
+      // queues it for offline replay instead of dropping it silently.
+      const { error: rpcError } = await executeWithSync({
+        table: 'update_role_permissions_atomic',
+        type: 'RPC',
+        rpc: true,
+        data: {
+          p_role_id: roleId,
+          p_permission_ids: permissionIds || [],
+        },
+      });
 
-      if (deleteError) throw deleteError;
-
-      // Insertar los nuevos permisos
-      if (permissionIds.length > 0) {
-        const { error: insertError } = await client
-          .from('role_permissions')
-          .insert(
-            permissionIds.map(permId => ({
-              role_id: roleId,
-              permission_id: permId,
-            }))
-          );
-
-        if (insertError) throw insertError;
-      }
+      if (rpcError) throw rpcError;
 
       // Refrescar lista
       await fetchRoles();
@@ -292,7 +275,6 @@ const useRoles = () => {
       return { success: false, error: err.message };
     }
   }, [fetchRoles]);
-
   // Cargar datos iniciales
   useEffect(() => {
     const loadData = async () => {

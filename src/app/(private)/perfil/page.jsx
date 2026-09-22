@@ -245,9 +245,9 @@ const Perfil = () => {
     <div className="w-full space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Mi Perfil
-          </h1>
+          </h2>
           <p className="text-muted-foreground text-sm">
             Gestiona tu información personal y preferencias de cuenta
           </p>

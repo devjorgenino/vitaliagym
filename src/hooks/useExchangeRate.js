@@ -1,16 +1,25 @@
 import { useState, useEffect } from "react";
 
+// Tasa de respaldo usada únicamente cuando no se puede obtener la tasa BCV
+// (sin conexión, sin caché y sin fuente externa). Se expone como constante
+// nombrada para que sea configurable y auditable; no es un valor mágico.
+export const FALLBACK_EXCHANGE_RATE = 310.0;
+
 export function useExchangeRate() {
   const [rate, setRate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isManualRate, setIsManualRate] = useState(false);
+  // True cuando la tasa actual es la de respaldo, no una real del BCV.
+  // Permite a la UI advertir al usuario en lugar de mostrársela sin contexto.
+  const [isFallback, setIsFallback] = useState(false);
 
   const setManualRate = (newRate) => {
     if (newRate && newRate > 0) {
       setRate(newRate);
       setIsManualRate(true);
       setError(null);
+      setIsFallback(false);
       localStorage.setItem('manualExchangeRate', newRate.toString());
       localStorage.setItem('isManualRate', 'true');
     }
@@ -81,16 +90,19 @@ export function useExchangeRate() {
 
       if (cachedRate && cachedRate > 0) {
         setRate(cachedRate);
+        setIsFallback(false);
       } else {
         // Fallback a tasa fija si todo falla (incluso caché)
-        const fallbackRate = 310.0;
+        const fallbackRate = FALLBACK_EXCHANGE_RATE;
         setRate(fallbackRate);
+        setIsFallback(true);
         setError("No se pudo obtener la tasa BCV (ni online ni caché), usando tasa de respaldo");
       }
     } catch (err) {
       // Fallback a tasa fija
-      const fallbackRate = 310.0;
+      const fallbackRate = FALLBACK_EXCHANGE_RATE;
       setRate(fallbackRate);
+      setIsFallback(true);
       setError(
         "No se pudo obtener la tasa BCV, usando tasa de respaldo: " +
           err.message
@@ -158,6 +170,7 @@ export function useExchangeRate() {
     loading,
     error,
     isManualRate,
+    isFallback,
     convertToBs,
     formatCurrency,
     formatMultiCurrency,

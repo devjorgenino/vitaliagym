@@ -86,9 +86,9 @@ const ResetPassword = () => {
               <CheckCircle2 className="w-10 h-10 text-primary" />
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-3">
               ¡Correo enviado!
-            </h1>
+            </h2>
             <p className="text-[--muted-foreground] mb-6">
               Hemos enviado un enlace de recuperación a <br />
               <span className="font-semibold text-[--foreground]">{email}</span>
@@ -173,9 +173,9 @@ const ResetPassword = () => {
 
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[--foreground] mb-2">
               ¿Olvidaste tu contraseña?
-            </h1>
+            </h2>
             <p className="text-[--muted-foreground] text-sm">
               No te preocupes, te enviaremos un enlace para recuperarla
             </p>

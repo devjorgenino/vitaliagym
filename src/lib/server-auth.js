@@ -13,44 +13,27 @@ function getProjectRef() {
 }
 
 /**
- * Extract auth token from request body (for POST/PUT/PATCH)
- * @param {Request} request - The incoming request
- * @returns {Promise<string|null>}
- */
-async function getTokenFromBody(request) {
-  try {
-    // Clone the request to avoid consuming the body
-    const cloned = request.clone();
-    const body = await cloned.json();
-    return body?._authToken || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Extract auth token from query parameters (for GET/DELETE)
+ * Extract auth token from Authorization header
  * @param {Request} request - The incoming request
  * @returns {string|null}
  */
-function getTokenFromQuery(request) {
-  try {
-    const url = new URL(request.url);
-    return url.searchParams.get('_authToken');
-  } catch {
-    return null;
+function getTokenFromHeader(request) {
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7);
   }
+  return null;
 }
 
 /**
- * Extract auth token from cookies (fallback)
+ * Extract auth token from cookies (fallback for SSR/middleware)
  * @returns {Promise<string|null>}
  */
 async function getTokenFromCookies() {
   try {
     const cookieStore = await cookies();
     const projectRef = getProjectRef();
-    
+
     // Try different cookie name patterns that Supabase uses
     const cookiePatterns = [
       projectRef ? `sb-${projectRef}-auth-token` : null,
@@ -71,7 +54,7 @@ async function getTokenFromCookies() {
         }
       }
     }
-    
+
     return null;
   } catch {
     return null;
@@ -80,25 +63,17 @@ async function getTokenFromCookies() {
 
 /**
  * Verify user authentication from request
- * Extracts token from body (POST), query params (DELETE), or cookies (fallback)
+ * Extracts token from Authorization header (preferred), or cookies (fallback for SSR/middleware)
  * Returns the user if authenticated, null otherwise
  */
 export async function verifyAuth(request) {
   try {
     let accessToken = null;
-    const method = request.method?.toUpperCase();
 
-    // 1. For POST/PUT/PATCH: Get token from request body
-    if (['POST', 'PUT', 'PATCH'].includes(method)) {
-      accessToken = await getTokenFromBody(request);
-    }
-    
-    // 2. For GET/DELETE: Get token from query parameters
-    if (!accessToken && ['GET', 'DELETE'].includes(method)) {
-      accessToken = getTokenFromQuery(request);
-    }
-    
-    // 3. Fallback: Try cookies (for SSR or middleware scenarios)
+    // 1. Preferred: Get token from Authorization header
+    accessToken = getTokenFromHeader(request);
+
+    // 2. Fallback: Try cookies (for SSR or middleware scenarios)
     if (!accessToken) {
       accessToken = await getTokenFromCookies();
     }
@@ -232,7 +207,7 @@ export async function requirePermission(request, requiredPermission) {
     // If we can't check permissions, deny access for security
     return {
       authorized: false,
-      status: 500,
+      status: 403,
       error: "Error al verificar permisos",
     };
   }

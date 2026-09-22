@@ -518,7 +518,7 @@ const Asistencia = () => {
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Asistencia</h1>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">Asistencia</h2>
             <p className="text-sm sm:text-base text-muted-foreground">
               Registro de asistencia y control de acceso al gimnasio
             </p>
