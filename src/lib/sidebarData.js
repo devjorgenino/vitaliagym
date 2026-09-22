@@ -39,6 +39,7 @@ export const items = [
     url: "/asistencia",
     icon: CalendarCheck2,
     permission: "attendance.view",
+    isEnabled: process.env.NEXT_PUBLIC_ENABLE_ATTENDANCE === 'true',
   },
   {
     title: "Planes",
@@ -87,15 +88,14 @@ export const configItems = [
  */
 export const filterItemsByPermission = (menuItems, hasPermission) => {
   return menuItems.filter(item => {
-    // Si tiene featureFlag, verificar que esté habilitado
-    if (item.featureFlag) {
-      const isEnabled = process.env[item.featureFlag] === 'true';
-      if (!isEnabled) return false;
+    // Si tiene control de habilitación explícito
+    if (item.hasOwnProperty('isEnabled') && !item.isEnabled) {
+      return false;
     }
 
     // Si no tiene permission definido, siempre mostrar
     if (!item.permission) return true;
-    
+
     // Verificar permiso
     return hasPermission(item.permission);
   });
