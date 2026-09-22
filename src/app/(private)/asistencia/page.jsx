@@ -25,6 +25,7 @@ import {
 } from "../../../components/ui/card";
 import { Skeleton } from "../../../components/ui/skeleton";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   EmptyState,
   SearchEmptyState,
@@ -66,14 +67,7 @@ import { Pagination, usePagination } from "../../../components/ui/pagination";
 const Asistencia = () => {
   const router = useRouter();
 
-  // TODO: Remove this guard when attendance feature is ready to be permanently enabled
-  // Feature flag: Redirect if attendance module is disabled
-  useEffect(() => {
-    const isAttendanceEnabled = process.env.NEXT_PUBLIC_ENABLE_ATTENDANCE === 'true';
-    if (!isAttendanceEnabled) {
-      router.replace('/dashboard');
-    }
-  }, [router]);
+// Attendance permanently enabled
 
   const {
     attendance,
@@ -101,6 +95,36 @@ const Asistencia = () => {
     record: null,
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [editFormData, setEditFormData] = useState({ status: 'present', notes: '', check_in_time: '' });
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleOpenEdit = (record) => {
+    setEditingRecord(record);
+    setEditFormData({
+      status: record.status || 'present',
+      notes: record.notes || '',
+      check_in_time: record.check_in_time || ''
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRecord) return;
+    try {
+      setIsUpdating(true);
+      const res = await updateAttendance(editingRecord.id, editFormData);
+      if (res.success) {
+        toast.success("Asistencia actualizada correctamente");
+        setEditingRecord(null);
+      } else {
+        toast.error("Error al actualizar asistencia: " + res.error);
+      }
+    } catch (e) {
+      toast.error("Error al actualizar asistencia");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
   const [clientStatus, setClientStatus] = useState(null);
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
@@ -494,7 +518,7 @@ const Asistencia = () => {
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Asistencia</h1>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">Asistencia</h2>
             <p className="text-sm sm:text-base text-muted-foreground">
               Registro de asistencia y control de acceso al gimnasio
             </p>
@@ -625,7 +649,7 @@ const Asistencia = () => {
                             </div>
                             <div className="flex-shrink-0">
                               <Badge
-                                variant={isExpired ? "destructive" : "success"}
+                                variant={isExpired ? "warning" : "success"}
                                 className="text-xs"
                               >
                                 {isExpired ? "Vencido" : "Activo"}
@@ -730,9 +754,11 @@ const Asistencia = () => {
                           </dl>
                           <div
                             className={`mt-3 p-3 rounded-md text-sm font-medium ${
-                              clientStatus.canEnter
-                                ? "bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-200"
-                                : "bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-200"
+                              clientStatus.isExpired
+                                ? "bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                                : clientStatus.canEnter
+                                  ? "bg-green-100 text-green-800 border border-green-300 dark:bg-green-800/50 dark:text-green-200"
+                                  : "bg-red-100 text-red-800 border border-red-300 dark:bg-red-800/50 dark:text-red-200"
                             }`}
                             role="status"
                           >
@@ -857,7 +883,7 @@ const Asistencia = () => {
                 </div>
 
                 {/* Filtros */}
-                <div className="flex flex-wrap gap-3 items-center">
+                <div className="hidden">
                   <Label
                     htmlFor="status-filter"
                     className="text-sm font-medium text-muted-foreground"
@@ -947,15 +973,33 @@ const Asistencia = () => {
                               {formatDate(record.date)}
                             </TableCell>
                             <TableCell>
-                              <div>
-                                <p className="font-medium">
-                                  {record.clients?.first_name}{" "}
-                                  {record.clients?.last_name}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {record.clients?.cedula}
-                                </p>
-                              </div>
+                              {(() => {
+                                const today = new Date();
+                                today.setHours(0,0,0,0);
+                                const nextPay = record.clients?.next_payment_date ? new Date(record.clients.next_payment_date) : null;
+                                if (nextPay) nextPay.setHours(0,0,0,0);
+                                const isExpired = nextPay && nextPay < today;
+                                const diffTime = nextPay ? (today.getTime() - nextPay.getTime()) : 0;
+                                const diffDays = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+                                
+                                return (
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium">
+                                        {record.clients?.first_name} {record.clients?.last_name}
+                                      </p>
+                                      {isExpired && (
+                                        <Badge variant="destructive" className="h-5 px-1.5 py-0 text-[10px] font-semibold tracking-wide">
+                                          Vencido ({diffDays}d)
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                      V-{record.clients?.cedula}
+                                    </p>
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               {formatTime(record.check_in_time)}
@@ -982,10 +1026,7 @@ const Asistencia = () => {
                                     <Button
                                       variant="outline"
                                       size="icon-sm"
-                                      onClick={() => {
-                                        setSelectedClientId(record.client_id);
-                                        setShowAttendanceForm(true);
-                                      }}
+                                      onClick={() => handleOpenEdit(record)}
                                       aria-label={`Editar asistencia de ${record.clients?.first_name} ${record.clients?.last_name}`}
                                     >
                                       <EditIcon />
@@ -1031,6 +1072,60 @@ const Asistencia = () => {
             </CardContent>
           </Card>
         </div>
+
+      {/* Dialogo de Edición de Asistencia */}
+      <Dialog open={!!editingRecord} onOpenChange={(open) => !open && setEditingRecord(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Editar Asistencia</DialogTitle>
+            <DialogDescription>
+              Modifica los detalles de la asistencia de {editingRecord?.clients?.first_name} {editingRecord?.clients?.last_name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Estado</Label>
+              <Select
+                value={editFormData.status}
+                onValueChange={(val) => setEditFormData(prev => ({ ...prev, status: val }))}
+              >
+                <SelectTrigger id="edit-status">
+                  <SelectValue placeholder="Selecciona estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="present">Presente</SelectItem>
+                  <SelectItem value="late">Tardía</SelectItem>
+                  <SelectItem value="absent">Ausente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-time">Hora de entrada</Label>
+              <Input
+                id="edit-time"
+                type="time"
+                value={editFormData.check_in_time}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, check_in_time: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-notes">Notas / Observaciones</Label>
+              <Input
+                id="edit-notes"
+                placeholder="Observaciones adicionales"
+                value={editFormData.notes}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingRecord(null)}>Cancelar</Button>
+            <Button onClick={handleSaveEdit} disabled={isUpdating}>
+              {isUpdating ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialogo de confirmacion para eliminar */}
       <ConfirmDialog

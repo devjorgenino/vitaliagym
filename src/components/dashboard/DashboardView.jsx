@@ -1,3 +1,4 @@
+import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { useDashboardMetrics } from "../../hooks/useDashboardMetrics";
 import { Button } from "../ui/button";
@@ -18,12 +19,14 @@ import {
   Phone,
   Mail,
   IdCard,
+      DollarSign,
 } from "lucide-react";
 
 export function DashboardView() {
   const { metrics, loading, error, refetch } = useDashboardMetrics();
   const [selectedClient, setSelectedClient] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const router = useRouter();
 
   const copyToClipboard = (text, label = "Texto") => {
     navigator.clipboard
@@ -94,9 +97,9 @@ export function DashboardView() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 shrink-0">
         <div className="min-w-0">
           <div className="relative inline-block">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
               Dashboard
-            </h1>
+            </h2>
             <span className="absolute -top-1 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
           </div>
           <p className="text-sm sm:text-base text-muted-foreground">
@@ -259,19 +262,34 @@ export function DashboardView() {
                           </div>
                         )}
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <span
-                          className={`text-xs sm:text-sm font-medium whitespace-nowrap ${textStyles}`}
+                      <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5">
+                        <div>
+                          <span
+                            className={`text-xs sm:text-sm font-medium whitespace-nowrap ${textStyles}`}
+                          >
+                            {isExpired
+                              ? daysUntil === 0
+                                ? "Vence hoy"
+                                : `${Math.abs(daysUntil)} dia${Math.abs(daysUntil) !== 1 ? "s" : ""} vencido`
+                              : `${daysUntil} dia${daysUntil !== 1 ? "s" : ""}`}
+                          </span>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground">
+                            {paymentDate.toLocaleDateString("es-ES")}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/pagos/${client.id}`);
+                          }}
+                          size="sm"
+                          className="h-7 px-2 bg-green-600 hover:bg-green-700 text-white text-[11px] font-medium shadow-xs"
+                          aria-label={`Registrar pago para ${client.first_name} ${client.last_name}`}
                         >
-                          {isExpired
-                            ? daysUntil === 0
-                              ? "Vence hoy"
-                              : `${Math.abs(daysUntil)} dia${Math.abs(daysUntil) !== 1 ? "s" : ""} vencido`
-                            : `${daysUntil} dia${daysUntil !== 1 ? "s" : ""}`}
-                        </span>
-                        <p className="text-[10px] sm:text-xs text-muted-foreground">
-                          {paymentDate.toLocaleDateString("es-ES")}
-                        </p>
+                          <DollarSign className="h-3 w-3 mr-1" />
+                          Registrar Pago
+                        </Button>
                       </div>
                     </div>
                   );
@@ -501,6 +519,21 @@ export function DashboardView() {
                         : "Sin pagos registrados"}
                     </span>
                   </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      router.push(`/pagos/${selectedClient.id}`);
+                    }}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
+                    aria-label={`Registrar pago para ${selectedClient.first_name} ${selectedClient.last_name}`}
+                  >
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Registrar Pago
+                  </Button>
                 </div>
               </div>
             </div>

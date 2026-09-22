@@ -300,6 +300,10 @@ export function useAttendance() {
           ? (monthAttendance.length / totalPossibleDays) * 100
           : 0;
 
+      // Calculate days difference for a nicer warning
+      const diffTime = Math.abs(today - nextPayment);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
       return {
         found: true,
         client: clientData,
@@ -307,9 +311,9 @@ export function useAttendance() {
         attendanceCount: monthAttendance.length,
         totalPossibleDays,
         attendancePercentage,
-        canEnter: !isExpired,
+        canEnter: true, // As per requirements: allow check-in even if expired
         message: isExpired
-          ? "❌ Plan vencido. Contacta al administrador."
+          ? `⚠️ Plan vencido hace ${diffDays} día(s). Asistencia registrada bajo alerta.`
           : `✅ Acceso permitido. Asistencias este mes: ${monthAttendance.length}/${totalPossibleDays}`,
       };
     } catch (err) {

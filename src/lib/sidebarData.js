@@ -39,7 +39,6 @@ export const items = [
     url: "/asistencia",
     icon: CalendarCheck2,
     permission: "attendance.view",
-    featureFlag: "NEXT_PUBLIC_ENABLE_ATTENDANCE",
   },
   {
     title: "Planes",

@@ -272,6 +272,69 @@ export function useClients() {
   };
 
   /**
+   * SPEC-03: Reinicio de historial para clientes ausentes
+   */
+  const resetClientHistory = useCallback(async (clientId, options = {}) => {
+    if (!clientId) return { success: false, error: "ID del cliente es requerido" };
+
+    try {
+      const resetDate = options.newJoinDate || new Date().toISOString().split("T")[0];
+
+      // Obtener el cliente actual para guardar su fecha de inicio original
+      const { data: currentClient, error: fetchError } = await client
+        .from('clients')
+        .select('join_date')
+        .eq('id', clientId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Update client: set join_date to today, store original_join_date
+      const dataToUpdate = {
+        original_join_date: currentClient.join_date,
+        join_date: resetDate,
+        next_payment_date: null,
+        enrollment_paid: false,
+        status: "inactivo"
+      };
+
+      const { data, error } = await executeWithSync({
+        table: "clients",
+        type: "UPDATE",
+        data: dataToUpdate,
+        match: { id: clientId }
+      });
+
+      if (error) {
+        console.error("Error al reiniciar historial (cliente):", error);
+        throw error;
+      }
+
+      // Archive payments
+      await executeWithSync({
+        table: "payments",
+        type: "UPDATE",
+        data: { is_archived: true },
+        match: { client_id: clientId, is_archived: false }
+      });
+
+      // Archive attendance
+      await executeWithSync({
+        table: "attendance",
+        type: "UPDATE",
+        data: { is_archived: true },
+        match: { client_id: clientId, is_archived: false }
+      });
+
+      await fetchClients();
+      return { success: true, data };
+    } catch (err) {
+      console.error("Error completo en reinicio:", err);
+      return { success: false, error: err.message };
+    }
+  }, [fetchClients]);
+
+  /**
    * Recalcula las fechas de próximo pago de todos los clientes.
    * Usa la función centralizada de paymentCalculations.
    */
@@ -367,6 +430,7 @@ export function useClients() {
     createClient,
     updateClient,
     deleteClient,
+    resetClientHistory,
     calculateAge,
     recalculateAllNextPaymentDates,
     fixAllPhones,

@@ -207,15 +207,15 @@ export function SearchableSelect({
         </span>
         <div className="flex items-center gap-1">
           {value && !disabled && (
-            <span
+            <div
               role="button"
               tabIndex={-1}
               onClick={handleClear}
-              className="p-0.5 hover:bg-accent rounded transition-colors"
+              className="p-0.5 hover:bg-accent rounded transition-colors cursor-pointer"
               aria-label="Limpiar selección"
             >
               <X className="h-3.5 w-3.5 text-muted-foreground" />
-            </span>
+            </div>
           )}
           <ChevronDown
             className={cn(

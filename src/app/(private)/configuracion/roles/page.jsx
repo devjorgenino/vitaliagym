@@ -110,9 +110,9 @@ export default function RolesConfigPage() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="relative inline-block">
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+              <h2 className="text-2xl sm:text-3xl font-bold text-foreground">
                 Gestión de Roles
-              </h1>
+              </h2>
               <span className="absolute -top-0.5 -right-3 w-2 h-2 bg-primary rounded-full animate-pulse" />
             </div>
             <p className="text-sm sm:text-base text-muted-foreground">

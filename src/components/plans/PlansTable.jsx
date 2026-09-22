@@ -2,8 +2,13 @@ import React, { useState, useMemo, useCallback } from "react";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Dumbbell } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Dumbbell, Edit2Icon, CheckIcon, CreditCard as BCVCardIcon } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import {
+  getPlanCurrency,
+  getPlanPriceInBS,
+  getPlanPriceInUSD,
+} from "@/lib/planUtils";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -38,12 +43,19 @@ import {
   TableRow,
 } from "../ui/table";
 import { Pagination, usePagination } from "../ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 export function PlansTable() {
   const { plans, loading, error, refetch, createPlan, updatePlan, deletePlan } =
     usePlans();
 
-  const { formatMultiCurrency, loading: rateLoading } = useExchangeRate();
+  const { formatMultiCurrency, rate, setManualRate, loading: rateLoading } = useExchangeRate();
 
   // Estados para paginación
   const { currentPage, pageSize, setCurrentPage, setPageSize, paginateData } =
@@ -62,8 +74,11 @@ export function PlansTable() {
     name: "",
     description: "",
     price: "",
+    currency: "USD",
+    exchange_rate: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingRate, setIsEditingRate] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, plan: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -73,10 +88,12 @@ export function PlansTable() {
       name: "",
       description: "",
       price: "",
+      currency: "USD",
+      exchange_rate: rate ? rate.toFixed(2) : "",
     });
     setSelectedPlan(null);
     setIsEditing(false);
-  }, []);
+  }, [rate]);
 
   // Abrir modal para crear
   const handleOpenCreateDialog = useCallback(() => {
@@ -91,10 +108,12 @@ export function PlansTable() {
       name: plan.name || "",
       description: plan.description || "",
       price: plan.price?.toString() || "",
+      currency: getPlanCurrency(plan),
+      exchange_rate: rate ? rate.toFixed(2) : "",
     });
     setIsEditing(true);
     setIsDialogOpen(true);
-  }, []);
+  }, [rate]);
 
   // Cerrar modal
   const handleCloseDialog = useCallback(() => {
@@ -317,18 +336,20 @@ export function PlansTable() {
                             ) : (
                               <div className="text-sm">
                                 <div className="font-medium">
-                                  {
-                                    formatMultiCurrency(
-                                      parseFloat(plan.price) || 0,
-                                    ).usd
-                                  }
+                                  {getPlanCurrency(plan) === "BS"
+                                    ? `${(parseFloat(plan.price) || 0).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`
+                                    : formatMultiCurrency(
+                                        parseFloat(plan.price) || 0,
+                                      ).usd}
                                 </div>
                                 <div className="text-muted-foreground">
-                                  {
-                                    formatMultiCurrency(
-                                      parseFloat(plan.price) || 0,
-                                    ).bs
-                                  }
+                                  {getPlanCurrency(plan) === "BS"
+                                    ? formatMultiCurrency(
+                                        getPlanPriceInUSD(plan, rate),
+                                      ).usd
+                                    : formatMultiCurrency(
+                                        parseFloat(plan.price) || 0,
+                                      ).bs}
                                 </div>
                               </div>
                             )}
@@ -428,10 +449,95 @@ export function PlansTable() {
               />
             </div>
 
+            {/* Moneda y Precio */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="plan-currency">
+                  Moneda <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.currency}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, currency: value }))
+                  }
+                >
+                  <SelectTrigger id="plan-currency" aria-label="Moneda del plan">
+                    <SelectValue placeholder="Seleccionar moneda" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">Dólares (USD)</SelectItem>
+                    <SelectItem value="BS">Bolívares (Bs)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formData.currency === "BS" && (
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="exchange_rate"
+                    className="text-sm font-medium flex items-center justify-between"
+                  >
+                    Tasa de cambio local (Bs/$)
+                    <div className="flex items-center gap-1 bg-secondary rounded-full px-2 py-0.5 text-xs text-muted-foreground mr-1">
+                      <BCVCardIcon className="h-3 w-3" />
+                      {parseFloat(formData.exchange_rate) === parseFloat(rate)
+                        ? "Auto"
+                        : "Manual"}
+                    </div>
+                  </Label>
+                  {!isEditingRate ? (
+                    <div className="flex items-center bg-background border rounded-md">
+                      <Input
+                        id="exchange_rate"
+                        type="number"
+                        disabled
+                        value={parseFloat(formData.exchange_rate).toFixed(2)}
+                        className="border-0 bg-transparent"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 hover:bg-transparent"
+                        onClick={() => setIsEditingRate(true)}
+                      >
+                        <Edit2Icon className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        name="exchange_rate"
+                        value={formData.exchange_rate}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            exchange_rate: e.target.value,
+                          }))
+                        }
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => setIsEditingRate(false)}
+                        size="sm"
+                        className="h-9 px-2"
+                      >
+                        <CheckIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Precio */}
             <div className="space-y-2">
               <Label htmlFor="plan-price">
-                Precio (USD) <span className="text-destructive">*</span>
+                Precio {formData.currency === "BS" ? "(Bs)" : "(USD)"}{" "}
+                <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="plan-price"
@@ -445,7 +551,19 @@ export function PlansTable() {
                 aria-required="true"
               />
               <p className="text-xs text-muted-foreground">
-                El precio se mostrará en USD y Bs automáticamente
+                {formData.price && rate
+                  ? formData.currency === "BS"
+                    ? `≈ ${getPlanPriceInUSD(
+                        { price: formData.price, currency: "BS" },
+                        parseFloat(formData.exchange_rate || rate),
+                      ).toFixed(2)} USD al cambio actual`
+                    : `≈ ${getPlanPriceInBS(
+                        { price: formData.price, currency: "USD" },
+                        parseFloat(formData.exchange_rate || rate),
+                      ).toLocaleString("es-VE", {
+                        maximumFractionDigits: 2,
+                      })} Bs al cambio actual`
+                  : "El precio se mantiene fijo en la moneda seleccionada"}
               </p>
             </div>
 

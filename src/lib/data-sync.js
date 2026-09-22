@@ -1,68 +1,68 @@
 import { saveMutation, getMutations, clearMutation } from './offline-db';
 import client from '@/api/client'; // Assuming client is the default export from @/api/client or ../api/client
 
-// We export this so the UI can listen to sync events or trigger manual sync
+// Guard against concurrent executions
+let isSyncing = false;
+
 export async function syncPendingData() {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
         console.log("Cannot sync, device offline.");
         return;
     }
 
-    const mutations = await getMutations();
-    if (mutations.length === 0) return;
+    if (isSyncing) {
+        console.log("Sync already in progress, skipping trigger.");
+        return;
+    }
 
-    console.log(`Syncing ${mutations.length} pending mutations...`);
+    isSyncing = true;
+    try {
+        const mutations = await getMutations();
+        if (mutations.length === 0) return;
 
-    for (const mutation of mutations) {
-        try {
-            const { table, type, data, match, rpc, id } = mutation;
-            let result = { error: null };
+        console.log(`Syncing ${mutations.length} pending mutations...`);
 
-            // We must skip if dependencies might be missing? 
-            // For simple CRUD, usually fine. 
-            // Complex dependencies might require topological sort or sequential processing.
-            // Since we use autoIncrement ID in local DB, getAll returns detailed order.
-            
-            if (rpc) {
-                result = await client.rpc(table, data);
-            } else if (type === 'AUTH_UPDATE') {
-                // Special case for auth user metadata update
-                const { data: updateData } = data; // structure we pass to executeWithSync is usually data: { data: metadata }
-                const { data: userData, error } = await client.auth.updateUser({ data: updateData });
-                result = { data: userData, error };
-            } else {
-                const query = client.from(table);
-                if (type === 'INSERT') {
-                    // We remove temp ID if present and created locally?
-                    // For now assuming data is clean.
-                    result = await query.insert(data).select();
-                } else if (type === 'UPDATE') {
-                    result = await query.update(data).match(match).select();
-                } else if (type === 'DELETE') {
-                    result = await query.delete().match(match).select();
+        for (const mutation of mutations) {
+            try {
+                const { table, type, data, match, rpc, id } = mutation;
+                let result = { error: null };
+
+                if (rpc) {
+                    result = await client.rpc(table, data);
+                } else if (type === 'AUTH_UPDATE') {
+                    const { data: updateData } = data;
+                    const { data: userData, error } = await client.auth.updateUser({ data: updateData });
+                    result = { data: userData, error };
+                } else {
+                    const query = client.from(table);
+                    if (type === 'INSERT') {
+                        result = await query.insert(data).select();
+                    } else if (type === 'UPDATE') {
+                        result = await query.update(data).match(match).select();
+                    } else if (type === 'DELETE') {
+                        result = await query.delete().match(match).select();
+                    }
                 }
-            }
 
-            if (result.error) {
-                console.error(`Failed to sync mutation ${id}:`, result.error);
-                // If it's a permanent error (constraint violation), maybe we should discard it?
-                // If network error, we stop syncing and keep it.
-                if (result.error.message?.includes('fetch') || result.error.message?.includes('Network')) {
-                    throw new Error('Sync network error');
+                if (result.error) {
+                    console.error(`Failed to sync mutation ${id}:`, result.error);
+                    if (result.error.message?.includes('fetch') || result.error.message?.includes('Network')) {
+                        throw new Error('Sync network error');
+                    }
+                    console.warn(`Removing problematic mutation ${id} from queue.`);
+                    await clearMutation(id);
+                } else {
+                    console.log(`Synced mutation ${id} successfully.`);
+                    await clearMutation(id);
                 }
-                // If other error, we might remove it to avoid blocking queue forever, 
-                // OR we flag it. For now, we remove it to unblock.
-                console.warn(`Removing problematic mutation ${id} from queue.`);
-                await clearMutation(id);
-            } else {
-                console.log(`Synced mutation ${id} successfully.`);
-                await clearMutation(id);
+
+            } catch (err) {
+                console.warn("Sync process interrupted:", err);
+                break;
             }
-            
-        } catch (err) {
-            console.warn("Sync process interrupted:", err);
-            break; // Stop syncing if network fails
         }
+    } finally {
+        isSyncing = false;
     }
 }
 
