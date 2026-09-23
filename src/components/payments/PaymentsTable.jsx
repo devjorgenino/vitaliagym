@@ -253,12 +253,19 @@ export function PaymentsTable({
         setPaymentMode("full");
         setIsPayingRemaining(true);
 
-        // Precargar formulario con los datos del pago restante
+        // Precargar formulario con los datos del pago restante.
+        // El monto es el SALDO RESTANTE, no el precio del plan: usar
+        // clientPlan.price como amount_usd haría que un plan de 20.000 Bs
+        // mostrara $20.000 y un saldo de 1.36 Bs se redondeara a $0.00.
+        const planCurrency = getPlanCurrency(clientPlan);
+        const remaining = parseFloat(remainingAmount) || 0;
+        const remainingInBs = planCurrency === "BS" ? remaining : (remaining * (rate || 1));
+        const remainingInUsd = planCurrency === "BS" ? (remaining / (rate || 1)) : remaining;
         setFormData({
           client_id: preselectedClient.id,
           plan_id: preselectedClient.plan_id,
-          amount_usd: clientPlan.price,
-          amount_bs: (parseFloat(clientPlan.price) * (rate || 1)).toFixed(2),
+          amount_usd: (planCurrency === "BS" ? remainingInUsd.toFixed(4) : remainingInUsd.toFixed(2)),
+          amount_bs: remainingInBs.toFixed(2),
           exchange_rate: rate || 1,
           payment_date: new Date().toISOString().split("T")[0],
           reference: "",
@@ -363,8 +370,25 @@ export function PaymentsTable({
   // Buscar el plan asociado a un pago. getEffectiveAmount(p, getPlanForPayment(p)) sin plan asume
   // USD y lee amount_usd; para pagos de planes en BS eso mezcla monedas y
   // genera restantes absurdos (ej: $19,976.46 en un plan de 20,000 Bs).
-  const getPlanForPayment = (payment) =>
-    plans.find((p) => p.id === payment.plan_id) || null;
+  const getPlanForPayment = (payment) => {
+    if (!payment) return null;
+    return plans.find((p) => p.id === payment.plan_id) || null;
+  };
+
+  // La inscripción de $5 USD se cobra UNA SOLA VEZ (al registrar o al hacer
+  // borrón y cuenta nueva). El system la rastrea por dos fuentes que no
+  // siempre coinciden: el booleano clients.enrollment_paid (grabado al
+  // registrar) y la columna payments.enrollment_fee (grabada desde este
+  // sprint). Tomamos el máximo para que un cliente que la pagó no muestre
+  // saldo fantasma, sin importar de dónde viene el dato.
+  const getEnrollmentFeePaid = (client, clientPayments) => {
+    const fromBoolean = client?.enrollment_paid === true ? INSCRIPTION_PRICE : 0;
+    const fromColumn = (clientPayments || []).reduce(
+      (sum, p) => sum + (parseFloat(p.enrollment_fee) || 0),
+      0,
+    );
+    return Math.max(fromBoolean, fromColumn);
+  };
 
   // Moneda base del plan seleccionado ('USD' | 'BS').
   // Los efectos de conversión usan esto para saber en qué dirección
@@ -544,14 +568,17 @@ export function PaymentsTable({
       };
     }
 
-    // Obtener el estado de inscripción del cliente
-    const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
-
     // Obtener todos los pagos del cliente para este plan
     const allClientPayments = payments.filter(
       (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
     );
+
+    // El precio total incluye la inscripción si ya fue pagada (una sola vez)
+    const enrollmentFeePaid = getEnrollmentFeePaid(
+      payment.clients,
+      allClientPayments,
+    );
+    const totalPrice = planPrice + enrollmentFeePaid;
 
     // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
     const totalPaidSoFar = allClientPayments.reduce(
@@ -566,8 +593,14 @@ export function PaymentsTable({
       currentCyclePaid = totalPrice;
     }
 
-    // El restante para este ciclo es el precio total menos lo pagado en este ciclo
-    const currentRemaining = totalPrice - currentCyclePaid;
+    // La inscripción de $5 USD solo corresponde al primer ciclo. Si el
+    // remanente del total pagado supera planPrice, es porque ese ciclo
+    // incluyó la inscripción (cyclePrice = planPrice + fee); si no, la
+    // inscripción ya fue pagada y el ciclo actual cuesta solo planPrice.
+    const currentCyclePrice =
+      currentCyclePaid > planPrice ? totalPrice : planPrice;
+    // El restante para este ciclo es el precio del ciclo menos lo pagado
+    const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);
     const isFullyPaid = currentRemaining < 0.001;
 
     // Si el pago total del ciclo actual es mayor o igual al precio total, está pagado
@@ -598,10 +631,6 @@ export function PaymentsTable({
   const calculateRemainingForNewPayment = (payment) => {
     const planPrice = getPlanPrice(payment.plan_id);
     
-    // Obtener el estado de inscripción del cliente
-    const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
-
     // Obtener todos los pagos ANTERIORES del cliente para este plan (excluyendo el actual)
     const previousPayments = payments.filter(
       (p) =>
@@ -610,15 +639,30 @@ export function PaymentsTable({
         p.id !== payment.id, // Excluir el pago actual
     );
 
+    // El precio total incluye la inscripción si ya fue pagada (una sola vez)
+    const enrollmentFeePaid = getEnrollmentFeePaid(
+      payment.clients,
+      previousPayments,
+    );
+    const totalPrice = planPrice + enrollmentFeePaid;
+
     // Calcular el total pagado ANTES del pago actual
     const totalPaidBefore = previousPayments.reduce(
       (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
 
-    // Calcular el restante del ciclo actual ANTES de hacer un nuevo pago
+    // Calcular el restante del ciclo actual ANTES de hacer un nuevo pago.
+    // La inscripción solo corresponde al primer ciclo: si el remanente
+    // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
+    // actual cuesta solo planPrice.
     const currentCyclePaidBefore = totalPaidBefore % totalPrice;
-    const remainingForNewPayment = Math.max(0, totalPrice - currentCyclePaidBefore);
+    const currentCyclePriceBefore =
+      currentCyclePaidBefore > planPrice ? totalPrice : planPrice;
+    const remainingForNewPayment = Math.max(
+      0,
+      currentCyclePriceBefore - currentCyclePaidBefore,
+    );
 
     return {
       planPrice: totalPrice,
@@ -715,9 +759,12 @@ export function PaymentsTable({
       const bsAmount = parseFloat(formData.amount_bs);
       if (currentRate > 0) {
         const usdAmount = bsAmount / currentRate;
+        // Para planes en BS el amount_usd es solo una conversión de referencia:
+        // con 2 decimales un saldo pequeño (ej: 1.36 Bs) se redondea a $0.00.
+        const planCurrency = getPlanCurrency(plans.find((p) => p.id === formData.plan_id));
         setFormData((prev) => ({
           ...prev,
-          amount_usd: usdAmount.toFixed(2),
+          amount_usd: planCurrency === "BS" ? usdAmount.toFixed(4) : usdAmount.toFixed(2),
         }));
       }
     } else if (!formData.amount_bs) {
@@ -756,12 +803,17 @@ export function PaymentsTable({
   // Efecto para aplicar descuento cuando cambia
   useEffect(() => {
     if (!isDialogOpen || isEditing || paymentMode !== "full" || !formData.plan_id) return;
-    if (isPayingRemaining) return;
 
-    // Calcular la base correcta: incluir inscripción si aplica, multiplicado por meses
-    const planPrice = getPlanPrice(formData.plan_id);
-    const months = Math.max(1, parseInt(monthsCount, 10) || 1);
-    const baseAmount = planPrice * months + (isRegisterMode && includeInscription ? INSCRIPTION_PRICE : 0);
+    // Al pagar un restante la base es el monto que ya tiene el formulario
+    // (lo cargó handlePayRemaining con el saldo pendiente). En los demas
+    // modos la base es planPrice * meses (+ inscripción si aplica).
+    const baseAmount = isPayingRemaining
+      ? (parseFloat(formData.amount_usd) || 0)
+      : (() => {
+          const planPrice = getPlanPrice(formData.plan_id);
+          const months = Math.max(1, parseInt(monthsCount, 10) || 1);
+          return planPrice * months + (isRegisterMode && includeInscription ? INSCRIPTION_PRICE : 0);
+        })();
 
     if (!formData.discount_type || !formData.discount_value || parseFloat(formData.discount_value) <= 0) {
       // Sin descuento, usar el precio base completo
@@ -1111,12 +1163,48 @@ export function PaymentsTable({
         amountToSuggest = planPrice + INSCRIPTION_PRICE;
       }
       
-      setFormData((prev) => ({
-        ...prev,
-        amount_usd: amountToSuggest > 0 ? amountToSuggest.toString() : "",
-        amount_bs: amountToSuggest > 0 ? (amountToSuggest * (rate || 1)).toFixed(2) : "",
-      }));
+      // amountToSuggest ya está en la moneda base del plan (Bs para planes BS,
+      // USD para USD). Solo convertir cuando sea necesario.
+      const partialPlanCurrency = getPlanCurrency(plans.find((p) => p.id === formData.plan_id));
+      if (amountToSuggest > 0) {
+        if (partialPlanCurrency === "BS") {
+          setFormData((prev) => ({
+            ...prev,
+            amount_bs: parseFloat(amountToSuggest).toFixed(2),
+            amount_usd: (parseFloat(amountToSuggest) / (rate || 1)).toFixed(4),
+          }));
+        } else {
+          setFormData((prev) => ({
+            ...prev,
+            amount_usd: parseFloat(amountToSuggest).toFixed(2),
+            amount_bs: (parseFloat(amountToSuggest) * (rate || 1)).toFixed(2),
+          }));
+        }
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          amount_usd: "",
+          amount_bs: "",
+        }));
+      }
     } else if (mode === "full" && formData.plan_id) {
+      // Al pagar un restante, el monto completo es el SALDO PENDIENTE, no
+      // el precio del plan. Usar remainingPaymentData evita que amount_usd
+      // se reinicie a 20.000 y amount_bs a 20.000 * tasa.
+      if (isPayingRemaining && remainingPaymentData) {
+        const planCurrency = remainingPaymentData?.plan_currency
+          || getPlanCurrency(plans.find((p) => p.id === formData.plan_id));
+        const remaining = parseFloat(remainingPaymentData.remaining_amount) || 0;
+        const remainingInBs = planCurrency === "BS" ? remaining : (remaining * (rate || 1));
+        const remainingInUsd = planCurrency === "BS" ? (remaining / (rate || 1)) : remaining;
+        setFormData((prev) => ({
+          ...prev,
+          amount_usd: (planCurrency === "BS" ? remainingInUsd.toFixed(4) : remainingInUsd.toFixed(2)),
+          amount_bs: remainingInBs.toFixed(2),
+        }));
+        return;
+      }
+
       // Resetear al monto completo (plan + inscripción si aplica)
       const planPrice = getPlanPrice(formData.plan_id);
       let fullAmount = planPrice;
@@ -1183,6 +1271,12 @@ export function PaymentsTable({
         payment_detail: combinedDetail,
         discount_type: formData.discount_type || null,
         discount_value: formData.discount_value ? parseFloat(formData.discount_value) : null,
+        // enrollment_fee: la inscripción de $5 USD se cobra UNA SOLA VEZ
+        // (al registrar o al hacer borrón y cuenta nueva). Se graba aquí
+        // para que las renovaciones futuras no la vuelvan a sumar.
+        enrollment_fee: (isRegisterMode && includeInscription)
+          ? INSCRIPTION_PRICE
+          : (isEditing ? (selectedPayment?.enrollment_fee || 0) : 0),
       };
       // Remove UI-only fields to avoid schema cache errors
       delete paymentData.phone_operator;
@@ -1271,11 +1365,22 @@ export function PaymentsTable({
       0,
     );
     const planPrice = getPlanPrice(payment.plan_id);
-    
-    // Incluir inscripción en el cálculo si aplica
-    const hasEnrollmentPaid = payment.clients?.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid ? planPrice : planPrice;
-    const remainingAmount = Math.max(0, totalPrice - totalPaid);
+
+    // Incluir inscripción en el cálculo si ya fue pagada (una sola vez)
+    const enrollmentFeePaid = getEnrollmentFeePaid(
+      payment.clients,
+      allClientPayments,
+    );
+    const totalPrice = planPrice + enrollmentFeePaid;
+    // La inscripción solo corresponde al primer ciclo: si lo pagado supera
+    // planPrice, ese ciclo incluyó la inscripción; si no, el ciclo actual
+    // cuesta solo planPrice.
+    const currentCyclePrice =
+      totalPaid % totalPrice > planPrice ? totalPrice : planPrice;
+    const remainingAmount = Math.max(
+      0,
+      currentCyclePrice - (totalPaid % totalPrice),
+    );
 
     const remainingStatus = {
       planPrice: totalPrice,
@@ -1290,17 +1395,26 @@ export function PaymentsTable({
       client_name: `${payment.clients?.first_name} ${payment.clients?.last_name}`,
       plan_id: payment.plan_id,
       plan_name: payment.plans?.name,
+      plan_currency: getPlanCurrency(getPlanForPayment(payment)),
       remaining_amount: remainingStatus.remaining,
       plan_price: remainingStatus.planPrice,
       total_paid: totalPaid, // Usar el cálculo correcto que incluye TODOS los pagos
     });
 
-    // Abrir formulario de creación con los datos precargados
+    // Abrir formulario de creación con los datos precargados.
+    // El monto del restante está en la moneda base del plan: para planes
+    // en BS va a amount_bs y amount_usd se calcula con la tasa activa.
+    const planCurrency = getPlanCurrency(getPlanForPayment(payment));
+    // Para planes BS el amount_usd es solo una conversión de referencia: con
+    // solo 2 decimales un saldo pequeño (ej: 1.36 Bs) se redondea a $0.00 y
+    // el formulario queda vacío. Usamos 4 decimales para BS.
+    const remainingInBs = planCurrency === "BS" ? remainingStatus.remaining : (remainingStatus.remaining * (rate || 1));
+    const remainingInUsd = planCurrency === "BS" ? (remainingStatus.remaining / (rate || 1)) : remainingStatus.remaining;
     const newFormData = {
       client_id: payment.client_id,
       plan_id: payment.plan_id,
-      amount_usd: remainingStatus.remaining.toString(),
-      amount_bs: (remainingStatus.remaining * (rate || 1)).toFixed(2),
+      amount_usd: (planCurrency === "BS" ? remainingInUsd.toFixed(4) : remainingInUsd.toFixed(2)),
+      amount_bs: remainingInBs.toFixed(2),
       exchange_rate: (rate || 1).toString(),
       payment_date: new Date().toISOString().split("T")[0],
       reference: "",
@@ -1772,7 +1886,7 @@ export function PaymentsTable({
                         </TableCell>
                         <TableCell>
                           <TruncatedCell
-                            value={payment.clients?.enrollment_paid === true && payment.plans?.name
+                            value={parseFloat(payment.enrollment_fee) > 0 && payment.plans?.name
                               ? `${payment.plans.name} + Inscripción`
                               : payment.plans?.name || "N/A"}
                             maxWidth="100px"
@@ -1963,45 +2077,6 @@ export function PaymentsTable({
           </DialogHeader>
 
           <div className="flex-1 py-3 space-y-4">
-              {/* Resumen de pago restante */}
-              {isPayingRemaining && remainingPaymentData && (
-                <div
-                  className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    Resumen del Plan
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-blue-600 dark:text-blue-300">
-                        Precio Plan
-                      </p>
-                      <p className="font-bold text-blue-900 dark:text-blue-100">
-                        ${remainingPaymentData.plan_price?.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-green-600 dark:text-green-300">
-                        Ya Pagado
-                      </p>
-                      <p className="font-bold text-green-700 dark:text-green-100">
-                        ${remainingPaymentData.total_paid?.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="text-center p-2 bg-white dark:bg-blue-900/30 rounded">
-                      <p className="text-xs text-orange-600 dark:text-orange-300">
-                        Restante
-                      </p>
-                      <p className="font-bold text-orange-700 dark:text-orange-100">
-                        ${remainingPaymentData.remaining_amount?.toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <fieldset className="space-y-2">
                 <legend className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
                   <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
@@ -2166,15 +2241,18 @@ export function PaymentsTable({
                         <div>
                           <p className="font-medium text-sm">Pago Completo</p>
                           <p className="text-xs text-muted-foreground">{(() => {
-                            const selectedPlan = plans.find(p => p.id === formData.plan_id);
-                            const planPrice = selectedPlan ? parseFloat(selectedPlan.price) || 0 : 0;
-                            const totalAmount = (isRegisterMode && includeInscription) ? planPrice + INSCRIPTION_PRICE : planPrice;
-                            if (totalAmount <= 0) return "0.00";
-                            const planCurrency = getPlanCurrency(selectedPlan);
-                            // En planes BS la inscripción ($5 USD) se convierte a Bs con la tasa activa
+                            // El monto a pagar es el que tiene el formulario, no
+                            // el precio del plan: en modo pago restante el monto
+                            // es el saldo pendiente y en los demas es lo que el
+                            // usuario eligió. Usar remainingPaymentData hacía que
+                            // el campo mostrara $0.00 cuando no era ese modo.
+                            const planCurrency = remainingPaymentData?.plan_currency
+                              || getPlanCurrency(plans.find((p) => p.id === formData.plan_id));
+                            console.log("[card]", { planCurrency, plan_id: formData.plan_id, amount_bs: formData.amount_bs, amount_usd: formData.amount_usd, rpd: !!remainingPaymentData });
                             const amount = planCurrency === "BS"
-                              ? (isRegisterMode && includeInscription ? planPrice + INSCRIPTION_PRICE * (parseFloat(formData.exchange_rate) || 1) : planPrice)
-                              : totalAmount;
+                              ? (parseFloat(formData.amount_bs) || 0)
+                              : (parseFloat(formData.amount_usd) || 0);
+                            if (amount <= 0) return planCurrency === "BS" ? "Bs. 0.00" : "$0.00";
                             return planCurrency === "BS" ? `Bs. ${amount.toFixed(2)}` : `$${amount.toFixed(2)}`;
                           })()}</p>
                         </div>
@@ -2302,7 +2380,7 @@ export function PaymentsTable({
                   );
                 })()}
 
-                {paymentMode === "full" && formData.plan_id && !isEditing && !isPayingRemaining && (
+                {paymentMode === "full" && formData.plan_id && !isEditing && (
                   <div className="space-y-3 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <Label className="text-sm font-semibold text-green-900 dark:text-green-100 flex items-center gap-2">
                       <span className="text-lg">🏷️</span>
@@ -2866,7 +2944,7 @@ export function PaymentsTable({
                 <div>
                   <p className="text-muted-foreground">Plan</p>
                   <p className="font-medium">
-                    {detailsPayment.clients?.enrollment_paid === true && detailsPayment.plans?.name
+                    {parseFloat(detailsPayment.enrollment_fee) > 0 && detailsPayment.plans?.name
                       ? `${detailsPayment.plans.name} + Inscripción`
                       : detailsPayment.plans?.name || "N/A"}
                   </p>

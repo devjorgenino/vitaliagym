@@ -22,6 +22,7 @@ import {
   recalculateNextPaymentDate,
   getEffectiveAmount,
 } from "../../utils/paymentCalculations";
+import { getPlanCurrency } from "../../lib/planUtils";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -174,6 +175,27 @@ export function ClientsTable() {
     return plan ? parseFloat(plan.price) || 0 : 0;
   };
 
+  // Buscar el plan asociado a un pago. getEffectiveAmount(p) sin plan asume
+  // USD y lee amount_usd; para pagos de planes en BS eso mezcla monedas y
+  // genera saldos artificiales en la lista de clientes.
+  const getPlanForPayment = (payment) =>
+    plans.find((p) => p.id === payment.plan_id) || null;
+
+  // La inscripción de $5 USD se cobra UNA SOLA VEZ (al registrar o al hacer
+  // borrón y cuenta nueva). El system la rastrea por dos fuentes que no
+  // siempre coinciden: el booleano clients.enrollment_paid (grabado al
+  // registrar) y la columna payments.enrollment_fee (grabada desde este
+  // sprint). Tomamos el máximo para que un cliente que la pagó no muestre
+  // saldo fantasma, sin importar de dónde viene el dato.
+  const getEnrollmentFeePaid = (client, clientPayments) => {
+    const fromBoolean = client?.enrollment_paid === true ? INSCRIPTION_PRICE : 0;
+    const fromColumn = (clientPayments || []).reduce(
+      (sum, p) => sum + (parseFloat(p.enrollment_fee) || 0),
+      0,
+    );
+    return Math.max(fromBoolean, fromColumn);
+  };
+
   // Calcular el status del cliente basado en sus pagos
   // Activo: tiene días restantes positivos o ha pagado su membresía completa
   // Pendiente: tiene pagos parciales (pago fraccionado) pero no completó el ciclo
@@ -214,13 +236,13 @@ export function ClientsTable() {
     }
 
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
 
-    // Calcular el ciclo actual de pago (considerar inscripción si está pagada)
-    const hasEnrollmentPaid = client.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid ? planPrice + INSCRIPTION_PRICE : planPrice;
+    // Calcular el ciclo actual de pago (considerar inscripción si ya fue pagada)
+    const enrollmentFeePaid = getEnrollmentFeePaid(client, allClientPayments);
+    const totalPrice = planPrice + enrollmentFeePaid;
 
     let paidForCurrentCycle = totalPaidSoFar % totalPrice;
 
@@ -228,7 +250,13 @@ export function ClientsTable() {
       paidForCurrentCycle = totalPrice;
     }
 
-    const currentRemaining = totalPrice - paidForCurrentCycle;
+    // La inscripción de $5 USD solo corresponde al primer ciclo. Si el
+    // remanente supera planPrice, ese ciclo incluyó la inscripción
+    // (cyclePrice = planPrice + fee); si no, la inscripción ya fue pagada
+    // y el ciclo actual cuesta solo planPrice.
+    const currentCyclePrice =
+      paidForCurrentCycle > planPrice ? totalPrice : planPrice;
+    const currentRemaining = Math.max(0, currentCyclePrice - paidForCurrentCycle);
     const isFullyPaid = currentRemaining < 0.001;
 
     // Si pagó completo el ciclo actual, está activo
@@ -260,22 +288,25 @@ export function ClientsTable() {
     );
 
     const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
 
-    // El precio total incluye la inscripción si está marcada
-    const hasEnrollmentPaid = client.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid
-      ? planPrice + INSCRIPTION_PRICE
-      : planPrice;
+    // El precio total incluye la inscripción si ya fue pagada (una sola vez)
+    const enrollmentFeePaid = getEnrollmentFeePaid(client, allClientPayments);
+    const totalPrice = planPrice + enrollmentFeePaid;
 
     // Calcular cuánto se ha pagado en el ciclo actual
     let currentCyclePaid = totalPaidSoFar % totalPrice;
     if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
       currentCyclePaid = totalPrice;
     }
-    const currentRemaining = totalPrice - currentCyclePaid;
+    // La inscripción solo corresponde al primer ciclo: si el remanente
+    // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
+    // actual cuesta solo planPrice.
+    const currentCyclePrice =
+      currentCyclePaid > planPrice ? totalPrice : planPrice;
+    const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);
     const isFullyPaid = currentRemaining < 0.001;
 
     // Si ya se completó el ciclo actual, no hay restante que mostrar
@@ -304,22 +335,25 @@ export function ClientsTable() {
 
     const planPrice = getPlanPrice(client.plan_id);
     const totalPaid = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p),
+      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
       0,
     );
 
-    // El precio total incluye la inscripción si está marcada
-    const hasEnrollmentPaid = client.enrollment_paid === true;
-    const totalPrice = hasEnrollmentPaid
-      ? planPrice + INSCRIPTION_PRICE
-      : planPrice;
+    // El precio total incluye la inscripción si ya fue pagada (una sola vez)
+    const enrollmentFeePaid = getEnrollmentFeePaid(client, allClientPayments);
+    const totalPrice = planPrice + enrollmentFeePaid;
 
     // Calcular cuánto se ha pagado en el ciclo actual
     let currentCyclePaid = totalPaid % totalPrice;
     if (currentCyclePaid < 0.001 && totalPaid > 0) {
       currentCyclePaid = totalPrice;
     }
-    const remainingAmount = totalPrice - currentCyclePaid;
+    // La inscripción solo corresponde al primer ciclo: si el remanente
+    // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
+    // actual cuesta solo planPrice.
+    const currentCyclePrice =
+      currentCyclePaid > planPrice ? totalPrice : planPrice;
+    const remainingAmount = Math.max(0, currentCyclePrice - currentCyclePaid);
 
     // Si ya completó el ciclo actual, no hay restante
     if (remainingAmount < 0.001) {
@@ -1325,7 +1359,7 @@ export function ClientsTable() {
                                   {shouldDisableButton
                                     ? "Pago al día"
                                     : paymentWithRemaining
-                                      ? `Pagar restante ($${paymentWithRemaining.remainingFormatted})`
+                                      ? `Pagar restante (${getPlanCurrency(plans.find((p) => p.id === client.plan_id)) === "BS" ? "Bs." : "$"}${paymentWithRemaining.remainingFormatted})`
                                       : "Registrar pago"}
                                 </p>
                               </TooltipContent>
