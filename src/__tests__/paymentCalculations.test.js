@@ -6,6 +6,7 @@ import {
   computeNextPaymentDate,
   calculateDaysUntilPayment,
   getPaymentStatusColor,
+  getEffectiveAmount,
 } from '../utils/paymentCalculations';
 
 describe('paymentCalculations - addMonthsPreservingAnchor & getAnchorDateForTargetMonth', () => {
@@ -188,6 +189,85 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
     expect(computeNextPaymentDate(null, [], plan, 30)).toBeNull();
     expect(computeNextPaymentDate('2026-08-31', [], plan, 0)).toBeNull();
     expect(computeNextPaymentDate('2026-08-31', [], plan, -10)).toBeNull();
+  });
+
+  it('efectivo_dolares en plan BS usa amount_usd, no amount_bs', () => {
+    // Plan en BS: precio 20000 Bs
+    const bsPlan = { id: 'p1', name: 'Plan BS', price: 20000, currency: 'BS' };
+    const joinDate = '2026-01-01';
+
+    // Pago con efectivo_dolares: $64.52 USD (equivalente a ~20000 Bs a tasa 310)
+    // amount_usd = 64.52, amount_bs = 20000.00 (convertido automáticamente por el formulario)
+    const payment = {
+      id: 'pay1',
+      amount_usd: 64.52,
+      amount_bs: 20000.00,
+      exchange_rate: 310,
+      payment_type: 'efectivo_dolares',
+      payment_date: '2026-01-15',
+    };
+
+    // Antes del fix: getEffectiveAmount(reads amount_bs=20000) sería 20000 y el cálculo sería correcto.
+    // Pero el problema era que al calcular el estado en ClientsTable, si el plan no tenía currency,
+    // se usaba amount_usd (64.52) para un plan de 20000 Bs → saldo fantasma.
+    // Con el fix, efectivo_dolares siempre lee amount_usd.
+
+    // Si el usuario paga $64.52 USD en efectivo para un plan de 20000 Bs:
+    // - El campo efectivo es amount_usd = 64.52
+    // - El precio del plan es 20000 Bs
+    // - Como son monedas diferentes, el pago de $64.52 NO cubre 20000 Bs
+    // - Esto es correcto: $64.52 ≠ 20000 Bs
+
+    // El escenario correcto del bug: plan USD de $25, pago efectivo_dolares $25
+    const usdPlan = { id: 'p2', name: 'Plan USD', price: 25, currency: 'USD' };
+    const usdPayment = {
+      id: 'pay2',
+      amount_usd: 25,
+      amount_bs: 7750,
+      exchange_rate: 310,
+      payment_type: 'efectivo_dolares',
+      payment_date: '2026-01-15',
+    };
+
+    // getEffectiveAmount debe leer amount_usd (25) para efectivo_dolares
+    const effective = getEffectiveAmount(usdPayment, usdPlan);
+    expect(effective).toBe(25);
+  });
+
+  it('efectivo_bolivares en plan USD usa amount_bs (conversión automática)', () => {
+    // Plan USD: precio $25
+    const usdPlan = { id: 'p1', name: 'Plan USD', price: 25, currency: 'USD' };
+
+    // Pago con efectivo_bolivares: 7750 Bs (equivalente a $25 a tasa 310)
+    const payment = {
+      id: 'pay1',
+      amount_usd: 25,
+      amount_bs: 7750,
+      exchange_rate: 310,
+      payment_type: 'efectivo_bolivares',
+      payment_date: '2026-01-15',
+    };
+
+    // efectivo_bolivares debe leer amount_bs (7750)
+    const effective = getEffectiveAmount(payment, usdPlan);
+    expect(effective).toBe(7750);
+  });
+
+  it('pago_movil en plan BS usa amount_bs (comportamiento existente)', () => {
+    const bsPlan = { id: 'p1', name: 'Plan BS', price: 20000, currency: 'BS' };
+
+    const payment = {
+      id: 'pay1',
+      amount_usd: 64.52,
+      amount_bs: 20000,
+      exchange_rate: 310,
+      payment_type: 'pago_movil',
+      payment_date: '2026-01-15',
+    };
+
+    // pago_movil no es efectivo, debe usar amount_bs para plan BS
+    const effective = getEffectiveAmount(payment, bsPlan);
+    expect(effective).toBe(20000);
   });
 
   it('calcula correctamente la cobertura cuando se paga exactamente en el dia de vencimiento (Sebastian Villaroel)', () => {

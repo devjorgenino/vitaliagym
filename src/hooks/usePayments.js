@@ -33,7 +33,8 @@ export function usePayments({ onClientUpdate } = {}) {
           plans (
             id,
             name,
-            price
+            price,
+            currency
           )
         `)
         .order('created_at', { ascending: false }));

@@ -109,7 +109,8 @@ export function useClients() {
           *,
           plans (
             id,
-            name
+            name,
+            currency
           )
         `,
         )
