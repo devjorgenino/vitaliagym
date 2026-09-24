@@ -27,7 +27,7 @@ import client from '../api/client';
  */
 export function getEffectiveAmount(payment, plan) {
   if (!payment) return 0;
-  const field = getPaymentAmountField(plan);
+  const field = getPaymentAmountField(payment, plan);
   let amount = parseFloat(payment[field]) || 0;
   if (payment.discount_type === 'percentage' && payment.discount_value) {
     const disc = parseFloat(payment.discount_value) || 0;
@@ -45,15 +45,29 @@ export function getEffectiveAmount(payment, plan) {
 }
 
 /**
- * Determina el campo de monto a usar para los pagos de un plan según su moneda base.
- * - Plan en USD  → acumulamos `amount_usd` de los pagos.
- * - Plan en BS   → acumulamos `amount_bs` de los pagos (bolívares fijos históricos,
- *   inmunes a la fluctuación de la tasa BCV).
+ * Determina el campo de monto a usar para los pagos según su método de pago y moneda base del plan.
  *
+ * Reglas:
+ * - Si el pago es en efectivo dólares (efectivo_dolares) → usa `amount_usd` (el monto en dólares pagado)
+ * - Si el pago es en efectivo bolívares (efectivo_bolivares) → usa `amount_bs` (el monto en bolívares pagado)
+ * - Si el pago es otro tipo → usa el campo según la moneda del plan:
+ *   - Plan en USD  → `amount_usd`
+ *   - Plan en BS   → `amount_bs`
+ *
+ * @param {Object} payment - Pago con posible campo `payment_type` ('efectivo_dolares' | 'efectivo_bolivares' | ...)
  * @param {Object} plan - Plan con posible campo `currency` ('USD' | 'BS')
  * @returns {'amount_usd'|'amount_bs'}
  */
-function getPaymentAmountField(plan) {
+function getPaymentAmountField(payment, plan) {
+  // Priorizar payment_type para pagos en efectivo
+  if (payment?.payment_type === 'efectivo_dolares') {
+    return 'amount_usd';
+  }
+  if (payment?.payment_type === 'efectivo_bolivares') {
+    return 'amount_bs';
+  }
+
+  // Para otros tipos de pago, usar la moneda del plan
   const currency = (plan?.currency || 'USD').toUpperCase();
   return currency === 'BS' ? 'amount_bs' : 'amount_usd';
 }
@@ -342,7 +356,7 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     // 2. Pagos del cliente para su plan actual, excluyendo archivados y ordenados por fecha
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, discount_type, discount_value, payment_date')
+      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
       .eq('client_id', clientId)
       .eq('plan_id', clientData.plan_id)
       .eq('is_archived', false)
@@ -429,7 +443,7 @@ export async function recalculateAllNextPaymentDates() {
     // 2. Obtener todos los pagos ordenados por fecha (excluyendo archivados)
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs, discount_type, discount_value, payment_date')
+      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
       .eq('is_archived', false)
       .order('payment_date', { ascending: true });
 
@@ -555,7 +569,7 @@ export async function auditNextPaymentDates() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs, discount_type, discount_value, payment_date')
+      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
       .order('payment_date', { ascending: true });
 
     if (paymentsError) throw paymentsError;
@@ -738,7 +752,7 @@ export async function updateClientStatus(clientId, planId) {
 
     const { data: payments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, discount_type, discount_value, payment_date')
+      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
       .eq('client_id', clientId)
       .eq('plan_id', planId)
       .eq('is_archived', false);
@@ -844,7 +858,7 @@ export async function fixAllClientStatuses() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, discount_type, discount_value');
+      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_type, discount_type, discount_value');
 
     if (paymentsError) throw paymentsError;
 

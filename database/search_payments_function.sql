@@ -46,7 +46,8 @@ BEGIN
     json_build_object(
       'id', pl.id,
       'name', pl.name,
-      'price', pl.price
+      'price', pl.price,
+      'currency', pl.currency
     ) AS plans
   FROM
     payments p
