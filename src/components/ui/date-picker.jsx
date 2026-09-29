@@ -7,6 +7,31 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Normaliza un valor de fecha a formato local YYYY-MM-DD T00:00:00.
+ * Acepta "YYYY-MM-DD" (lo convierte a hora local) o una fecha ISO completa
+ * (ya contiene la parte de tiempo; se usa tal cual). Devuelve null si el
+ * valor es inválido o nulo.
+ */
+function normalizeDateValue(value) {
+  if (!value || typeof value !== "string") return null;
+  let date;
+  if (value.includes("T")) {
+    // Ya viene con parte de hora (ISO desde Supabase): usar directo
+    date = new Date(value);
+  } else {
+    // Solo fecha "YYYY-MM-DD": añadir T00:00:00 para forzar hora local
+    date = new Date(value + "T00:00:00");
+  }
+  if (isNaN(date.getTime())) return null;
+  return date;
+}
+
+/** Devuelve true si value es una fecha parseable válida. */
+function isValidDateValue(value) {
+  return normalizeDateValue(value) !== null;
+}
+
 export function DatePicker({
   value,
   onChange,
@@ -17,7 +42,9 @@ export function DatePicker({
   const [isOpen, setIsOpen] = React.useState(false);
   const [showSelectors, setShowSelectors] = React.useState(false);
   const [currentMonth, setCurrentMonth] = React.useState(
-    value ? new Date(value + "T00:00:00") : new Date()
+    value && isValidDateValue(value)
+      ? normalizeDateValue(value)
+      : new Date()
   );
   const containerRef = React.useRef(null);
 
@@ -27,7 +54,7 @@ export function DatePicker({
   const currentYear = today.getFullYear();
   const years = Array.from({ length: currentYear - 1930 + 1 }, (_, i) => currentYear - i).reverse();
 
-  const selectedDate = value ? new Date(value + "T00:00:00") : null;
+  const selectedDate = value && isValidDateValue(value) ? normalizeDateValue(value) : null;
 
   const sizeClasses = {
     sm: {
@@ -130,12 +157,12 @@ export function DatePicker({
           !value && "text-muted-foreground"
         )}
         onClick={() => setIsOpen(!isOpen)}
-        aria-label={value ? `Fecha: ${format(new Date(value + "T00:00:00"), "dd/MM/yyyy", { locale: es })}` : placeholder}
+        aria-label={value && isValidDateValue(value) ? `Fecha: ${format(normalizeDateValue(value), "dd/MM/yyyy", { locale: es })}` : placeholder}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
       >
         <span className="truncate">
-          {value ? format(new Date(value + "T00:00:00"), "dd/MM/yyyy", { locale: es }) : placeholder}
+          {value && isValidDateValue(value) ? format(normalizeDateValue(value), "dd/MM/yyyy", { locale: es }) : placeholder}
         </span>
         <CalendarIcon className={cn("ml-2 flex-shrink-0", size === "sm" ? "h-3 w-3" : "h-4 w-4")} />
       </Button>
