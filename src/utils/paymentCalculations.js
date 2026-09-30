@@ -620,9 +620,9 @@ export async function recalculateAllNextPaymentDates() {
           continue;
         }
 
-        // Pagos del cliente para su plan actual, ya ordenados por fecha
+        // Pagos del cliente (sin filtrar por plan_id para incluir historial de cambios de plan)
         const clientPayments = (allPayments || []).filter(
-          p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
+          p => p.client_id === clientData.id
         );
 
         // Calcular la fecha correcta con la regla de negocio
@@ -873,6 +873,17 @@ export function getPaymentStatusColor(daysLeft) {
  * @param {string} planId - ID del plan actual del cliente
  * @returns {Promise<{success: boolean, status?: string, previousStatus?: string, error?: any}>}
  */
+/**
+ * MAX_DAYS_ACTIVE: días máximos desde el último pago para mantenerse como activo.
+ * Si un cliente no paga en 30 días, se considera inactivo automáticamente.
+ */
+const MAX_DAYS_ACTIVE = 30;
+/**
+ * MAX_CYCLES: número de ciclos completos para considerar al cliente como finalizado.
+ * Un cliente con 12+ ciclos pagados se marca como finalizado.
+ */
+const MAX_CYCLES = 12;
+
 export async function updateClientStatus(clientId, planId) {
   try {
     const { data: clientData, error: clientError } = await client
@@ -882,6 +893,7 @@ export async function updateClientStatus(clientId, planId) {
         status,
         next_payment_date,
         join_date,
+        enrollment_paid,
         plan_id,
         plans (
           id,
@@ -897,17 +909,18 @@ export async function updateClientStatus(clientId, planId) {
       return { success: false, error: clientError };
     }
 
-    const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
+    const plan = clientData.plans;
+    const planPrice = plan ? parseFloat(plan.price) || 0 : 0;
 
     if (planPrice <= 0) {
       return { success: false, error: 'Plan price is invalid or zero' };
     }
 
+    // Obtener TODOS los pagos no archivados del cliente (sin filtrar por plan_id)
     const { data: payments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
+      .select('id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, payment_date, is_archived')
       .eq('client_id', clientId)
-      .eq('plan_id', planId)
       .eq('is_archived', false);
 
     if (paymentsError) {
@@ -917,37 +930,44 @@ export async function updateClientStatus(clientId, planId) {
 
     // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
     const totalPaid = (payments || []).reduce(
-      (sum, p) => sum + getEffectiveAmount(p, clientData.plans),
+      (sum, p) => sum + getEffectiveAmount(p, plan),
       0
     );
 
-    // Calcular cuánto se ha pagado en el ciclo actual.
-    // Si el total pagado es 0 o múltiplo exacto del planPrice, está al día o inactivo.
-    // Si hay un sobrante (totalPaid % planPrice > 0), está pendiente.
-    let paidForCurrentCycle = totalPaid % planPrice;
-    if (paidForCurrentCycle < 0.001 && totalPaid > 0) {
-      paidForCurrentCycle = planPrice;
+    // Calcular días desde el último pago
+    let daysSinceLastPayment = 999;
+    if ((payments || []).length > 0) {
+      const lastPaymentDate = Math.max(
+        ...(payments || []).map(p => new Date(p.payment_date).getTime())
+      );
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      daysSinceLastPayment = Math.floor((now.getTime() - lastPaymentDate) / (1000 * 60 * 60 * 24));
     }
 
-    const currentRemaining = planPrice - paidForCurrentCycle;
-    const isFullyPaid = currentRemaining < 0.001;
-    const daysUntilPayment = calculateDaysUntilPayment(
-      clientData.next_payment_date,
-      clientData.join_date
-    );
+    const cycles = Math.floor(totalPaid / planPrice);
+    const remainder = totalPaid % planPrice;
+    const isFullyPaid = remainder < 0.001;
+    const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
+    const totalPrice = planPrice + enrollmentFee;
 
     let newStatus;
-    if (isFullyPaid && daysUntilPayment !== null && daysUntilPayment >= 0) {
-      // Si pagó el ciclo completo y no está vencido
+
+    // Nuevo algoritmo basado en días desde último pago
+    if ((payments || []).length === 0) {
+      // Sin pagos
+      const joinDate = new Date(clientData.join_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      newStatus = (today < joinDate) ? 'pendiente' : 'inactivo';
+    } else if (isFullyPaid && cycles >= MAX_CYCLES) {
+      // Completamente pagado (12+ ciclos)
+      newStatus = 'finalizado';
+    } else if (daysSinceLastPayment <= MAX_DAYS_ACTIVE) {
+      // Pago reciente (<= 30 días)
       newStatus = 'activo';
-    } else if (totalPaid > 0 && !isFullyPaid) {
-      // Tiene pagos parciales (pago fraccionado)
-      newStatus = 'pendiente';
-    } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
-      // Pasó la fecha de pago y no está al día
-      newStatus = 'inactivo';
     } else {
-      // Sin pagos o estado no claro
+      // Sin pago reciente
       newStatus = 'inactivo';
     }
 
@@ -983,7 +1003,11 @@ export async function updateClientStatus(clientId, planId) {
 
 /**
  * Corrige el status de TODOS los clientes basándose en sus pagos.
- * Útil para arreglar clientes existentes con status incorrecto.
+ * Lógica mejorada:
+ * - Activo: tiene pagos recientes (<= 30 días)
+ * - Inactivo: no tiene pagos o último pago hace más de 30 días
+ * - Pendiente: no tiene pagos y fecha de inicio está en el futuro
+ * - Finalizado: tiene 12+ ciclos pagados completos
  *
  * @returns {Promise<{success: boolean, updated: number, total: number, errors: string[]}>}
  */
@@ -996,6 +1020,7 @@ export async function fixAllClientStatuses() {
         status,
         next_payment_date,
         join_date,
+        enrollment_paid,
         plan_id,
         plans (
           id,
@@ -1011,44 +1036,75 @@ export async function fixAllClientStatuses() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_type, discount_type, discount_value');
+      .select('id, client_id, plan_id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, is_archived');
 
     if (paymentsError) throw paymentsError;
+
+    // Filtrar solo pagos no archivados
+    const validPayments = (allPayments || []).filter(p => !p.is_archived);
+
+    // Agrupar pagos por cliente
+    const clientPaymentsMap = {};
+    validPayments.forEach(p => {
+      if (!clientPaymentsMap[p.client_id]) clientPaymentsMap[p.client_id] = [];
+      clientPaymentsMap[p.client_id].push(p);
+    });
+
+    const INSCRIPTION_PRICE = 5;
+    const MAX_DAYS_ACTIVE = 30;
+    const MAX_CYCLES = 12;
 
     const updates = [];
     const errors = [];
 
     for (const clientData of allClients) {
       try {
-        const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
+        const plan = clientData.plans;
+        const planPrice = plan ? parseFloat(plan.price) || 0 : 0;
 
         if (planPrice <= 0) continue;
 
-        const clientPayments = (allPayments || []).filter(
-          p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
-        );
-
+        // Obtener todos los pagos del cliente (sin filtrar por plan_id para incluir historial)
+        const clientPayments = clientPaymentsMap[clientData.id] || [];
         const totalPaid = clientPayments.reduce(
-          (sum, p) => sum + getEffectiveAmount(p, clientData.plans),
+          (sum, p) => sum + getEffectiveAmount(p, plan),
           0
         );
 
+        // Calcular días desde último pago
+        let daysSinceLastPayment = 999;
+        if (clientPayments.length > 0) {
+          const lastPaymentDate = Math.max(
+            ...clientPayments.map(p => new Date(p.payment_date).getTime())
+          );
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          daysSinceLastPayment = Math.floor((now.getTime() - lastPaymentDate) / (1000 * 60 * 60 * 24));
+        }
+
         const cycles = Math.floor(totalPaid / planPrice);
-        const daysUntilPayment = calculateDaysUntilPayment(
-          clientData.next_payment_date,
-          clientData.join_date
-        );
+        const remainder = totalPaid % planPrice;
+        const isFullyPaid = remainder < 0.001;
+        const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
+        const totalPrice = planPrice + enrollmentFee;
 
         let newStatus;
-        if (cycles >= 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
+
+        // Nuevo algoritmo basado en días desde último pago
+        if (clientPayments.length === 0) {
+          // Sin pagos
+          const joinDate = new Date(clientData.join_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          newStatus = (today < joinDate) ? 'pendiente' : 'inactivo';
+        } else if (isFullyPaid && cycles >= MAX_CYCLES) {
+          // Completamente pagado (12+ ciclos)
+          newStatus = 'finalizado';
+        } else if (daysSinceLastPayment <= MAX_DAYS_ACTIVE) {
+          // Pago reciente (<= 30 días)
           newStatus = 'activo';
-        } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
-          newStatus = 'inactivo';
-        } else if (totalPaid > 0 && totalPaid % planPrice > 0.001) {
-          newStatus = 'pendiente';
-        } else if (cycles < 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
-          newStatus = 'pendiente';
         } else {
+          // Sin pago reciente
           newStatus = 'inactivo';
         }
 
@@ -1057,7 +1113,9 @@ export async function fixAllClientStatuses() {
             id: clientData.id,
             name: `${clientData.first_name} ${clientData.last_name}`,
             oldStatus: clientData.status,
-            newStatus
+            newStatus,
+            daysSinceLast: daysSinceLastPayment,
+            totalPaid: totalPaid.toFixed(2)
           });
         }
       } catch (err) {
@@ -1085,11 +1143,12 @@ export async function fixAllClientStatuses() {
         success: errors.length === 0,
         updated: updatedCount,
         total: allClients.length,
+        changes: updates,
         errors
       };
     }
 
-    return { success: true, updated: 0, total: allClients.length, errors: [] };
+    return { success: true, updated: 0, total: allClients.length, changes: [], errors: [] };
 
   } catch (err) {
     console.error('Error fixing all client statuses:', err);
