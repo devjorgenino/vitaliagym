@@ -4,11 +4,11 @@ import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { usePayments } from "../../hooks/usePayments";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
-import { formatDate, matchesSearch } from "@/lib/utils";
+import { formatDate, formatDateToLocal, matchesSearch } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 import supabase from "../../api/client";
 
-const INSCRIPTION_PRICE = 5;
+import { INSCRIPTION_PRICE } from "../../utils/paymentCalculations";
 import {
   DOCUMENT_TYPES,
   PHONE_OPERATORS,
@@ -21,6 +21,7 @@ import {
   auditNextPaymentDates,
   recalculateNextPaymentDate,
   getEffectiveAmount,
+  getClientPaymentStatus,
 } from "../../utils/paymentCalculations";
 import { getPlanCurrency } from "../../lib/planUtils";
 import { toast } from "sonner";
@@ -122,7 +123,7 @@ export function ClientsTable() {
     address: "",
     observations: "",
     plan_id: "",
-    join_date: new Date().toISOString().split("T")[0],
+    join_date: formatDateToLocal(),
     enrollment_paid: false,
       avatar_url: "",
   });
@@ -274,51 +275,15 @@ export function ClientsTable() {
   };
 
   const calculatePaymentStatus = (client) => {
-    if (!client || !client.plan_id) {
-      return { isFullyPaid: true, remainingFormatted: "0.00" };
-    }
-
-    const planPrice = getPlanPrice(client.plan_id);
-    if (planPrice <= 0) {
-      return { isFullyPaid: true, remainingFormatted: "0.00" };
-    }
-
-    const allClientPayments = payments.filter(
-      (p) => p.client_id === client.id && p.plan_id === client.plan_id,
-    );
-
-    const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
-      0,
-    );
-
-    // El precio total incluye la inscripción si ya fue pagada (una sola vez)
-    const enrollmentFeePaid = getEnrollmentFeePaid(client, allClientPayments);
-    const totalPrice = planPrice + enrollmentFeePaid;
-
-    // Calcular cuánto se ha pagado en el ciclo actual
-    let currentCyclePaid = totalPaidSoFar % totalPrice;
-    if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
-      currentCyclePaid = totalPrice;
-    }
-    // La inscripción solo corresponde al primer ciclo: si el remanente
-    // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
-    // actual cuesta solo planPrice.
-    const currentCyclePrice =
-      currentCyclePaid > planPrice ? totalPrice : planPrice;
-    const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);
-    const isFullyPaid = currentRemaining < 0.001;
-
-    // Si ya se completó el ciclo actual, no hay restante que mostrar
-    if (isFullyPaid) {
-      return { isFullyPaid: true, remainingFormatted: "0.00" };
-    }
-
-    return {
-      isFullyPaid: false,
-      remainingFormatted: currentRemaining.toFixed(2),
-    };
-  };
+  return getClientPaymentStatus(
+    client,
+    payments,
+    getPlanForPayment,
+    getEffectiveAmount,
+    getPlanPrice,
+    getEnrollmentFeePaid
+  );
+};
 
   const getPaymentWithRemaining = (client) => {
     if (!client || !client.plan_id) {
@@ -404,7 +369,7 @@ export function ClientsTable() {
       address: "",
       observations: "",
       plan_id: "",
-      join_date: new Date().toISOString().split("T")[0],
+      join_date: formatDateToLocal(),
       enrollment_paid: false,
       avatar_url: "",
     });
@@ -682,7 +647,7 @@ export function ClientsTable() {
     if (!clientToReset) return;
     setResettingId(clientToReset.id);
     try {
-      const result = await resetClientHistory(clientToReset.id, { newJoinDate: resetDate || new Date().toISOString().split("T")[0] });
+      const result = await resetClientHistory(clientToReset.id, { newJoinDate: resetDate || formatDateToLocal() });
       if (result.success) {
         toast.success("Historial reiniciado exitosamente. Redirigiendo al pago de reactivación...");
         setIsResetDialogOpen(false);
@@ -709,7 +674,7 @@ export function ClientsTable() {
 
   const openResetDialog = (client) => {
     setClientToReset(client);
-    setResetDate(new Date().toISOString().split("T")[0]);
+    setResetDate(formatDateToLocal());
     setIsResetDialogOpen(true);
   };
 

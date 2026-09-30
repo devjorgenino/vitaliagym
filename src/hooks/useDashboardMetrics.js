@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import client from '../api/client';
 import { fetchWithOffline } from '../lib/offline-read';
+import { formatDateToLocal } from '@/lib/utils';
 
 export function useDashboardMetrics() {
   const [metrics, setMetrics] = useState({

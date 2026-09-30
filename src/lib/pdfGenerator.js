@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { loadLogoForPDF, getLogoDimensions } from "./logoLoader";
+import { formatDateToLocal } from "@/lib/utils";
 
 /**
  * Utilidades para generación de reportes PDF profesionales

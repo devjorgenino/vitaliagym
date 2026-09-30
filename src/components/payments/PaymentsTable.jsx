@@ -14,12 +14,10 @@ import { usePayments } from "../../hooks/usePayments";
 import { useClients } from "../../hooks/useClients";
 import { usePlans } from "../../hooks/usePlans";
 import { useExchangeRate } from "../../hooks/useExchangeRate";
-import { formatDate, formatDateTime, matchesSearch } from "@/lib/utils";
+import { formatDate, formatDateTime, formatDateToLocal, matchesSearch } from "@/lib/utils";
 import { getPlanCurrency, getPlanPriceInBS, getPlanPriceInUSD } from "@/lib/planUtils";
 import { DatePicker } from "@/components/ui/date-picker";
-import { addMonthsPreservingAnchor, getEffectiveAmount, computeNextPaymentDate } from "@/utils/paymentCalculations";
-
-const INSCRIPTION_PRICE = 5;
+import { addMonthsPreservingAnchor, getEffectiveAmount, computeNextPaymentDate, getClientPaymentStatus, INSCRIPTION_PRICE } from "@/utils/paymentCalculations";
 import {
   VENEZUELAN_BANKS,
   getBanksWithFavorites,
@@ -178,7 +176,7 @@ export function PaymentsTable({
     amount_usd: "",
     amount_bs: "",
     exchange_rate: rate || 1,
-    payment_date: new Date().toISOString().split("T")[0],
+    payment_date: formatDateToLocal(),
     reference: "",
     bank: "",
     payment_type: "pago_movil",
@@ -267,7 +265,7 @@ export function PaymentsTable({
           amount_usd: (planCurrency === "BS" ? remainingInUsd.toFixed(4) : remainingInUsd.toFixed(2)),
           amount_bs: remainingInBs.toFixed(2),
           exchange_rate: rate || 1,
-          payment_date: new Date().toISOString().split("T")[0],
+          payment_date: formatDateToLocal(),
           reference: "",
           bank: "",
           payment_type: "pago_movil",
@@ -326,7 +324,7 @@ export function PaymentsTable({
         amount_usd: planIsBS ? (rate ? (planPrice / rate).toFixed(2) : "") : amountUSD,
         amount_bs: planIsBS ? planPrice.toFixed(2) : amountBS,
         exchange_rate: rate || 1,
-        payment_date: new Date().toISOString().split("T")[0],
+        payment_date: formatDateToLocal(),
         reference: "",
         bank: "",
         payment_type: "pago_movil",
@@ -554,77 +552,15 @@ export function PaymentsTable({
 
   // Calcular total pagado y restante para un cliente-plan
   const calculatePaymentStatus = (payment) => {
-    const planPrice = getPlanPrice(payment.plan_id);
-    const currency = getPlanCurrency(getPlanForPayment(payment));
-    if (planPrice <= 0) {
-      return {
-        planPrice: 0,
-        totalPaid: 0,
-        currentPayment: parseFloat(payment.amount_usd) || 0,
-        remaining: 0,
-        isFullyPaid: true,
-        remainingFormatted: "0.00",
-        currency,
-      };
-    }
-
-    // Obtener todos los pagos del cliente para este plan
-    const allClientPayments = payments.filter(
-      (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
+    return getClientPaymentStatus(
+      payment,
+      payments,
+      getPlanForPayment,
+      getEffectiveAmount,
+      getPlanPrice,
+      getEnrollmentFeePaid,
+      getPlanCurrency
     );
-
-    // El precio total incluye la inscripción si ya fue pagada (una sola vez)
-    const enrollmentFeePaid = getEnrollmentFeePaid(
-      payment.clients,
-      allClientPayments,
-    );
-    const totalPrice = planPrice + enrollmentFeePaid;
-
-    // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
-    const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
-      0,
-    );
-
-    // Calcular cuánto se ha pagado en el ciclo actual
-    // Usamos el operador % para obtener el remanente del total pagado respecto al precio del plan
-    let currentCyclePaid = totalPaidSoFar % totalPrice;
-    if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
-      currentCyclePaid = totalPrice;
-    }
-
-    // La inscripción de $5 USD solo corresponde al primer ciclo. Si el
-    // remanente del total pagado supera planPrice, es porque ese ciclo
-    // incluyó la inscripción (cyclePrice = planPrice + fee); si no, la
-    // inscripción ya fue pagada y el ciclo actual cuesta solo planPrice.
-    const currentCyclePrice =
-      currentCyclePaid > planPrice ? totalPrice : planPrice;
-    // El restante para este ciclo es el precio del ciclo menos lo pagado
-    const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);
-    const isFullyPaid = currentRemaining < 0.001;
-
-    // Si el pago total del ciclo actual es mayor o igual al precio total, está pagado
-    if (isFullyPaid) {
-      return {
-        planPrice: totalPrice,
-        totalPaid: totalPaidSoFar,
-        currentPayment: parseFloat(payment.amount_usd) || 0,
-        remaining: 0,
-        isFullyPaid: true,
-        remainingFormatted: "0.00",
-        currency,
-      };
-    }
-
-    return {
-      planPrice: totalPrice,
-      totalPaid: totalPaidSoFar,
-      currentPayment: parseFloat(payment.amount_usd) || 0,
-      remaining: currentRemaining,
-      isFullyPaid: false,
-      remainingFormatted: currentRemaining.toFixed(2),
-      currency,
-    };
   };
 
   // Calcular pago restante EXCLUYENDO el pago actual (para el botón "Pagar Restante")
@@ -1022,7 +958,7 @@ export function PaymentsTable({
       amount_usd: "",
       amount_bs: "",
       exchange_rate: rate || 1,
-      payment_date: new Date().toISOString().split("T")[0],
+      payment_date: formatDateToLocal(),
       reference: "",
       bank: "",
       payment_type: "pago_movil",
@@ -1416,7 +1352,7 @@ export function PaymentsTable({
       amount_usd: (planCurrency === "BS" ? remainingInUsd.toFixed(4) : remainingInUsd.toFixed(2)),
       amount_bs: remainingInBs.toFixed(2),
       exchange_rate: (rate || 1).toString(),
-      payment_date: new Date().toISOString().split("T")[0],
+      payment_date: formatDateToLocal(),
       reference: "",
       bank: "",
       payment_type: "pago_movil",
@@ -2365,14 +2301,14 @@ export function PaymentsTable({
                   const selectedPlan = plans.find(p => p.id === formData.plan_id);
                   if (!selectedPlan) return null;
                   const client = clients.find(c => c.id === formData.client_id);
-                  const joinDate = client?.join_date || new Date().toISOString().split("T")[0];
+                  const joinDate = client?.join_date || formatDateToLocal();
                   const anchorDay = parseInt(joinDate.split("-")[2], 10) || 1;
                   const today = new Date();
                   const y = today.getFullYear();
                   const m = today.getMonth() + monthsCount;
                   const d = Math.min(anchorDay, new Date(y, m + 1, 0).getDate());
                   const previewDate = new Date(y, m, d);
-                  const fmt = previewDate.toISOString().split("T")[0];
+                  const fmt = formatDateToLocal(previewDate);
                   return (
                     <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200">
                       <strong>Próximo vencimiento estimado:</strong> {fmt} (después de {monthsCount} mes{monthsCount > 1 ? "es" : ""})

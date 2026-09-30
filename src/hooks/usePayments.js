@@ -228,7 +228,7 @@ export function usePayments({ onClientUpdate } = {}) {
       }
 
       // Refetch to reflect updated state
-      await fetchPayments();      await fetchPayments();
+      await fetchPayments();
 
       // Refrescar la lista de clientes para que el status se actualice en la tabla
       if (typeof onClientUpdate === 'function') {
