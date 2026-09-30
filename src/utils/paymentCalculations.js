@@ -326,8 +326,9 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
     return { isFullyPaid: true, remainingFormatted: "0.00", currency: getPlanCurrency ? getPlanCurrency(getPlanForPayment(client)) : "USD" };
   }
 
+  // 获取客户所有非归档支付（兼容客户换计划后旧支付 plan_id 未更新的场景）
   const clientPayments = payments.filter(
-    (p) => p.client_id === client.id && p.plan_id === client.plan_id,
+    (p) => p.client_id === client.id && !p.is_archived,
   );
 
   const totalPaidSoFar = clientPayments.reduce(

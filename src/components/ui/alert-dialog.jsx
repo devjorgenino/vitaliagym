@@ -15,7 +15,6 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal
 
 // Hook para combinar refs
 function useCombinedRefs(...refs) {
-   
   return React.useCallback((element) => {
     refs.forEach((ref) => {
       if (!ref) return
@@ -25,7 +24,8 @@ function useCombinedRefs(...refs) {
         ref.current = element
       }
     })
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, refs)
 }
 
 const AlertDialogOverlay = React.forwardRef(({ className, ...props }, ref) => {

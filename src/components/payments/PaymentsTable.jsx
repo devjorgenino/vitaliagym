@@ -403,10 +403,11 @@ export function PaymentsTable({
 
       // Si hay un cliente seleccionado, podemos verificar pagos anteriores.
       if (formData.client_id) {
+        // 获取客户所有非归档支付（兼容客户换计划后旧支付 plan_id 未更新的场景）
         const allClientPayments = payments.filter(
           (p) =>
             p.client_id === formData.client_id &&
-            p.plan_id === formData.plan_id,
+            !p.is_archived,
         );
 
         const totalPaid = allClientPayments.reduce(
@@ -516,8 +517,9 @@ export function PaymentsTable({
 
     // Solo sumar pagos existentes si estamos pagando un restante.
     if (isPayingRemaining) {
+      // 获取客户所有非归档支付（兼容客户换计划后旧支付 plan_id 未更新的场景）
       const allClientPayments = payments.filter(
-        (p) => p.client_id === formData.client_id && p.plan_id === planId,
+        (p) => p.client_id === formData.client_id && !p.is_archived,
       );
       totalPaidSoFar = allClientPayments.reduce(
         (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
@@ -551,9 +553,11 @@ export function PaymentsTable({
   };
 
   // Calcular total pagado y restante para un cliente-plan
+  // 修复：传递 payment.clients 而不是 payment 本身
+  // getClientPaymentStatus 期望 client 对象来过滤支付记录
   const calculatePaymentStatus = (payment) => {
     return getClientPaymentStatus(
-      payment,
+      payment.clients || payment,
       payments,
       getPlanForPayment,
       getEffectiveAmount,
@@ -564,15 +568,16 @@ export function PaymentsTable({
   };
 
   // Calcular pago restante EXCLUYENDO el pago actual (para el botón "Pagar Restante")
+  // 兼容客户换计划后旧支付 plan_id 未更新的场景
   const calculateRemainingForNewPayment = (payment) => {
     const planPrice = getPlanPrice(payment.plan_id);
-    
-    // Obtener todos los pagos ANTERIORES del cliente para este plan (excluyendo el actual)
+
+    // Obtener todos los pagos ANTERIORES del cliente (excluyendo el actual y archivados)
     const previousPayments = payments.filter(
       (p) =>
         p.client_id === payment.client_id &&
-        p.plan_id === payment.plan_id &&
-        p.id !== payment.id, // Excluir el pago actual
+        p.id !== payment.id &&
+        !p.is_archived,
     );
 
     // El precio total incluye la inscripción si ya fue pagada (una sola vez)
@@ -888,9 +893,11 @@ export function PaymentsTable({
 
     if (isDialogOpen && formData.client_id && formData.plan_id) {
       // Calcular el restante actual
+      // 获取客户所有非归档支付（兼容客户换计划后旧支付 plan_id 未更新的场景）
       const allClientPayments = payments.filter(
         (p) =>
-          p.client_id === formData.client_id && p.plan_id === formData.plan_id,
+          p.client_id === formData.client_id &&
+          !p.is_archived,
       );
       const totalPaid = allClientPayments.reduce(
         (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
@@ -1293,8 +1300,9 @@ export function PaymentsTable({
 
   const handlePayRemaining = (payment) => {
     // Calcular el pago restante INCLUYENDO todos los pagos existentes
+    // 获取客户所有非归档支付（兼容客户换计划后旧支付 plan_id 未更新的场景）
     const allClientPayments = payments.filter(
-      (p) => p.client_id === payment.client_id && p.plan_id === payment.plan_id,
+      (p) => p.client_id === payment.client_id && !p.is_archived,
     );
     const totalPaid = allClientPayments.reduce(
       (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
