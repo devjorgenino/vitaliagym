@@ -26,6 +26,18 @@ export function matchesSearch(searchTerm, ...fields) {
   return searchTokens.every((token) => combinedText.includes(token));
 }
 
+/**
+ * Devuelve la fecha local actual en formato YYYY-MM-DD.
+ * Evita el problema de `toISOString()` que devuelve UTC y puede causar
+ * un desfase de un día en zonas horarias con offset negativo (ej: Venezuela UTC-4).
+ */
+export function formatDateToLocal(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function formatDate(dateString) {
   if (!dateString) return "N/A";
   let date;

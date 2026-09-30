@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { matchesSearch } from "@/lib/utils";
+import { matchesSearch, formatDateToLocal } from "@/lib/utils";
 import useStaff from "@/hooks/useStaff";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { VENEZUELAN_BANKS, BANK_ACCOUNT_TYPES, DOCUMENT_TYPES, PHONE_OPERATORS, formatCedula, parseCedula, formatPhone, parsePhone } from "@/lib/venezuelanData";

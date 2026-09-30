@@ -25,22 +25,92 @@ import client from '../api/client';
  * @param {Object} [plan] - Plan del cliente (opcional, para soportar moneda BS)
  * @returns {number} - Monto efectivo en la moneda base del plan
  */
-export function getEffectiveAmount(payment, plan) {
+/**
+ * Precio fijo de inscripción (inscripción / enrollment fee) en USD.
+ * Se cobra UNA SOLA VEZ al registrar un cliente o hacer borrón y cuenta nueva.
+ */
+export const INSCRIPTION_PRICE = 5;
+
+/**
+ * Límite máximo de montos efectivos en USD.
+ * Previene fechas locas por montos/descuentos anómalos.
+ */
+const MAX_EFFECTIVE_AMOUNT_USD = 10000;
+
+/**
+ * Límite máximo de montos efectivos en BS.
+ * Para planes en bolívares, un pago de hasta 1M Bs es razonable.
+ */
+const MAX_EFFECTIVE_AMOUNT_BS = 1000000;
+
+/**
+ * Límite máximo de ciclos que un solo pago puede cubrir (2 años = 24 meses).
+ */
+const MAX_CYCLES_PER_PAYMENT = 24;
+
+/**
+ * Calcula el monto efectivo cubierto por un pago, convirtiendo BS a USD si es necesario.
+ *
+ * Para pagos en efectivo bolívares (efectivo_bolivares), se usa la tasa de cambio
+ * almacenada en el pago (payment.exchange_rate) para convertir a USD.
+ * Si no tiene tasa, se usa una tasa por defecto de 310 Bs/$.
+ *
+ * @param {Object} payment - Registro de pago
+ * @param {Object} [plan] - Plan del cliente (opcional, para moneda base)
+ * @param {number} [fallbackRate=310] - Tasa de cambio por defecto para conversión BS→USD
+ * @returns {number} - Monto efectivo en USD (o BS si el plan es en BS)
+ */
+export function getEffectiveAmount(payment, plan, fallbackRate = 310) {
   if (!payment) return 0;
   const field = getPaymentAmountField(payment, plan);
   let amount = parseFloat(payment[field]) || 0;
+  const isBSPlan = (plan?.currency || 'USD').toUpperCase() === 'BS';
+
+  // Para planes en USD con efectivo_bolivares, convertir a USD
+  if (payment.payment_type === 'efectivo_bolivares' && !isBSPlan) {
+    const rate = payment.exchange_rate || fallbackRate;
+    amount = amount / rate;
+  }
+
+  // Validar monto base razonable
+  const maxAmount = isBSPlan ? MAX_EFFECTIVE_AMOUNT_BS : MAX_EFFECTIVE_AMOUNT_USD;
+  if (amount > maxAmount) {
+    console.warn(
+      `⚠️ Monto anómalo detectado: ${amount} en pago ${payment.id || 'unknown'} (${isBSPlan ? 'Bs' : 'USD'}), limitando a ${maxAmount}`
+    );
+    amount = maxAmount;
+  }
+
   if (payment.discount_type === 'percentage' && payment.discount_value) {
     const disc = parseFloat(payment.discount_value) || 0;
     if (disc > 0 && disc < 100) {
-      amount = amount / (1 - disc / 100);
+      // Protección contra descuentos cercanos al 100% que inflan el monto efectivo
+      const maxDiscount = 95; // Máximo 95% de descuento
+      const safeDisc = Math.min(disc, maxDiscount);
+      if (disc !== safeDisc) {
+        console.warn(`⚠️ Descuento excesivo ${disc}% en pago ${payment.id || 'unknown'}, limitando a ${maxDiscount}%`);
+      }
+      amount = amount / (1 - safeDisc / 100);
     } else if (disc >= 100) {
-      // 100% discount means full coverage - the effective amount is the full plan price
-      // Return a sentinel that callers should handle; here we return 0 to avoid div-by-zero
+      // 100% discount means full coverage - treat as 0 for cycle purposes
       return 0;
     }
   } else if (payment.discount_type === 'fixed' && payment.discount_value) {
-    amount += parseFloat(payment.discount_value) || 0;
+    const fixedDisc = parseFloat(payment.discount_value) || 0;
+    // Validar descuento fijo razonable
+    if (fixedDisc > MAX_EFFECTIVE_AMOUNT_USD) {
+      console.warn(`⚠️ Descuento fijo anómalo: ${fixedDisc}, limitando`);
+      amount += MAX_EFFECTIVE_AMOUNT_USD;
+    } else {
+      amount += fixedDisc;
+    }
   }
+
+  // Límite final de monto efectivo
+  if (amount > maxAmount) {
+    amount = maxAmount;
+  }
+
   return Math.round(amount * 100) / 100;
 }
 
@@ -171,27 +241,38 @@ export function calculatePaymentCycle(payments, planPrice, plan) {
     return { cycles: 0, accumulatedBalance: 0, currentRemaining: planPrice, isFullyPaid: false };
   }
 
-  let accumulatedBalance = 0;
-
-  for (const p of payments) {
+  // Calculate total paid amount (ignore negative payments)
+  const totalPaid = payments.reduce((sum, p) => {
     const amount = getEffectiveAmount(p, plan);
-    if (amount <= 0) continue;
+    return sum + (amount > 0 ? amount : 0);
+  }, 0);
 
-    accumulatedBalance += amount;
-    const cycles = Math.floor(accumulatedBalance / planPrice);
-    if (cycles <= 0) continue;
-
-    // Descontar los ciclos completos aplicados
-    accumulatedBalance -= cycles * planPrice;
+  // Handle zero payment case (should be same as no payment)
+  if (totalPaid === 0) {
+    return {
+      cycles: 0,
+      accumulatedBalance: 0,
+      currentRemaining: planPrice,
+      isFullyPaid: false
+    };
   }
 
-  const currentRemaining = planPrice - accumulatedBalance;
-  const isFullyPaid = currentRemaining < 0.001;
+  // Calculate cycles and remainder
+  const remainder = totalPaid % planPrice;
+  const cycles = Math.floor(totalPaid / planPrice);
+
+  // isFullyPaid is true when we've just completed a cycle (remainder === 0) and have made payments
+  const isFullyPaid = remainder === 0;
+
+  // currentRemaining represents how much has been paid toward the current cycle
+  // When isFullyPaid is true, we show 0 (completed cycle)
+  // When isFullyPaid is false, we show the amount paid toward current cycle
+  const currentRemaining = isFullyPaid ? 0 : remainder;
 
   return {
-    cycles: Math.floor((payments.reduce((sum, p) => sum + getEffectiveAmount(p, plan), 0)) / planPrice),
-    accumulatedBalance,
-    currentRemaining: isFullyPaid ? 0 : currentRemaining,
+    cycles,
+    accumulatedBalance: 0, // Not used in UI logic, kept for API compatibility
+    currentRemaining,
     isFullyPaid
   };
 }
@@ -218,6 +299,71 @@ export function addMonthsToDate(baseDate, monthsToAdd) {
 
   const anchorDay = parseInt(baseStr.split('-')[2], 10);
   return addMonthsPreservingAnchor(baseStr, monthsToAdd, anchorDay);
+}
+
+/**
+ * Calcula el estado de pago unificado para un cliente basado en sus pagos y plan.
+ *
+ * Esta función centraliza la lógica de cálculo de estado de pago que estaba duplicada
+ * en ClientsTable.jsx y PaymentsTable.jsx.
+ *
+ * @param {Object} client - Objeto cliente con plan_id y pagos asociados
+ * @param {Array} payments - Array de pagos del cliente
+ * @param {Function} getPlanForPayment - Función para obtener el plan de un pago
+ * @param {Function} getEffectiveAmount - Función para obtener el monto efectivo de un pago
+ * @param {Function} getPlanPrice - Función para obtener el precio de un plan
+ * @param {Function} getEnrollmentFeePaid - Función para obtener el monto de inscripción pagada
+ * @param {Function} getPlanCurrency - Función para obtener la moneda del plan (opcional)
+ * @returns {Object} - Estado de pago con isFullyPaid, remainingFormatted y currency
+ */
+export function getClientPaymentStatus(client, payments, getPlanForPayment, getEffectiveAmount, getPlanPrice, getEnrollmentFeePaid, getPlanCurrency) {
+  if (!client || !client.plan_id) {
+    return { isFullyPaid: true, remainingFormatted: "0.00", currency: "USD" };
+  }
+
+  const planPrice = getPlanPrice(client.plan_id);
+  if (planPrice <= 0) {
+    return { isFullyPaid: true, remainingFormatted: "0.00", currency: getPlanCurrency ? getPlanCurrency(getPlanForPayment(client)) : "USD" };
+  }
+
+  const clientPayments = payments.filter(
+    (p) => p.client_id === client.id && p.plan_id === client.plan_id,
+  );
+
+  const totalPaidSoFar = clientPayments.reduce(
+    (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
+    0,
+  );
+
+  // El precio total incluye la inscripción si ya fue pagada (una sola vez)
+  const enrollmentFeePaid = getEnrollmentFeePaid(client, clientPayments);
+  const totalPrice = planPrice + enrollmentFeePaid;
+
+  // Calcular cuánto se ha pagado en el ciclo actual
+  let currentCyclePaid = totalPaidSoFar % totalPrice;
+  if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
+    currentCyclePaid = totalPrice;
+  }
+  // La inscripción solo corresponde al primer ciclo: si el remanente
+  // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
+  // actual cuesta solo planPrice.
+  const currentCyclePrice =
+    currentCyclePaid > planPrice ? totalPrice : planPrice;
+  const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);
+  const isFullyPaid = currentRemaining < 0.001;
+
+  const currency = getPlanCurrency ? getPlanCurrency(getPlanForPayment(client)) : "USD";
+
+  // Si ya se completó el ciclo actual, no hay restante que mostrar
+  if (isFullyPaid) {
+    return { isFullyPaid: true, remainingFormatted: "0.00", currency };
+  }
+
+  return {
+    isFullyPaid: false,
+    remainingFormatted: currentRemaining.toFixed(2),
+    currency,
+  };
 }
 
 /**
@@ -261,8 +407,14 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
     const cycles = Math.floor(accumulatedBalance / planPrice);
     if (cycles <= 0) continue;
 
+    // Límite de seguridad: un solo pago no puede cubrir más de MAX_CYCLES_PER_PAYMENT meses
+    const safeCycles = Math.min(cycles, MAX_CYCLES_PER_PAYMENT);
+    if (safeCycles !== cycles) {
+      console.warn(`⚠️ Ciclos excesivos detectados: ${cycles}, limitando a ${MAX_CYCLES_PER_PAYMENT} (pago ${p.id || 'unknown'})`);
+    }
+
     // Descontar los ciclos completos aplicados
-    accumulatedBalance -= cycles * planPrice;
+    accumulatedBalance -= safeCycles * planPrice;
 
     const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
 

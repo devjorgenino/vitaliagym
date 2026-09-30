@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAttendance } from "../../../hooks/useAttendance";
-import { formatDate, matchesSearch } from "@/lib/utils";
+import { formatDate, formatDateToLocal, matchesSearch } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";

@@ -234,7 +234,7 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
     expect(effective).toBe(25);
   });
 
-  it('efectivo_bolivares en plan USD usa amount_bs (conversión automática)', () => {
+  it('efectivo_bolivares en plan USD convierte Bs a USD usando exchange_rate', () => {
     // Plan USD: precio $25
     const usdPlan = { id: 'p1', name: 'Plan USD', price: 25, currency: 'USD' };
 
@@ -248,9 +248,39 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
       payment_date: '2026-01-15',
     };
 
-    // efectivo_bolivares debe leer amount_bs (7750)
+    // efectivo_bolivares debe convertir a USD: 7750 / 310 = 25
     const effective = getEffectiveAmount(payment, usdPlan);
-    expect(effective).toBe(7750);
+    expect(effective).toBe(25);
+  });
+
+  it('efectivo_bolivares sin exchange_rate usa fallback de 310', () => {
+    const usdPlan = { id: 'p1', name: 'Plan USD', price: 25, currency: 'USD' };
+
+    const payment = {
+      id: 'pay2',
+      amount_bs: 7750,
+      payment_type: 'efectivo_bolivares',
+      payment_date: '2026-01-15',
+    };
+
+    // Sin exchange_rate, usa fallback 310: 7750 / 310 = 25
+    const effective = getEffectiveAmount(payment, usdPlan);
+    expect(effective).toBe(25);
+  });
+
+  it('efectivo_bolivares en plan BS usa amount_bs directamente', () => {
+    const bsPlan = { id: 'p1', name: 'Plan BS', price: 20000, currency: 'BS' };
+
+    const payment = {
+      id: 'pay3',
+      amount_bs: 20000,
+      payment_type: 'efectivo_bolivares',
+      payment_date: '2026-01-15',
+    };
+
+    // Plan BS: el monto ya está en Bs, no convertir
+    const effective = getEffectiveAmount(payment, bsPlan);
+    expect(effective).toBe(20000);
   });
 
   it('pago_movil en plan BS usa amount_bs (comportamiento existente)', () => {

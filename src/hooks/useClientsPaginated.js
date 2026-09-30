@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import client from "../api/client";
+import { formatDateToLocal } from "@/lib/utils";
 
 /**
  * Hook para obtener clientes con paginación del lado del servidor

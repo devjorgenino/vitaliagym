@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { matchesSearch } from "@/lib/utils";
+import { matchesSearch, formatDateToLocal } from "@/lib/utils";
 import useStaffPayments from "@/hooks/useStaffPayments";
 import useStaff from "@/hooks/useStaff";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
