@@ -1236,20 +1236,20 @@ export function PaymentsTable({
       }
 
       if (result.success) {
-        // Si es modo registro, actualizar el status del cliente a activo
-        if (isRegisterMode && preselectedClient && !isEditing) {
+        // Si es modo registro, actualizar el status del cliente usando el algoritmo correcto
+        if (isRegisterMode && preselectedClient && !isEditing && paymentData.plan_id) {
           try {
-            const clientUpdateResult = await client
-              .from('clients')
-              .update({
-                status: 'activo',
-                enrollment_paid: includeInscription ? true : preselectedClient.enrollment_paid
-              })
-              .eq('id', preselectedClient.id);
-
-            if (clientUpdateResult.error) {
-              console.error('Error updating client status:', clientUpdateResult.error);
+            // Actualizar inscripción si aplica
+            if (includeInscription) {
+              await client
+                .from('clients')
+                .update({ enrollment_paid: true })
+                .eq('id', preselectedClient.id);
             }
+
+            // Llamar a updateClientStatus para calcular el status correctamente
+            // basándose en los días desde el último pago
+            await updateClientStatus(paymentData.client_id, paymentData.plan_id);
           } catch (err) {
             console.error('Error updating client status:', err);
           }
