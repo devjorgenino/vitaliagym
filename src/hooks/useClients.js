@@ -292,12 +292,13 @@ export function useClients() {
       if (fetchError) throw fetchError;
 
       // Update client: set join_date to today, store original_join_date
+      // Después de borrón y cuenta nueva, el cliente queda "pendiente" hasta que pague
       const dataToUpdate = {
         original_join_date: currentClient.join_date,
         join_date: resetDate,
         next_payment_date: null,
         enrollment_paid: false,
-        status: "inactivo"
+        status: "pendiente"
       };
 
       const { data, error } = await executeWithSync({

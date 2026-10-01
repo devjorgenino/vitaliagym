@@ -955,11 +955,14 @@ export async function updateClientStatus(clientId, planId) {
 
     // Nuevo algoritmo basado en días desde último pago
     if ((payments || []).length === 0) {
-      // Sin pagos
+      // Sin pagos: verificar si es un cliente nuevo o reactivado
       const joinDate = new Date(clientData.join_date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      newStatus = (today < joinDate) ? 'pendiente' : 'inactivo';
+      // Si la fecha de ingreso es reciente (<= 7 días) o está en el futuro, es "pendiente"
+      // Esto cubre casos de "borrón y cuenta nueva" donde aún no se ha pagado
+      const daysSinceJoin = Math.floor((today.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
+      newStatus = (today < joinDate || daysSinceJoin <= 7) ? 'pendiente' : 'inactivo';
     } else if (isFullyPaid && cycles >= MAX_CYCLES) {
       // Completamente pagado (12+ ciclos)
       newStatus = 'finalizado';
@@ -1092,20 +1095,26 @@ export async function fixAllClientStatuses() {
 
         // Nuevo algoritmo basado en días desde último pago
         if (clientPayments.length === 0) {
-          // Sin pagos
+          // Sin pagos activos:
+          // - Si tiene original_join_date (hizo borrón y cuenta nueva), queda pendiente hasta pagar
+          // - Si el ingreso es reciente (<= 7 días) o está en el futuro, es pendiente
+          // - De lo contrario, es inactivo
+          const hasHadReset = !!clientData.original_join_date;
           const joinDate = new Date(clientData.join_date);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-          newStatus = (today < joinDate) ? 'pendiente' : 'inactivo';
-        } else if (isFullyPaid && cycles >= MAX_CYCLES) {
-          // Completamente pagado (12+ ciclos)
-          newStatus = 'finalizado';
-        } else if (daysSinceLastPayment <= MAX_DAYS_ACTIVE) {
-          // Pago reciente (<= 30 días)
-          newStatus = 'activo';
+          const daysSinceJoin = Math.floor((today.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
+          newStatus = (hasHadReset || today < joinDate || daysSinceJoin <= 7) ? 'pendiente' : 'inactivo';
         } else {
-          // Sin pago reciente
-          newStatus = 'inactivo';
+          // Tiene pagos activos - calcular días desde último pago
+          const daysSinceLast = daysSinceLastPayment;
+          if (isFullyPaid && cycles >= MAX_CYCLES) {
+            newStatus = 'finalizado';
+          } else if (daysSinceLast <= MAX_DAYS_ACTIVE) {
+            newStatus = 'activo';
+          } else {
+            newStatus = 'inactivo';
+          }
         }
 
         if (newStatus !== clientData.status) {
