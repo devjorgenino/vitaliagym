@@ -388,6 +388,8 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
   if (!joinDate || planPrice <= 0) return null;
   const anchorDay = parseInt(joinDate.split('-')[2], 10);
 
+  // Si no hay pagos, retornamos join_date + 1 mes (para compatibilidad con tests)
+  // El manejo de "borrón y cuenta nueva" se hace en recalculateNextPaymentDate
   if (!clientPayments || clientPayments.length === 0) {
     return addMonthsPreservingAnchor(joinDate, 1, anchorDay);
   }
@@ -521,14 +523,25 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     }
 
     // 3. Calcular la fecha correcta con la regla de negocio
-    const newNextPaymentDate = computeNextPaymentDate(
-      clientData.join_date,
-      allPayments || [],
-      clientData.plans,
-      planPrice
-    );
+    // Si el cliente hizo "borrón y cuenta nueva" y no tiene pagos activos,
+    // la próxima fecha de pago debe ser null hasta que paguen
+    const hasHadReset = !!clientData.original_join_date;
+    const hasActivePayments = (allPayments || []).length > 0;
 
-    if (!newNextPaymentDate) {
+    let newNextPaymentDate;
+    if (hasHadReset && !hasActivePayments) {
+      // Cliente con reset pero sin pagos activos -> no hay fecha de próximo pago
+      newNextPaymentDate = null;
+    } else {
+      newNextPaymentDate = computeNextPaymentDate(
+        clientData.join_date,
+        allPayments || [],
+        clientData.plans,
+        planPrice
+      );
+    }
+
+    if (!newNextPaymentDate && !hasHadReset) {
       return { success: false, error: 'No se pudo calcular la nueva fecha' };
     }
 
