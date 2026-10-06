@@ -1091,12 +1091,31 @@ export function PaymentsTable({
       setDiscountedAmount(0);
     }
 
-    if (mode === "maintenance") {
-      setFormData((prev) => ({
-        ...prev,
-        amount_usd: "",
-        amount_bs: "",
-      }));
+    if (mode === "maintenance" && formData.plan_id) {
+      // For maintenance payments, suggest the full plan amount (or remaining if paying remaining)
+      let amountToSuggest = isPayingRemaining && remainingPaymentData
+        ? parseFloat(remainingPaymentData.remaining_amount)
+        : getPlanPrice(formData.plan_id);
+
+      // Add inscription if applicable
+      if (isRegisterMode && includeInscription) {
+        amountToSuggest += INSCRIPTION_PRICE;
+      }
+
+      const planCurrency = getPlanCurrency(plans.find((p) => p.id === formData.plan_id));
+      if (planCurrency === "BS") {
+        setFormData((prev) => ({
+          ...prev,
+          amount_bs: amountToSuggest.toFixed(2),
+          amount_usd: (amountToSuggest / (rate || 1)).toFixed(4),
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          amount_usd: amountToSuggest.toFixed(2),
+          amount_bs: (amountToSuggest * (rate || 1)).toFixed(2),
+        }));
+      }
     } else if (mode === "partial" && formData.plan_id) {
       let amountToSuggest = currentPaymentInfo.remainingAmount;
       

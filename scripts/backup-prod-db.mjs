@@ -32,9 +32,26 @@ if (!PROD_URL || !PROD_KEY) {
   process.exit(1);
 }
 
-const BACKUPS_DIR = resolve(__dirname, '../backups');
+const BACKUPS_DIR = '/home/jorge/Documents/Projects/backups-vitaliagym';
 const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const BACKUP_FILE = resolve(BACKUPS_DIR, `backup-${TIMESTAMP}.sql`);
+
+// Extract project reference from SUPABASE_PROD_URL (e.g., https://xyz.supabase.co -> xyz)
+// Falls back to SUPABASE_PROJECT_REF if set, or empty string (will cause error later).
+function getProjectRef() {
+  if (process.env.SUPABASE_PROJECT_REF) {
+    return process.env.SUPABASE_PROJECT_REF;
+  }
+  if (PROD_URL) {
+    if (
+      PROD_URL.startsWith('https://') &&
+      PROD_URL.endsWith('.supabase.co')
+    ) {
+      return PROD_URL.substring(8, PROD_URL.length - '.supabase.co'.length);
+    }
+  }
+  return '';
+}
 
 async function main() {
   console.log('🔄 Iniciando backup de producción...');
@@ -49,7 +66,14 @@ async function main() {
 
   try {
     // Usar el CLI de Supabase para hacer el backup
-    const command = `supabase db dump --project-ref sefshrkbuydtocxrbowe --file "${BACKUP_FILE}"`;
+    const projectRef = getProjectRef();
+      if (!projectRef) {
+        console.error('❌ No se pudo determinar la referencia del proyecto. Verifique SUPABASE_PROD_URL o establezca SUPABASE_PROJECT_REF.');
+        process.exit(1);
+      }
+      // Use --data-only to dump table data (rows) in addition to schema.
+      // For a full backup (schema + data) you could omit --data-only, but default is schema-only.
+      const command = `supabase db dump --project-ref ${projectRef} --data-only --file "${BACKUP_FILE}"`;
 
     console.log('📦 Ejecutando backup...\n');
 
