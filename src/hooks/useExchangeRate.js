@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 
 // Tasa de respaldo usada únicamente cuando no se puede obtener la tasa BCV
