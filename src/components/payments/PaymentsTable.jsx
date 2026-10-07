@@ -1225,6 +1225,10 @@ export function PaymentsTable({
         .filter(Boolean)
         .join(" - ");
 
+      // Asegurar que los pagos de mantenimiento tengan el reference correcto
+      // incluso si el usuario lo modificó manualmente en el formulario
+      const finalReference = paymentMode === "maintenance" ? "mantenimiento" : formData.reference;
+
       const paymentData = {
         ...formData,
         amount_usd: parseFloat(formData.amount_usd) || 0,
@@ -1234,6 +1238,7 @@ export function PaymentsTable({
           ? formatPhone(formData.phone_operator, formData.phone_payment)
           : "",
         payment_detail: combinedDetail,
+        reference: finalReference, // Forzar reference para mantenimiento
         discount_type: formData.discount_type || null,
         discount_value: formData.discount_value ? parseFloat(formData.discount_value) : null,
         // enrollment_fee: la inscripción de $5 USD se cobra UNA SOLA VEZ
