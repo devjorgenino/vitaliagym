@@ -15,6 +15,7 @@
  *   5. No Payments: Projects first due date to 1 month from join_date.
  */
 import client from '../api/client';
+import { getPlanFrequency } from '@/lib/planUtils';
 
 /**
  * Fixed registration (enrollment) fee in USD.
@@ -46,15 +47,33 @@ const MAX_DAYS_ACTIVE = 30;
 const MAX_CYCLES = 12;
 
 /**
- * Calculates how many months a payment covers based on its effective amount and plan price.
+ * Calculates how many periods a payment covers based on its effective amount and plan price.
+ * For monthly plans: returns months covered
+ * For daily/weekly plans: returns days/weeks covered (no accumulation across periods)
  * @param {Object} payment - Payment record
- * @param {number} planPrice - Monthly plan price
- * @returns {number} Number of months covered (minimum 1 if payment is positive)
+ * @param {Object} plan - Client's plan (for frequency and price)
+ * @returns {number} Number of periods covered (minimum 1 if payment is positive)
  */
-export function getMonthsCoveredByPayment(payment, planPrice) {
-  if (!payment || planPrice <= 0) return 0;
-  const effective = getEffectiveAmount(payment);
-  return Math.max(Math.floor(effective / planPrice), 0);
+export function getPeriodsCoveredByPayment(payment, plan) {
+  if (!payment || !plan) return 0;
+
+  const planPrice = parseFloat(plan.price) || 0;
+  if (planPrice <= 0) return 0;
+
+  const frequency = getPlanFrequency(plan);
+  const effective = getEffectiveAmount(payment, plan);
+
+  // For monthly plans, we calculate months covered (existing behavior)
+  // For daily/weekly plans, each payment covers exact periods (no accumulation logic needed here)
+  // The accumulation logic is handled differently in computeNextPaymentDate for non-monthly plans
+  const basePeriods = Math.max(Math.floor(effective / planPrice), 0);
+
+  // For maintenance payments, treat as at least one period if effective > 0
+  if (isMaintenancePayment(payment) && effective > 0 && basePeriods === 0) {
+    return 1;
+  }
+
+  return basePeriods;
 }
 
 /**
@@ -66,7 +85,7 @@ export function getMonthsCoveredByPayment(payment, planPrice) {
 export function isMaintenancePayment(payment) {
   if (!payment) return false;
   const ref = (payment.reference || '').toLowerCase();
-  return ref.includes('maintenance') || ref.includes('maintenance fee');
+  return ref.includes('maintenance') || ref.includes('maintenance fee') || ref.includes('mantenimiento');
 }
 
 /**
@@ -386,8 +405,10 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
 
 /**
  * Calculates the correct next_payment_date for a client based on chronological payment history.
+ * For monthly plans: uses anchor day logic with accumulation
+ * For daily/weekly plans: each payment period is independent, no accumulation
  *
- * BUSINESS RULES:
+ * BUSINESS RULES FOR MONTHLY PLANS:
  * 1. Anchor Day Preservation: Cutoff always corresponds to join_date day (or month end if month shorter).
  * 2. Continuous Renewals: If active client pays before or on due date, coverage is extended.
  * 3. Reactivations after Inactivity: If client returns after months without paying, payment reactivates service
@@ -396,14 +417,34 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
  * 5. If payment is maintenance, it is treated as a full coverage cycle.
  * 6. No Payments: Projects first due date to 1 month from join_date.
  *
+ * BUSINESS RULES FOR DAILY/WEEKLY PLANS:
+ * 1. Each payment grants access for exactly N periods (where N = payment amount / plan price)
+ * 2. No accumulation of partial payments across periods (each day/week stands alone)
+ * 3. No concept of "next payment date" - access is granted per period paid
+ * 4. Maintenance payments treated as full coverage cycles (grant at least 1 period)
+ * 5. Client status based on whether current period is paid
+ *
  * @param {string} joinDate - Client's join date (YYYY-MM-DD)
  * @param {Array}  clientPayments - Client's payments for current plan
  * @param {Object} plan - Client's plan
- * @param {number} planPrice - Monthly plan price
- * @returns {string|null} - Calculated next payment date (YYYY-MM-DD)
+ * @param {number} planPrice - Plan price per period
+ * @returns {string|null} - Calculated next payment date (YYYY-MM-DD) for monthly plans, null for daily/weekly
  */
-export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice) {
+export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrollmentFee = 0) {
   if (!joinDate || planPrice <= 0) return null;
+
+  const frequency = getPlanFrequency(plan);
+
+  // For daily and weekly plans, there's no concept of next payment date
+  // Access is granted per period paid
+  if (frequency === 'daily' || frequency === 'weekly') {
+    return null;
+  }
+
+  // For monthly plans, use existing logic
+  // Total cycle price includes enrollment fee (one-time only)
+  const cyclePrice = planPrice + enrollmentFee;
+
   const anchorDay = parseInt(joinDate.split('-')[2], 10);
 
   // If no payments, the next payment date is join_date + 1 month
@@ -434,7 +475,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
       maintenanceBonusSoFar++;
     }
 
-    const baseCycles = Math.floor(totalEffectiveSoFar / planPrice);
+    const baseCycles = Math.floor(totalEffectiveSoFar / cyclePrice);
     const accumulatedMonths = baseCycles + maintenanceBonusSoFar;
 
     if (accumulatedMonths <= 0) {
@@ -513,10 +554,12 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
         join_date,
         next_payment_date,
         plan_id,
+        enrollment_paid,
         plans (
           id,
           price,
-          currency
+          currency,
+          frequency
         )
       `)
       .eq('id', clientId)
@@ -537,7 +580,7 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
     // 2. Client's payments for current plan, excluding archived and ordered by date
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
+      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date, reference')
       .eq('client_id', clientId)
       .eq('plan_id', clientData.plan_id)
       .eq('is_archived', false)
@@ -559,19 +602,18 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
       // Client with reset but no active payments -> no next payment date
       newNextPaymentDate = null;
     } else {
+      const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
       newNextPaymentDate = computeNextPaymentDate(
         clientData.join_date,
         allPayments || [],
         clientData.plans,
-        planPrice
+        planPrice,
+        enrollmentFee
       );
     }
 
-    if (!newNextPaymentDate && !hasHadReset) {
-      return { success: false, error: 'Unable to calculate new date' };
-    }
-
     // 4. Update only if date changed
+    // For daily/weekly plans, newNextPaymentDate is null — clear any stale date
     if (newNextPaymentDate !== clientData.next_payment_date) {
       const { error } = await client
         .from('clients')
@@ -620,10 +662,12 @@ export async function recalculateAllNextPaymentDates() {
         join_date,
         next_payment_date,
         plan_id,
+        enrollment_paid,
         plans (
           id,
           price,
-          currency
+          currency,
+          frequency
         )
       `);
 
@@ -665,14 +709,17 @@ export async function recalculateAllNextPaymentDates() {
         );
 
         // Calculate correct date with business rules
+        const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
         const newNextPaymentDate = computeNextPaymentDate(
           clientData.join_date,
           clientPayments,
           clientData.plans,
-          planPrice
+          planPrice,
+          enrollmentFee
         );
 
-        if (newNextPaymentDate && newNextPaymentDate !== clientData.next_payment_date) {
+        // For daily/weekly plans, newNextPaymentDate is null — clear any stale date
+        if (newNextPaymentDate !== clientData.next_payment_date) {
           updates.push({
             id: clientData.id,
             next_payment_date: newNextPaymentDate
@@ -750,7 +797,8 @@ export async function auditNextPaymentDates() {
         join_date,
         next_payment_date,
         plan_id,
-        plans ( id, price, currency )
+        enrollment_paid,
+        plans ( id, price, currency, frequency )
       `);
 
     if (fetchError) throw fetchError;
@@ -788,7 +836,8 @@ export async function auditNextPaymentDates() {
         0
       );
       const cycles   = Math.floor(totalPaid / planPrice);
-      const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice);
+      const enrollmentFee = c.enrollment_paid ? INSCRIPTION_PRICE : 0;
+      const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice, enrollmentFee);
 
       if (expected !== c.next_payment_date) {
         discrepancies.push({
@@ -946,7 +995,7 @@ export async function updateClientStatus(clientId, planId) {
     // Get ALL non-archived payments for client (not filtering by plan_id)
     const { data: payments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, payment_date, is_archived')
+      .select('id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, payment_date, is_archived, reference')
       .eq('client_id', clientId)
       .eq('is_archived', false);
 
@@ -980,7 +1029,10 @@ export async function updateClientStatus(clientId, planId) {
 
     let newStatus;
 
-    // New algorithm based on days since last payment
+    // Get plan frequency for special handling
+    const planFrequency = getPlanFrequency(plan);
+
+    // New algorithm based on days since last payment and plan frequency
     if ((payments || []).length === 0) {
       // No payments: check if new client or reactivated
       const joinDate = new Date(clientData.join_date);
@@ -993,6 +1045,51 @@ export async function updateClientStatus(clientId, planId) {
     } else if (isFullyPaid && cycles >= MAX_CYCLES) {
       // Fully paid (12+ cycles)
       newStatus = 'finalizado';
+    } else if (planFrequency === 'daily' || planFrequency === 'weekly') {
+      // For daily/weekly plans: check if current period is paid
+      // Calculate if today falls within a paid period
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get the most recent payment date
+      const mostRecentPaymentDate = Math.max(
+        ...(payments || []).map(p => new Date(p.payment_date).getTime())
+      );
+
+      const mostRecentPayment = new Date(mostRecentPaymentDate);
+      mostRecentPayment.setHours(0, 0, 0, 0);
+
+      // Calculate periods since most recent payment
+      let periodsSinceLastPayment = 0;
+      if (planFrequency === 'daily') {
+        periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24));
+      } else if (planFrequency === 'weekly') {
+        periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24 * 7));
+      }
+
+      // Calculate total periods paid (including maintenance bonuses)
+      const totalPaid = (payments || []).reduce(
+        (sum, p) => sum + getEffectiveAmount(p, plan),
+        0
+      );
+
+      const totalPeriodsPaid = Math.floor(totalPaid / planPrice);
+      const maintenancePeriods = (payments || []).filter(p =>
+        isMaintenancePayment(p) && getEffectiveAmount(p, plan) > 0 && getEffectiveAmount(p, plan) < planPrice
+      ).length;
+
+      const totalEffectivePeriods = totalPeriodsPaid + maintenancePeriods;
+
+      // Client is active if we've paid for at least as many periods as have passed
+      // Or if we're within the grace period of the most recent payment
+      if (totalEffectivePeriods > periodsSinceLastPayment) {
+        newStatus = 'activo';
+      } else {
+        // Check if we're within the same period as the most recent payment
+        // (allow same-day activity for daily, same-week for weekly)
+        const isSamePeriod = periodsSinceLastPayment === 0;
+        newStatus = isSamePeriod ? 'activo' : 'inactivo';
+      }
     } else if (daysSinceLastPayment <= MAX_DAYS_ACTIVE) {
       // Recent payment (<= 30 days)
       newStatus = 'activo';
@@ -1034,8 +1131,8 @@ export async function updateClientStatus(clientId, planId) {
 /**
  * Fixes status for ALL clients based on payments.
  * Improved logic:
- * - Active: has recent payments (<= 30 days)
- * - Inactive: no payments or last payment > 30 days ago
+ * - Active: has recent payments (<= 30 days) for monthly plans, or current period paid for daily/weekly
+ * - Inactive: no payments or last payment > 30 days ago for monthly, or current period not paid for daily/weekly
  * - Pending: no payments and start date in future
  * - Finalized: has 12+ fully paid cycles
  *
@@ -1055,7 +1152,8 @@ export async function fixAllClientStatuses() {
         plans (
           id,
           price,
-          currency
+          currency,
+          frequency
         )
       `);
 
@@ -1066,7 +1164,7 @@ export async function fixAllClientStatuses() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, is_archived');
+      .select('id, client_id, plan_id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, is_archived, reference');
 
     if (paymentsError) throw paymentsError;
 
@@ -1091,6 +1189,7 @@ export async function fixAllClientStatuses() {
       try {
         const plan = clientData.plans;
         const planPrice = plan ? parseFloat(plan.price) || 0 : 0;
+        const planFrequency = getPlanFrequency(plan);
 
         if (planPrice <= 0) continue;
 
@@ -1101,26 +1200,9 @@ export async function fixAllClientStatuses() {
           0
         );
 
-        // Calculate days since last payment
-        let daysSinceLastPayment = 999;
-        if (clientPayments.length > 0) {
-          const lastPaymentDate = Math.max(
-            ...clientPayments.map(p => new Date(p.payment_date).getTime())
-          );
-          const now = new Date();
-          now.setHours(0, 0, 0, 0);
-          daysSinceLastPayment = Math.floor((now.getTime() - lastPaymentDate) / (1000 * 60 * 60 * 24));
-        }
-
-        const cycles = Math.floor(totalPaid / planPrice);
-        const remainder = totalPaid % planPrice;
-        const isFullyPaid = remainder < 0.001;
-        const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
-        const totalPrice = planPrice + enrollmentFee;
-
         let newStatus;
 
-        // New algorithm based on days since last payment
+        // New algorithm based on plan frequency
         if (clientPayments.length === 0) {
           // No active payments:
           // - If has original_join_date (did clean slate), remains pending until payment
@@ -1132,13 +1214,76 @@ export async function fixAllClientStatuses() {
           today.setHours(0, 0, 0, 0);
           const daysSinceJoin = Math.floor((today.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
           newStatus = (hasHadReset || today < joinDate || daysSinceJoin <= 7) ? 'pendiente' : 'inactivo';
-        } else {
-          // Has active payments - calculate days since last payment
-          const daysSinceLast = daysSinceLastPayment;
+        } else if (planFrequency === 'monthly') {
+          // Monthly plan logic (existing)
+          const cycles = Math.floor(totalPaid / planPrice);
+          const remainder = totalPaid % planPrice;
+          const isFullyPaid = remainder < 0.001;
+          const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
+          const totalPrice = planPrice + enrollmentFee;
+
+          // Calculate days since last payment
+          let daysSinceLastPayment = 999;
+          if (clientPayments.length > 0) {
+            const lastPaymentDate = Math.max(
+              ...clientPayments.map(p => new Date(p.payment_date).getTime())
+            );
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            daysSinceLastPayment = Math.floor((now.getTime() - lastPaymentDate) / (1000 * 60 * 60 * 24));
+          }
+
           if (isFullyPaid && cycles >= MAX_CYCLES) {
             newStatus = 'finalizado';
-          } else if (daysSinceLast <= MAX_DAYS_ACTIVE) {
+          } else if (daysSinceLastPayment <= MAX_DAYS_ACTIVE) {
             newStatus = 'activo';
+          } else {
+            newStatus = 'inactivo';
+          }
+        } else if (planFrequency === 'daily' || planFrequency === 'weekly') {
+          // Daily/weekly plan logic
+          // Calculate if current period is paid
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          // Get the most recent payment date
+          const mostRecentPaymentDate = Math.max(
+            ...(payments || []).map(p => new Date(p.payment_date).getTime())
+          );
+
+          const mostRecentPayment = new Date(mostRecentPaymentDate);
+          mostRecentPayment.setHours(0, 0, 0, 0);
+
+          // Calculate periods since most recent payment
+          let periodsSinceLastPayment = 0;
+          if (planFrequency === 'daily') {
+            periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24));
+          } else if (planFrequency === 'weekly') {
+            periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24 * 7));
+          }
+
+          // Calculate total periods paid (including maintenance bonuses)
+          const totalPaidAmount = (payments || []).reduce(
+            (sum, p) => sum + getEffectiveAmount(p, plan),
+            0
+          );
+
+          const totalPeriodsPaid = Math.floor(totalPaidAmount / planPrice);
+          const maintenancePeriods = (payments || []).filter(p =>
+            isMaintenancePayment(p) && getEffectiveAmount(p, plan) > 0
+          ).length;
+
+          const totalEffectivePeriods = totalPeriodsPaid + maintenancePeriods;
+
+          // Client is active if we've paid for at least as many periods as have passed
+          // Or if we're within the same period as the most recent payment
+          if (totalEffectivePeriods > periodsSinceLastPayment) {
+            newStatus = 'activo';
+          } else {
+            // Check if we're within the same period as the most recent payment
+            // (allow same-day activity for daily, same-week for weekly)
+            const isSamePeriod = periodsSinceLastPayment === 0;
+            newStatus = isSamePeriod ? 'activo' : 'inactivo';
           }
         }
 
@@ -1148,7 +1293,10 @@ export async function fixAllClientStatuses() {
             name: `${clientData.first_name} ${clientData.last_name}`,
             oldStatus: clientData.status,
             newStatus,
-            daysSinceLast: daysSinceLastPayment,
+            daysSinceLast: planFrequency === 'monthly' ?
+              ((clientPayments.length > 0) ?
+                Math.floor((new Date().getTime() - Math.max(...clientPayments.map(p => new Date(p.payment_date).getTime()))) / (1000 * 60 * 60 * 24)) : 999) :
+              (planFrequency === 'daily' || planFrequency === 'weekly') ? 0 : 999, // Placeholder for non-monthly
             totalPaid: totalPaid.toFixed(2)
           });
         }

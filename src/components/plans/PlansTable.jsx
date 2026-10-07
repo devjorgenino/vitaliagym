@@ -8,6 +8,7 @@ import {
   getPlanCurrency,
   getPlanPriceInBS,
   getPlanPriceInUSD,
+  getPlanFrequency,
 } from "@/lib/planUtils";
 import { Button } from "../ui/button";
 import {
@@ -76,6 +77,7 @@ export function PlansTable() {
     price: "",
     currency: "USD",
     exchange_rate: "",
+    frequency: "monthly",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditingRate, setIsEditingRate] = useState(false);
@@ -90,6 +92,7 @@ export function PlansTable() {
       price: "",
       currency: "USD",
       exchange_rate: rate ? rate.toFixed(2) : "",
+      frequency: "monthly",
     });
     setSelectedPlan(null);
     setIsEditing(false);
@@ -110,6 +113,7 @@ export function PlansTable() {
       price: plan.price?.toString() || "",
       currency: getPlanCurrency(plan),
       exchange_rate: rate ? rate.toFixed(2) : "",
+      frequency: plan.frequency || "monthly",
     });
     setIsEditing(true);
     setIsDialogOpen(true);
@@ -294,6 +298,9 @@ export function PlansTable() {
                         #
                       </TableHead>
                       <TableHead scope="col">Nombre</TableHead>
+                      <TableHead className="hidden sm:table-cell" scope="col">
+                        Frecuencia
+                      </TableHead>
                       <TableHead className="hidden md:table-cell" scope="col">
                         Descripción
                       </TableHead>
@@ -321,6 +328,9 @@ export function PlansTable() {
                               maxWidth="140px"
                               fallback="Sin nombre"
                             />
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell text-sm text-muted-foreground capitalize">
+                            {getPlanFrequency(plan)}
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
                             <TruncatedCell
@@ -564,6 +574,33 @@ export function PlansTable() {
                         maximumFractionDigits: 2,
                       })} Bs al cambio actual`
                   : "El precio se mantiene fijo en la moneda seleccionada"}
+              </p>
+            </div>
+
+            {/* Frecuencia */}
+            <div className="space-y-2">
+              <Label htmlFor="plan-frequency">
+                Frecuencia de facturación <span className="text-muted-foreground text-xs">(opcional)</span>
+              </Label>
+              <Select
+                value={formData.frequency}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, frequency: value }))
+                }
+              >
+                <SelectTrigger id="plan-frequency" aria-label="Frecuencia del plan">
+                  <SelectValue placeholder="Seleccionar frecuencia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">Mensual</SelectItem>
+                  <SelectItem value="weekly">Semanal</SelectItem>
+                  <SelectItem value="daily">Diario</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {formData.frequency === 'monthly' && 'El cliente paga mensualmente con fecha de vencimiento.'}
+                {formData.frequency === 'weekly' && 'El cliente paga semanalmente sin fecha de vencimiento acumulada.'}
+                {formData.frequency === 'daily' && 'El cliente paga por día de acceso.'}
               </p>
             </div>
 

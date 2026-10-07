@@ -301,7 +301,7 @@ export function PaymentsTable({
       // Si el cliente ya tiene inscripción pagada, el precio es solo el plan
       // Si NO tiene inscripción pagada Y viene del registro, se suma la inscripción
       const hasEnrollmentPaid = preselectedClient?.enrollment_paid === true;
-      if (!hasEnrollmentPaid && isRegisterMode && initialAmount) {
+      if (!hasEnrollmentPaid && isRegisterMode) {
         // Modo registro sin inscripción pagada: sumar inscripción
         // La inscripción es $5 USD: para planes en Bs se convierte a la moneda base
         planPrice = planIsBS
@@ -430,6 +430,7 @@ export function PaymentsTable({
               planPrice: totalPrice,
               totalPaid,
               remainingAmount: 0,
+              isFullyPaid: true,
             };
           }
 
@@ -1092,14 +1093,14 @@ export function PaymentsTable({
     }
 
     if (mode === "maintenance" && formData.plan_id) {
-      // For maintenance payments, suggest the full plan amount (or remaining if paying remaining)
-      let amountToSuggest = isPayingRemaining && remainingPaymentData
-        ? parseFloat(remainingPaymentData.remaining_amount)
-        : getPlanPrice(formData.plan_id);
+      // For maintenance payments, suggest the inscription price ($5) as the standard amount
+      let amountToSuggest = INSCRIPTION_PRICE;
 
-      // Add inscription if applicable
+      // Add inscription if applicable (avoid double charging in register mode)
       if (isRegisterMode && includeInscription) {
-        amountToSuggest += INSCRIPTION_PRICE;
+        // In register mode with inscription, we still want to suggest the inscription amount
+        // as maintenance payments are separate from the inscription fee
+        amountToSuggest = INSCRIPTION_PRICE;
       }
 
       const planCurrency = getPlanCurrency(plans.find((p) => p.id === formData.plan_id));
@@ -1108,12 +1109,14 @@ export function PaymentsTable({
           ...prev,
           amount_bs: amountToSuggest.toFixed(2),
           amount_usd: (amountToSuggest / (rate || 1)).toFixed(4),
+          reference: "mantenimiento", // Automatically set reference for maintenance payments
         }));
       } else {
         setFormData((prev) => ({
           ...prev,
           amount_usd: amountToSuggest.toFixed(2),
           amount_bs: (amountToSuggest * (rate || 1)).toFixed(2),
+          reference: "mantenimiento", // Automatically set reference for maintenance payments
         }));
       }
     } else if (mode === "partial" && formData.plan_id) {
@@ -1889,7 +1892,7 @@ export function PaymentsTable({
                         <TableCell className="hidden xl:table-cell">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-sm whitespace-nowrap">
-                              {payment.reference || "N/A"}
+                              {payment.reference ? payment.reference.charAt(0).toUpperCase() + payment.reference.slice(1) : "N/A"}
                             </span>
                             {payment.reference && (
                               <Button
