@@ -35,6 +35,25 @@ export function getPlanFrequency(plan) {
 }
 
 /**
+ * Devuelve la frecuencia de facturación del plan en español para mostrar en la UI.
+ * Valores posibles: 'Diario', 'Semanal', 'Mensual'
+ * Por defecto: 'Mensual' para compatibilidad hacia atrás.
+ */
+export function getPlanFrequencyDisplay(plan) {
+  if (!plan) return 'Mensual';
+  const frequency = (plan.frequency || 'monthly').toLowerCase();
+  switch (frequency) {
+    case 'daily':
+      return 'Diario';
+    case 'weekly':
+      return 'Semanal';
+    case 'monthly':
+    default:
+      return 'Mensual';
+  }
+}
+
+/**
  * Devuelve el precio del plan en USD para comparar con pagos USD
  * (solo si necesitas comparar con la cuenta USD; para cálculos de ciclo
  * lo más seguro es usar la moneda base).

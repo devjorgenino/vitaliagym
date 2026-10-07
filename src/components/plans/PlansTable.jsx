@@ -9,6 +9,7 @@ import {
   getPlanPriceInBS,
   getPlanPriceInUSD,
   getPlanFrequency,
+  getPlanFrequencyDisplay,
 } from "@/lib/planUtils";
 import { Button } from "../ui/button";
 import {
@@ -330,7 +331,7 @@ export function PlansTable() {
                             />
                           </TableCell>
                           <TableCell className="hidden sm:table-cell text-sm text-muted-foreground capitalize">
-                            {getPlanFrequency(plan)}
+                            {getPlanFrequencyDisplay(plan)}
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
                             <TruncatedCell
