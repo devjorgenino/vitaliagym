@@ -581,7 +581,7 @@ export function ClientsTable() {
         avatar_url: finalAvatarUrl,
         plan_id: formData.plan_id,
         join_date: formData.join_date,
-        enrollment_paid: formData.enrollment_paid,
+        enrollment_paid: isEditing ? formData.enrollment_paid : false,
         status: isEditing ? undefined : "pendiente",
       };
 

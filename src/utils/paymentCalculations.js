@@ -1,64 +1,102 @@
 /**
- * Utilidades para el cálculo de fechas de próximo pago
+ * Utilities for calculating next payment dates
  *
- * LÓGICA DEL SISTEMA (Ciclo de Vida Cronológico con Ancla de Día):
- * - El DÍA de corte siempre se ancla al join_date (ej: día 29 si se unió el 29, día 31 si se unió el 31).
- * - Procesamiento cronológico de pagos:
- *   1. Si el pago se realiza dentro de la vigencia activa (payment_date <= currentDueDate),
- *      extiende la cobertura N ciclos a partir del vencimiento actual (renovación puntual/anticipada).
- *   2. Si el pago se realiza después de un período de inactividad (payment_date > currentDueDate),
- *      se reactiva la membresía cubriendo el mes corriente según su día ancla:
- *      - Si payDay <= anchorDay: vence el día ancla del mes de pago (ej: pagó 3 Sep con ancla 29 -> vence 29 Sep).
- *      - Si payDay > anchorDay: vence el día ancla del mes siguiente (ej: pagó 30 Sep con ancla 29 -> vence 29 Oct).
- * - Pagos parciales: acumula saldo hasta completar el costo del plan antes de extender ciclos.
- * - Primera inscripción / sin pagos: Próximo pago = join_date + 1 mes (anclado).
+ * SYSTEM LOGIC (Chronological Lifecycle with Day Anchor):
+ * - The cutoff DAY always anchors to the join_date (e.g., day 29 if joined on the 29th, day 31 if joined on the 31st).
+ * - Chronological payment processing:
+ *   1. If payment is made within active validity (payment_date <= currentDueDate),
+ *      extends coverage by N cycles from the current due date (on-time/early renewal).
+ *   2. If payment is made after an inactivity period (payment_date > currentDueDate),
+ *      reactivates membership covering the current month according to its anchor day:
+ *      - If payDay <= anchorDay: expires on the anchor day of the payment month (e.g., paid Sep 3 with anchor 29 -> expires Sep 29).
+ *      - If payDay > anchorDay: expires on the anchor day of the following month (e.g., paid Sep 30 with anchor 29 -> expires Oct 29).
+ *   3. If payment is maintenance, it is treated as a full coverage cycle.
+ *   4. Partial payments: accumulate balance until completing the price of 1 cycle before extending the date.
+ *   5. No Payments: Projects first due date to 1 month from join_date.
  */
-
 import client from '../api/client';
+import { getPlanFrequency } from '@/lib/planUtils';
 
 /**
- * Calcula el monto efectivo cubierto por un pago considerando descuentos aplicados.
- * Si un cliente pagó $21.25 con un descuento del 15% por un plan de $25,
- * el monto efectivo cubierto es de $25.00.
- *
- * @param {Object} payment - Registro de pago
- * @param {Object} [plan] - Plan del cliente (opcional, para soportar moneda BS)
- * @returns {number} - Monto efectivo en la moneda base del plan
- */
-/**
- * Precio fijo de inscripción (inscripción / enrollment fee) en USD.
- * Se cobra UNA SOLA VEZ al registrar un cliente o hacer borrón y cuenta nueva.
+ * Fixed registration (enrollment) fee in USD.
+ * Charged ONLY ONCE when registering a client or doing a clean slate.
  */
 export const INSCRIPTION_PRICE = 5;
 
 /**
- * Límite máximo de montos efectivos en USD.
- * Previene fechas locas por montos/descuentos anómalos.
+ * Maximum effective amount in USD.
+ * Prevents extreme dates due to anomalous amounts/discounts.
  */
 const MAX_EFFECTIVE_AMOUNT_USD = 10000;
 
 /**
- * Límite máximo de montos efectivos en BS.
- * Para planes en bolívares, un pago de hasta 1M Bs es razonable.
+ * Maximum effective amount in BS.
+ * For bolivar plans, a payment of up to 1M Bs is reasonable.
  */
 const MAX_EFFECTIVE_AMOUNT_BS = 1000000;
 
 /**
- * Límite máximo de ciclos que un solo pago puede cubrir (2 años = 24 meses).
+ * Maximum cycles a single payment can cover (2 years = 24 months).
  */
 const MAX_CYCLES_PER_PAYMENT = 24;
 
 /**
- * Calcula el monto efectivo cubierto por un pago, convirtiendo BS a USD si es necesario.
+ * Constants for client status calculation
+ */
+const MAX_DAYS_ACTIVE = 30;
+const MAX_CYCLES = 12;
+
+/**
+ * Calculates how many periods a payment covers based on its effective amount and plan price.
+ * For monthly plans: returns months covered
+ * For daily/weekly plans: returns days/weeks covered (no accumulation across periods)
+ * @param {Object} payment - Payment record
+ * @param {Object} plan - Client's plan (for frequency and price)
+ * @returns {number} Number of periods covered (minimum 1 if payment is positive)
+ */
+export function getPeriodsCoveredByPayment(payment, plan) {
+  if (!payment || !plan) return 0;
+
+  const planPrice = parseFloat(plan.price) || 0;
+  if (planPrice <= 0) return 0;
+
+  const frequency = getPlanFrequency(plan);
+  const effective = getEffectiveAmount(payment, plan);
+
+  // For monthly plans, we calculate months covered (existing behavior)
+  // For daily/weekly plans, each payment covers exact periods (no accumulation logic needed here)
+  // The accumulation logic is handled differently in computeNextPaymentDate for non-monthly plans
+  const basePeriods = Math.max(Math.floor(effective / planPrice), 0);
+
+  // For maintenance payments, treat as at least one period if effective > 0
+  if (isMaintenancePayment(payment) && effective > 0 && basePeriods === 0) {
+    return 1;
+  }
+
+  return basePeriods;
+}
+
+/**
+ * Determines if a payment corresponds to maintenance.
+ * Looks for the word "maintenance" (case-insensitive) in the reference field.
+ * @param {Object} payment - Payment record
+ * @returns {boolean} true if it's a maintenance payment
+ */
+export function isMaintenancePayment(payment) {
+  if (!payment) return false;
+  const ref = (payment.reference || '').toLowerCase();
+  return ref.includes('maintenance') || ref.includes('maintenance fee') || ref.includes('mantenimiento');
+}
+
+/**
+ * Calculates the effective amount covered by a payment considering applied discounts.
+ * If a client paid $21.25 with a 15% discount on a $25 plan,
+ * the effective covered amount is $25.00.
  *
- * Para pagos en efectivo bolívares (efectivo_bolivares), se usa la tasa de cambio
- * almacenada en el pago (payment.exchange_rate) para convertir a USD.
- * Si no tiene tasa, se usa una tasa por defecto de 310 Bs/$.
- *
- * @param {Object} payment - Registro de pago
- * @param {Object} [plan] - Plan del cliente (opcional, para moneda base)
- * @param {number} [fallbackRate=310] - Tasa de cambio por defecto para conversión BS→USD
- * @returns {number} - Monto efectivo en USD (o BS si el plan es en BS)
+ * @param {Object} payment - Payment record
+ * @param {Object} [plan] - Client's plan (optional, to support BS currency)
+ * @param {number} [fallbackRate=310] - Default exchange rate for BS->USD conversion
+ * @returns {number} - Effective amount in USD (or BS if plan is in BS)
  */
 export function getEffectiveAmount(payment, plan, fallbackRate = 310) {
   if (!payment) return 0;
@@ -66,17 +104,17 @@ export function getEffectiveAmount(payment, plan, fallbackRate = 310) {
   let amount = parseFloat(payment[field]) || 0;
   const isBSPlan = (plan?.currency || 'USD').toUpperCase() === 'BS';
 
-  // Para planes en USD con efectivo_bolivares, convertir a USD
+  // For USD plans with bolivar cash, convert to USD
   if (payment.payment_type === 'efectivo_bolivares' && !isBSPlan) {
     const rate = payment.exchange_rate || fallbackRate;
     amount = amount / rate;
   }
 
-  // Validar monto base razonable
+  // Validate base amount reasonableness
   const maxAmount = isBSPlan ? MAX_EFFECTIVE_AMOUNT_BS : MAX_EFFECTIVE_AMOUNT_USD;
   if (amount > maxAmount) {
     console.warn(
-      `⚠️ Monto anómalo detectado: ${amount} en pago ${payment.id || 'unknown'} (${isBSPlan ? 'Bs' : 'USD'}), limitando a ${maxAmount}`
+      `⚠️ Anomalous amount detected: ${amount} in payment ${payment.id || 'unknown'} (${isBSPlan ? 'Bs' : 'USD'}), limiting to ${maxAmount}`
     );
     amount = maxAmount;
   }
@@ -84,11 +122,11 @@ export function getEffectiveAmount(payment, plan, fallbackRate = 310) {
   if (payment.discount_type === 'percentage' && payment.discount_value) {
     const disc = parseFloat(payment.discount_value) || 0;
     if (disc > 0 && disc < 100) {
-      // Protección contra descuentos cercanos al 100% que inflan el monto efectivo
-      const maxDiscount = 95; // Máximo 95% de descuento
+      // Protection against discounts near 100% that inflate effective amount
+      const maxDiscount = 95; // Maximum 95% discount
       const safeDisc = Math.min(disc, maxDiscount);
       if (disc !== safeDisc) {
-        console.warn(`⚠️ Descuento excesivo ${disc}% en pago ${payment.id || 'unknown'}, limitando a ${maxDiscount}%`);
+        console.warn(`⚠️ Excessive discount ${disc}% in payment ${payment.id || 'unknown'}, limiting to ${maxDiscount}%`);
       }
       amount = amount / (1 - safeDisc / 100);
     } else if (disc >= 100) {
@@ -97,16 +135,16 @@ export function getEffectiveAmount(payment, plan, fallbackRate = 310) {
     }
   } else if (payment.discount_type === 'fixed' && payment.discount_value) {
     const fixedDisc = parseFloat(payment.discount_value) || 0;
-    // Validar descuento fijo razonable
+    // Validate fixed discount reasonableness
     if (fixedDisc > MAX_EFFECTIVE_AMOUNT_USD) {
-      console.warn(`⚠️ Descuento fijo anómalo: ${fixedDisc}, limitando`);
+      console.warn(`⚠️ Anomalous fixed discount: ${fixedDisc}, limiting`);
       amount += MAX_EFFECTIVE_AMOUNT_USD;
     } else {
       amount += fixedDisc;
     }
   }
 
-  // Límite final de monto efectivo
+  // Final effective amount limit
   if (amount > maxAmount) {
     amount = maxAmount;
   }
@@ -115,21 +153,21 @@ export function getEffectiveAmount(payment, plan, fallbackRate = 310) {
 }
 
 /**
- * Determina el campo de monto a usar para los pagos según su método de pago y moneda base del plan.
+ * Determines the amount field to use for payments based on payment method and base plan currency.
  *
- * Reglas:
- * - Si el pago es en efectivo dólares (efectivo_dolares) → usa `amount_usd` (el monto en dólares pagado)
- * - Si el pago es en efectivo bolívares (efectivo_bolivares) → usa `amount_bs` (el monto en bolívares pagado)
- * - Si el pago es otro tipo → usa el campo según la moneda del plan:
- *   - Plan en USD  → `amount_usd`
- *   - Plan en BS   → `amount_bs`
+ * Rules:
+ * - If payment is in US dollars (efectivo_dolares) → use `amount_usd` (dollar amount paid)
+ * - If payment is in bolivar cash (efectivo_bolivares) → use `amount_bs` (bolivar amount paid)
+ * - If payment is another type → use field based on plan currency:
+ *   - USD plan  → `amount_usd`
+ *   - BS plan   → `amount_bs`
  *
- * @param {Object} payment - Pago con posible campo `payment_type` ('efectivo_dolares' | 'efectivo_bolivares' | ...)
- * @param {Object} plan - Plan con posible campo `currency` ('USD' | 'BS')
+ * @param {Object} payment - Payment with possible `payment_type` field ('efectivo_dolares' | 'efectivo_bolivares' | ...)
+ * @param {Object} plan - Plan with possible `currency` field ('USD' | 'BS')
  * @returns {'amount_usd'|'amount_bs'}
  */
 function getPaymentAmountField(payment, plan) {
-  // Priorizar payment_type para pagos en efectivo
+  // Prioritize payment_type for cash payments
   if (payment?.payment_type === 'efectivo_dolares') {
     return 'amount_usd';
   }
@@ -137,16 +175,16 @@ function getPaymentAmountField(payment, plan) {
     return 'amount_bs';
   }
 
-  // Para otros tipos de pago, usar la moneda del plan
+  // For other payment types, use plan currency
   const currency = (plan?.currency || 'USD').toUpperCase();
   return currency === 'BS' ? 'amount_bs' : 'amount_usd';
 }
 
 /**
- * Suma los pagos en la moneda base del plan, aplicando descuentos (monto efectivo).
- * @param {Array} clientPayments - Pagos del cliente
- * @param {Object} plan - Plan del cliente
- * @returns {number} Total pagado en la moneda base del plan
+ * Sums payments in the plan's base currency, applying discounts (effective amount).
+ * @param {Array} clientPayments - Client's payments
+ * @param {Object} plan - Client's plan
+ * @returns {number} Total paid in plan's base currency
  */
 export function sumPaymentsInPlanCurrency(clientPayments, plan) {
   if (!clientPayments || clientPayments.length === 0) return 0;
@@ -154,14 +192,14 @@ export function sumPaymentsInPlanCurrency(clientPayments, plan) {
 }
 
 /**
- * Obtiene la fecha YYYY-MM-DD para un año y mes específicos respetando el día ancla.
- * Si el mes destino tiene menos días que el ancla (ej: 31 en febrero o septiembre),
- * se ajusta al último día disponible de ese mes.
+ * Gets YYYY-MM-DD date for a specific year and month respecting the anchor day.
+ * If the target month has fewer days than the anchor (e.g., 31 in February or September),
+ * it adjusts to the last available day of that month.
  *
- * @param {number} anchorDay - Día ancla original del cliente (1-31)
- * @param {number} year - Año destino
- * @param {number} month - Mes destino (1-12)
- * @returns {string} - Fecha en formato YYYY-MM-DD
+ * @param {number} anchorDay - Original client anchor day (1-31)
+ * @param {number} year - Target year
+ * @param {number} month - Target month (1-12)
+ * @returns {string} - Date in YYYY-MM-DD format
  */
 export function getAnchorDateForTargetMonth(anchorDay, year, month) {
   const lastDay = new Date(year, month, 0).getDate();
@@ -170,13 +208,13 @@ export function getAnchorDateForTargetMonth(anchorDay, year, month) {
 }
 
 /**
- * Calcula la diferencia en meses calendario entre dos fechas.
- * Reemplaza la aproximación de 30 días por mes.
- * Ej: 2026-01-15 a 2026-03-15 = 2 meses (no ~60 días / 30)
+ * Calculates calendar month difference between two dates.
+ * Replaces the 30-day per month approximation.
+ * Example: 2026-01-15 to 2026-03-15 = 2 months (not ~60 days / 30)
  *
- * @param {string} fromStr - Fecha inicio YYYY-MM-DD
- * @param {string} toStr - Fecha fin YYYY-MM-DD
- * @returns {number} Meses calendario (mínimo 1)
+ * @param {string} fromStr - Start date YYYY-MM-DD
+ * @param {string} toStr - End date YYYY-MM-DD
+ * @returns {number} Calendar months (minimum 1)
  */
 export function differenceInCalendarMonths(fromStr, toStr) {
   if (!fromStr || !toStr) return 1;
@@ -185,7 +223,7 @@ export function differenceInCalendarMonths(fromStr, toStr) {
   if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) return 1;
 
   let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
-  // Ajustar si el día del mes destino es menor al día de origen
+  // Adjust if target month day is less than origin month day
   if (to.getDate() < from.getDate()) {
     months -= 1;
   }
@@ -193,17 +231,17 @@ export function differenceInCalendarMonths(fromStr, toStr) {
 }
 
 /**
- * Agrega N meses a una fecha base manteniendo intacto el día ancla original.
+ * Adds N months to a base date while keeping the original anchor day intact.
  *
- * Ejemplos:
- * - 2026-08-31 + 1 mes (ancla 31) = 2026-09-30
- * - 2026-08-31 + 2 meses (ancla 31) = 2026-10-31 (recupera el 31)
- * - 2026-01-31 + 1 mes (ancla 31) = 2026-02-28 (o 29 en bisiesto)
+ * Examples:
+ *  - 2026-08-31 + 1 month (anchor 31) = 2026-09-30
+ *  - 2026-08-31 + 2 months (anchor 31) = 2026-10-31 (recovers the 31st)
+ *  - 2026-01-31 + 1 month (anchor 31) = 2026-02-28 (or 29 in leap year)
  *
- * @param {string} baseDateStr - Fecha base en formato YYYY-MM-DD
- * @param {number} monthsToAdd - Cantidad de meses a agregar
- * @param {number} [anchorDay] - Día ancla (opcional, si no se pasa se extrae de baseDateStr)
- * @returns {string|null} - Nueva fecha en formato YYYY-MM-DD
+ * @param {string} baseDateStr - Base date in YYYY-MM-DD format
+ * @param {number} monthsToAdd - Number of months to add
+ * @param {number} [anchorDay] - Anchor day (optional, if not passed extracted from baseDateStr)
+ * @returns {string|null} - New date in YYYY-MM-DD format
  */
 export function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
   if (!baseDateStr || monthsToAdd === null || monthsToAdd === undefined || monthsToAdd < 0) return null;
@@ -227,13 +265,13 @@ export function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
 }
 
 /**
- * Calcula el ciclo de pago: cuántos ciclos completos se han pagado, el saldo pendiente
- * y el remanente dentro del ciclo actual.
- * Unifica la lógica de ciclos usada en computeNextPaymentDate, handlePayRemaining, etc.
+ * Calculates payment cycle: how many full cycles have been paid, pending balance
+ * and remainder within current cycle.
+ * Unifies cycle logic used in computeNextPaymentDate, handlePayRemaining, etc.
  *
- * @param {Array} payments - Array de pagos (ordenados cronológicamente)
- * @param {number} planPrice - Precio del plan por ciclo
- * @param {Object} [plan] - Plan opcional para calcular montos efectivos con moneda correcta
+ * @param {Array} payments - Array of payments (chronologically ordered)
+ * @param {number} planPrice - Plan price per cycle
+ * @param {Object} [plan] - Optional plan for calculating effective amounts with correct currency
  * @returns {Object} { cycles, accumulatedBalance, currentRemaining, isFullyPaid }
  */
 export function calculatePaymentCycle(payments, planPrice, plan) {
@@ -264,9 +302,9 @@ export function calculatePaymentCycle(payments, planPrice, plan) {
   // isFullyPaid is true when we've just completed a cycle (remainder === 0) and have made payments
   const isFullyPaid = remainder === 0;
 
-  // currentRemaining represents how much has been paid toward the current cycle
+  // currentRemaining represents how much has been paid toward current cycle
   // When isFullyPaid is true, we show 0 (completed cycle)
-  // When isFullyPaid is false, we show the amount paid toward current cycle
+  // When isFullyPaid is false, we show amount paid toward current cycle
   const currentRemaining = isFullyPaid ? 0 : remainder;
 
   return {
@@ -278,11 +316,11 @@ export function calculatePaymentCycle(payments, planPrice, plan) {
 }
 
 /**
- * Función legacy / utilitaria para sumar meses a una fecha.
+ * Legacy/utilitary function to add months to a date.
  *
- * @param {string|Date} baseDate - Fecha base (formato YYYY-MM-DD o Date)
- * @param {number} monthsToAdd - Cantidad de meses a agregar
- * @returns {string|null} - Nueva fecha en formato YYYY-MM-DD
+ * @param {string|Date} baseDate - Base date (YYYY-MM-DD format or Date object)
+ * @param {number} monthsToAdd - Number of months to add
+ * @returns {string|null} - New date in YYYY-MM-DD format
  */
 export function addMonthsToDate(baseDate, monthsToAdd) {
   if (!baseDate || monthsToAdd < 0) return null;
@@ -302,19 +340,19 @@ export function addMonthsToDate(baseDate, monthsToAdd) {
 }
 
 /**
- * Calcula el estado de pago unificado para un cliente basado en sus pagos y plan.
+ * Calculates unified payment status for a client based on payments and plan.
  *
- * Esta función centraliza la lógica de cálculo de estado de pago que estaba duplicada
- * en ClientsTable.jsx y PaymentsTable.jsx.
+ * This function centralizes the payment status calculation logic that was duplicated
+ * in ClientsTable.jsx and PaymentsTable.jsx.
  *
- * @param {Object} client - Objeto cliente con plan_id y pagos asociados
- * @param {Array} payments - Array de pagos del cliente
- * @param {Function} getPlanForPayment - Función para obtener el plan de un pago
- * @param {Function} getEffectiveAmount - Función para obtener el monto efectivo de un pago
- * @param {Function} getPlanPrice - Función para obtener el precio de un plan
- * @param {Function} getEnrollmentFeePaid - Función para obtener el monto de inscripción pagada
- * @param {Function} getPlanCurrency - Función para obtener la moneda del plan (opcional)
- * @returns {Object} - Estado de pago con isFullyPaid, remainingFormatted y currency
+ * @param {Object} client - Client object with plan_id and associated payments
+ * @param {Array} payments - Array of client's payments
+ * @param {Function} getPlanForPayment - Function to get plan for a payment
+ * @param {Function} getEffectiveAmount - Function to get effective amount of a payment
+ * @param {Function} getPlanPrice - Function to get plan price
+ * @param {Function} getEnrollmentFeePaid - Function to get enrollment fee paid amount
+ * @param {Function} getPlanCurrency - Function to get plan currency (optional)
+ * @returns {Object} - Payment status with isFullyPaid, remainingFormatted and currency
  */
 export function getClientPaymentStatus(client, payments, getPlanForPayment, getEffectiveAmount, getPlanPrice, getEnrollmentFeePaid, getPlanCurrency) {
   if (!client || !client.plan_id) {
@@ -336,18 +374,16 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
     0,
   );
 
-  // El precio total incluye la inscripción si ya fue pagada (una sola vez)
+  // Total price includes enrollment fee if already paid (one-time only)
   const enrollmentFeePaid = getEnrollmentFeePaid(client, clientPayments);
   const totalPrice = planPrice + enrollmentFeePaid;
 
-  // Calcular cuánto se ha pagado en el ciclo actual
+  // Calculate how much has been paid in current cycle
   let currentCyclePaid = totalPaidSoFar % totalPrice;
   if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
     currentCyclePaid = totalPrice;
   }
-  // La inscripción solo corresponde al primer ciclo: si el remanente
-  // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
-  // actual cuesta solo planPrice.
+  // Enrollment fee only applies to first cycle: if remainder > planPrice, that cycle included enrollment fee; if not, current cycle costs only planPrice.
   const currentCyclePrice =
     currentCyclePaid > planPrice ? totalPrice : planPrice;
   const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);
@@ -355,7 +391,7 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
 
   const currency = getPlanCurrency ? getPlanCurrency(getPlanForPayment(client)) : "USD";
 
-  // Si ya se completó el ciclo actual, no hay restante que mostrar
+  // If current cycle is completed, no remaining to show
   if (isFullyPaid) {
     return { isFullyPaid: true, remainingFormatted: "0.00", currency };
   }
@@ -368,118 +404,149 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
 }
 
 /**
- * Calcula la next_payment_date correcta para un cliente según su historial cronológico de pagos.
+ * Calculates the correct next_payment_date for a client based on chronological payment history.
+ * For monthly plans: uses anchor day logic with accumulation
+ * For daily/weekly plans: each payment period is independent, no accumulation
  *
- * REGLAS DE NEGOCIO:
- * 1. Preservación del Día Ancla: El corte siempre corresponde al día del join_date (o fin de mes si el mes es más corto).
- * 2. Renovaciones continuas: Si un cliente activo paga antes o el día de su vencimiento, se extiende su cobertura.
- * 3. Reactivaciones tras inactividad: Si un cliente regresa tras meses sin pagar, su pago reactiva el servicio
- *    hasta su próximo día de corte ancla (no se arrastran cortes en el pasado).
- * 4. Pagos Parciales: El saldo se acumula hasta completar el precio de 1 ciclo antes de extender la fecha.
- * 5. Sin pagos: Proyecta el primer vencimiento a 1 mes desde join_date.
+ * BUSINESS RULES FOR MONTHLY PLANS:
+ * 1. Anchor Day Preservation: Cutoff always corresponds to join_date day (or month end if month shorter).
+ * 2. Continuous Renewals: If active client pays before or on due date, coverage is extended.
+ * 3. Reactivations after Inactivity: If client returns after months without paying, payment reactivates service
+ *    until next anchor day cutoff (does not drag past cutoffs).
+ * 4. Partial Payments: Balance accumulates until completing 1 cycle price before extending the date.
+ * 5. If payment is maintenance, it is treated as a full coverage cycle.
+ * 6. No Payments: Projects first due date to 1 month from join_date.
  *
- * @param {string} joinDate        - Fecha de ingreso del cliente (YYYY-MM-DD)
- * @param {Array}  clientPayments  - Pagos del plan actual del cliente
- * @param {Object} plan            - Plan del cliente
- * @param {number} planPrice       - Precio del plan mensual
- * @returns {string|null}          - Próxima fecha de pago calculada (YYYY-MM-DD)
+ * BUSINESS RULES FOR DAILY/WEEKLY PLANS:
+ * 1. Each payment grants access for exactly N periods (where N = payment amount / plan price)
+ * 2. No accumulation of partial payments across periods (each day/week stands alone)
+ * 3. No concept of "next payment date" - access is granted per period paid
+ * 4. Maintenance payments treated as full coverage cycles (grant at least 1 period)
+ * 5. Client status based on whether current period is paid
+ *
+ * @param {string} joinDate - Client's join date (YYYY-MM-DD)
+ * @param {Array}  clientPayments - Client's payments for current plan
+ * @param {Object} plan - Client's plan
+ * @param {number} planPrice - Plan price per period
+ * @returns {string|null} - Calculated next payment date (YYYY-MM-DD) for monthly plans, null for daily/weekly
  */
-export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice) {
+export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrollmentFee = 0) {
   if (!joinDate || planPrice <= 0) return null;
+
+  const frequency = getPlanFrequency(plan);
+
+  // For daily and weekly plans, there's no concept of next payment date
+  // Access is granted per period paid
+  if (frequency === 'daily' || frequency === 'weekly') {
+    return null;
+  }
+
+  // For monthly plans, use existing logic
+  // Total cycle price includes enrollment fee (one-time only)
+  const cyclePrice = planPrice + enrollmentFee;
+
   const anchorDay = parseInt(joinDate.split('-')[2], 10);
 
-  // Si no hay pagos, retornamos join_date + 1 mes (para compatibilidad con tests)
-  // El manejo de "borrón y cuenta nueva" se hace en recalculateNextPaymentDate
+  // If no payments, the next payment date is join_date + 1 month
   if (!clientPayments || clientPayments.length === 0) {
     return addMonthsPreservingAnchor(joinDate, 1, anchorDay);
   }
 
-  // Ordenar pagos cronológicamente
+  // Sort payments chronologically
   const sortedPayments = [...clientPayments].sort(
     (a, b) => new Date(a.payment_date) - new Date(b.payment_date)
   );
 
   let currentDueDate = null;
-  let accumulatedBalance = 0;
+  let totalEffectiveSoFar = 0;
+  let maintenanceBonusSoFar = 0;
+  let previousAccumulatedMonths = 0;
 
   for (const p of sortedPayments) {
-    const amount = getEffectiveAmount(p, plan);
-    if (amount <= 0) continue;
-
-    accumulatedBalance += amount;
-    const cycles = Math.floor(accumulatedBalance / planPrice);
-    if (cycles <= 0) continue;
-
-    // Límite de seguridad: un solo pago no puede cubrir más de MAX_CYCLES_PER_PAYMENT meses
-    const safeCycles = Math.min(cycles, MAX_CYCLES_PER_PAYMENT);
-    if (safeCycles !== cycles) {
-      console.warn(`⚠️ Ciclos excesivos detectados: ${cycles}, limitando a ${MAX_CYCLES_PER_PAYMENT} (pago ${p.id || 'unknown'})`);
-    }
-
-    // Descontar los ciclos completos aplicados
-    accumulatedBalance -= safeCycles * planPrice;
-
     const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
 
+    const effective = getEffectiveAmount(p, plan);
+    const isMaint = isMaintenancePayment(p);
+    const isMaintBonus = isMaint && effective > 0 && effective < planPrice;
+
+    // Update running totals
+    totalEffectiveSoFar += effective;
+    if (isMaintBonus) {
+      maintenanceBonusSoFar++;
+    }
+
+    const baseCycles = Math.floor(totalEffectiveSoFar / cyclePrice);
+    const accumulatedMonths = baseCycles + maintenanceBonusSoFar;
+
+    if (accumulatedMonths <= 0) {
+      previousAccumulatedMonths = accumulatedMonths;
+      continue;
+    }
+
+    const deltaAccumulated = accumulatedMonths - previousAccumulatedMonths;
+
     if (!currentDueDate) {
-      // Primer pago registrado
-      const firstTarget = addMonthsPreservingAnchor(joinDate, cycles, anchorDay);
-      if (p.payment_date > firstTarget) {
-        // Pago inicial tardío tras la primera fecha esperada
+      // First time we have enough for at least one cycle
+      const baseTarget = addMonthsPreservingAnchor(joinDate, accumulatedMonths, anchorDay);
+      if (p.payment_date > baseTarget) {
+        // Initial late payment
         if (payDay < anchorDay) {
           let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
-          if (cycles > 1) {
-            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+          if (accumulatedMonths > 1) {
+            target = addMonthsPreservingAnchor(target, accumulatedMonths - 1, anchorDay);
           }
           currentDueDate = target;
         } else {
           currentDueDate = addMonthsPreservingAnchor(
             getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
-            cycles,
+            accumulatedMonths,
             anchorDay
           );
         }
       } else {
-        currentDueDate = firstTarget;
+        currentDueDate = baseTarget;
       }
     } else {
-      // Pagos subsecuentes
       if (p.payment_date <= currentDueDate) {
-        // Renovación dentro de vigencia activa: extiende desde el vencimiento actual
-        currentDueDate = addMonthsPreservingAnchor(currentDueDate, cycles, anchorDay);
+        // On-time or early payment: extend by deltaAccumulated
+        currentDueDate = addMonthsPreservingAnchor(currentDueDate, deltaAccumulated, anchorDay);
       } else {
-        // Reactivación tras inactividad: reactiva el ciclo actual anclado al día del cliente
-        if (payDay < anchorDay) {
-          let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
-          if (cycles > 1) {
-            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+        // Reactivation after inactivity: reactivates current cycle anchored to client's day.
+        // Only update the date when this payment actually completes at least one new cycle.
+        // Partial payments during reactivation do not advance the due date.
+        if (deltaAccumulated > 0) {
+          if (payDay < anchorDay) {
+            currentDueDate = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+          } else {
+            currentDueDate = addMonthsPreservingAnchor(
+              getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
+              1,
+              anchorDay
+            );
           }
-          currentDueDate = target;
-        } else {
-          currentDueDate = addMonthsPreservingAnchor(
-            getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
-            cycles,
-            anchorDay
-          );
         }
       }
     }
+
+    previousAccumulatedMonths = accumulatedMonths;
   }
 
+  // Si después de procesar todos los pagos no tenemos una fecha de vencimiento,
+  // proyectamos el primer vencimiento a partir de join_date (un mes adelante).
   return currentDueDate || addMonthsPreservingAnchor(joinDate, 1, anchorDay);
 }
 
 /**
- * Recalcula y persiste la next_payment_date de un cliente tras registrar/editar/borrar un pago.
+ * Recalculates and persists a client's next_payment_date after registering/editing/deleting a payment.
  *
  * @param {Object} params
- * @param {string} params.clientId - ID del cliente
- * @param {string} params.planId   - ID del plan actual del cliente
+ * @param {string} params.clientId - Client ID
+ * @param {string} params.planId   - Current plan ID for client
  * @returns {Promise<{success: boolean, newDate?: string, cyclesExtended?: number, error?: any}>}
  */
 export async function recalculateNextPaymentDate({ clientId, planId }) {
   try {
-    // 1. Datos del cliente
+    // 1. Client data
     const { data: clientData, error: clientError } = await client
       .from('clients')
       .select(`
@@ -487,10 +554,12 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
         join_date,
         next_payment_date,
         plan_id,
+        enrollment_paid,
         plans (
           id,
           price,
-          currency
+          currency,
+          frequency
         )
       `)
       .eq('id', clientId)
@@ -508,10 +577,10 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
       return { success: false, error: 'Plan price is invalid' };
     }
 
-    // 2. Pagos del cliente para su plan actual, excluyendo archivados y ordenados por fecha
+    // 2. Client's payments for current plan, excluding archived and ordered by date
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
+      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date, reference')
       .eq('client_id', clientId)
       .eq('plan_id', clientData.plan_id)
       .eq('is_archived', false)
@@ -522,30 +591,29 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
       return { success: false, error: paymentsError };
     }
 
-    // 3. Calcular la fecha correcta con la regla de negocio
-    // Si el cliente hizo "borrón y cuenta nueva" y no tiene pagos activos,
-    // la próxima fecha de pago debe ser null hasta que paguen
+    // 3. Calculate correct date with business rules
+    // If client did "clean slate" and has no active payments,
+    // next payment date should be null until they pay
     const hasHadReset = !!clientData.original_join_date;
     const hasActivePayments = (allPayments || []).length > 0;
 
     let newNextPaymentDate;
     if (hasHadReset && !hasActivePayments) {
-      // Cliente con reset pero sin pagos activos -> no hay fecha de próximo pago
+      // Client with reset but no active payments -> no next payment date
       newNextPaymentDate = null;
     } else {
+      const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
       newNextPaymentDate = computeNextPaymentDate(
         clientData.join_date,
         allPayments || [],
         clientData.plans,
-        planPrice
+        planPrice,
+        enrollmentFee
       );
     }
 
-    if (!newNextPaymentDate && !hasHadReset) {
-      return { success: false, error: 'No se pudo calcular la nueva fecha' };
-    }
-
-    // 4. Actualizar solo si la fecha cambió
+    // 4. Update only if date changed
+    // For daily/weekly plans, newNextPaymentDate is null — clear any stale date
     if (newNextPaymentDate !== clientData.next_payment_date) {
       const { error } = await client
         .from('clients')
@@ -564,14 +632,14 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
       };
     }
 
-    // Sin cambio
+    // No change
     return {
       success: true,
       newDate: clientData.next_payment_date,
+      // Maintain compatibility with old cyclesExtended field
       cyclesExtended: 0,
       isPartialPayment: true
     };
-
   } catch (err) {
     console.error('Error recalculating client next_payment_date:', err);
     return { success: false, error: err };
@@ -579,14 +647,14 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
 }
 
 /**
- * Recalcula las fechas de próximo pago para TODOS los clientes.
- * Útil para mantenimiento o migración de datos.
+ * Recalculates next_payment_date for ALL clients.
+ * Useful for maintenance or data migration.
  *
  * @returns {Promise<{success: boolean, updated: number, total: number, errors: string[]}>}
  */
 export async function recalculateAllNextPaymentDates() {
   try {
-    // 1. Obtener todos los clientes
+    // 1. Get all clients
     const { data: allClients, error: fetchError } = await client
       .from('clients')
       .select(`
@@ -594,10 +662,12 @@ export async function recalculateAllNextPaymentDates() {
         join_date,
         next_payment_date,
         plan_id,
+        enrollment_paid,
         plans (
           id,
           price,
-          currency
+          currency,
+          frequency
         )
       `);
 
@@ -606,7 +676,7 @@ export async function recalculateAllNextPaymentDates() {
       return { success: true, updated: 0, total: 0, errors: [] };
     }
 
-    // 2. Obtener todos los pagos ordenados por fecha (excluyendo archivados)
+    // 2. Get all payments ordered by date (excluding archived)
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
       .select('id, client_id, plan_id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
@@ -618,10 +688,10 @@ export async function recalculateAllNextPaymentDates() {
     const updates = [];
     const errors = [];
 
-    // 3. Procesar cada cliente
+    // 3. Process each client
     for (const clientData of allClients) {
       if (!clientData.join_date) {
-        errors.push(`Cliente ${clientData.id}: sin fecha de ingreso`);
+        errors.push(`Client ${clientData.id}: missing join date`);
         continue;
       }
 
@@ -629,35 +699,38 @@ export async function recalculateAllNextPaymentDates() {
         const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
 
         if (planPrice <= 0) {
-          errors.push(`Cliente ${clientData.id}: precio de plan inválido`);
+          errors.push(`Client ${clientData.id}: invalid plan price`);
           continue;
         }
 
-        // Pagos del cliente (sin filtrar por plan_id para incluir historial de cambios de plan)
+        // Client's payments (not filtering by plan_id to include plan change history)
         const clientPayments = (allPayments || []).filter(
           p => p.client_id === clientData.id
         );
 
-        // Calcular la fecha correcta con la regla de negocio
+        // Calculate correct date with business rules
+        const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
         const newNextPaymentDate = computeNextPaymentDate(
           clientData.join_date,
           clientPayments,
           clientData.plans,
-          planPrice
+          planPrice,
+          enrollmentFee
         );
 
-        if (newNextPaymentDate && newNextPaymentDate !== clientData.next_payment_date) {
+        // For daily/weekly plans, newNextPaymentDate is null — clear any stale date
+        if (newNextPaymentDate !== clientData.next_payment_date) {
           updates.push({
             id: clientData.id,
             next_payment_date: newNextPaymentDate
           });
         }
       } catch (err) {
-        errors.push(`Cliente ${clientData.id}: ${err.message}`);
+        errors.push(`Client ${clientData.id}: ${err.message}`);
       }
     }
 
-    // 4. Aplicar actualizaciones en lotes de 50
+    // 4. Apply updates in batches of 50
     if (updates.length > 0) {
       const batchSize = 50;
       let updatedCount = 0;
@@ -671,7 +744,7 @@ export async function recalculateAllNextPaymentDates() {
             .eq('id', u.id);
 
           if (error) {
-            errors.push(`Error actualizando ${u.id}: ${error.message}`);
+            errors.push(`Error updating ${u.id}: ${error.message}`);
           } else {
             updatedCount++;
           }
@@ -687,7 +760,6 @@ export async function recalculateAllNextPaymentDates() {
     }
 
     return { success: true, updated: 0, total: allClients.length, errors: [] };
-
   } catch (err) {
     console.error('Error recalculating all payment dates:', err);
     return { success: false, updated: 0, total: 0, errors: [err.message] };
@@ -695,8 +767,8 @@ export async function recalculateAllNextPaymentDates() {
 }
 
 /**
- * Audita las fechas de próximo pago de TODOS los clientes sin modificar nada.
- * Compara el valor almacenado contra el valor esperado según los pagos reales.
+ * Audits next_payment_date for ALL clients without modifying anything.
+ * Compares stored value against expected value based on actual payments.
  *
  * @returns {Promise<{
  *   success: boolean,
@@ -725,7 +797,8 @@ export async function auditNextPaymentDates() {
         join_date,
         next_payment_date,
         plan_id,
-        plans ( id, price, currency )
+        enrollment_paid,
+        plans ( id, price, currency, frequency )
       `);
 
     if (fetchError) throw fetchError;
@@ -745,13 +818,13 @@ export async function auditNextPaymentDates() {
 
     for (const c of allClients) {
       if (!c.join_date) {
-        errors.push(`${c.first_name} ${c.last_name} (${c.id}): sin join_date`);
+        errors.push(`${c.first_name} ${c.last_name} (${c.id}): missing join_date`);
         continue;
       }
 
       const planPrice = c.plans ? parseFloat(c.plans.price) || 0 : 0;
       if (planPrice <= 0) {
-        errors.push(`${c.first_name} ${c.last_name} (${c.id}): precio de plan inválido`);
+        errors.push(`${c.first_name} ${c.last_name} (${c.id}): invalid plan price`);
         continue;
       }
 
@@ -763,7 +836,8 @@ export async function auditNextPaymentDates() {
         0
       );
       const cycles   = Math.floor(totalPaid / planPrice);
-      const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice);
+      const enrollmentFee = c.enrollment_paid ? INSCRIPTION_PRICE : 0;
+      const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice, enrollmentFee);
 
       if (expected !== c.next_payment_date) {
         discrepancies.push({
@@ -792,8 +866,8 @@ export async function auditNextPaymentDates() {
 }
 
 /**
- * Corrige las fechas de próximo pago de los clientes con discrepancias.
- * Recibe el array `discrepancies` que devuelve auditNextPaymentDates().
+ * Fixes next_payment_date for clients with discrepancies.
+ * Receives the `discrepancies` array returned by auditNextPaymentDates().
  *
  * @param {Array<{id: string, expected: string}>} discrepancies
  * @returns {Promise<{success: boolean, updated: number, errors: string[]}>}
@@ -823,11 +897,11 @@ export async function fixAuditDiscrepancies(discrepancies) {
 }
 
 /**
- * Calcula los días restantes hasta el próximo pago.
- * Retorna número negativo si está vencido.
+ * Calculates days remaining until next payment.
+ * Returns negative number if overdue.
  *
- * @param {string} nextPaymentDate - Fecha del próximo pago (YYYY-MM-DD)
- * @returns {number} - Días restantes (negativo si vencido)
+ * @param {string} nextPaymentDate - Next payment date (YYYY-MM-DD)
+ * @returns {number} - Days remaining (negative if overdue)
  */
 export function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
   if (!nextPaymentDate) return null;
@@ -861,42 +935,31 @@ export function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
 }
 
 /**
- * Obtiene el color del estado de pago según días restantes.
+ * Gets payment status color based on days remaining.
  *
- * @param {number} daysLeft - Días restantes
- * @returns {string} - Clase CSS de color
+ * @param {number} daysLeft - Days remaining
+ * @returns {string} - CSS color class
  */
 export function getPaymentStatusColor(daysLeft) {
   if (daysLeft === null || daysLeft === undefined) return 'text-gray-500';
-  if (daysLeft < 0) return 'text-red-500';      // Vencido
-  if (daysLeft === 0) return 'text-yellow-500';  // Hoy (0 días)
-  if (daysLeft <= 7) return 'text-orange-500';  // Vence pronto (≤7 días)
-  if (daysLeft <= 15) return 'text-yellow-500'; // Vence (≤15 días)
-  return 'text-green-500';                      // Activo (>15 días)
+  if (daysLeft < 0) return 'text-red-500';      // Overdue
+  if (daysLeft === 0) return 'text-yellow-500';  // Today (0 days)
+  if (daysLeft <= 7) return 'text-orange-500';  // Due soon (≤7 days)
+  if (daysLeft <= 15) return 'text-yellow-500'; // Due (≤15 days)
+  return 'text-green-500';                      // Active (>15 days)
 }
 
 /**
- * Calcula y actualiza el status del cliente basándose en sus pagos.
- * Lógica:
- * - Si tiene pagos suficientes para al menos 1 ciclo Y próximo pago no vencido → "activo"
- * - Si próximo pago vencido (días negativos) → "inactivo"
- * - Si no tiene pagos suficientes → "pendiente" (o "inactivo" si prefers)
+ * Calculates and updates client status based on payments.
+ * Logic:
+ * - Has sufficient payments for at least 1 cycle AND next payment not overdue → "active"
+ * - Next payment overdue (negative days) → "inactive"
+ * - Insufficient payments → "pending" (or "inactive" if preferred)
  *
- * @param {string} clientId - ID del cliente
- * @param {string} planId - ID del plan actual del cliente
+ * @param {string} clientId - Client ID
+ * @param {string} planId - Current plan ID for client
  * @returns {Promise<{success: boolean, status?: string, previousStatus?: string, error?: any}>}
  */
-/**
- * MAX_DAYS_ACTIVE: días máximos desde el último pago para mantenerse como activo.
- * Si un cliente no paga en 30 días, se considera inactivo automáticamente.
- */
-const MAX_DAYS_ACTIVE = 30;
-/**
- * MAX_CYCLES: número de ciclos completos para considerar al cliente como finalizado.
- * Un cliente con 12+ ciclos pagados se marca como finalizado.
- */
-const MAX_CYCLES = 12;
-
 export async function updateClientStatus(clientId, planId) {
   try {
     const { data: clientData, error: clientError } = await client
@@ -929,10 +992,10 @@ export async function updateClientStatus(clientId, planId) {
       return { success: false, error: 'Plan price is invalid or zero' };
     }
 
-    // Obtener TODOS los pagos no archivados del cliente (sin filtrar por plan_id)
+    // Get ALL non-archived payments for client (not filtering by plan_id)
     const { data: payments, error: paymentsError } = await client
       .from('payments')
-      .select('id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, payment_date, is_archived')
+      .select('id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, payment_date, is_archived, reference')
       .eq('client_id', clientId)
       .eq('is_archived', false);
 
@@ -941,13 +1004,13 @@ export async function updateClientStatus(clientId, planId) {
       return { success: false, error: paymentsError };
     }
 
-    // Calcular el total pagado hasta ahora (incluyendo todos los ciclos anteriores)
+    // Calculate total paid so far (including all previous cycles)
     const totalPaid = (payments || []).reduce(
       (sum, p) => sum + getEffectiveAmount(p, plan),
       0
     );
 
-    // Calcular días desde el último pago
+    // Calculate days since last payment
     let daysSinceLastPayment = 999;
     if ((payments || []).length > 0) {
       const lastPaymentDate = Math.max(
@@ -966,24 +1029,72 @@ export async function updateClientStatus(clientId, planId) {
 
     let newStatus;
 
-    // Nuevo algoritmo basado en días desde último pago
+    // Get plan frequency for special handling
+    const planFrequency = getPlanFrequency(plan);
+
+    // New algorithm based on days since last payment and plan frequency
     if ((payments || []).length === 0) {
-      // Sin pagos: verificar si es un cliente nuevo o reactivado
+      // No payments: check if new client or reactivated
       const joinDate = new Date(clientData.join_date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      // Si la fecha de ingreso es reciente (<= 7 días) o está en el futuro, es "pendiente"
-      // Esto cubre casos de "borrón y cuenta nueva" donde aún no se ha pagado
+      // If join date is recent (<= 7 days) or in future, it's "pending"
+      // This covers "clean slate" cases where payment hasn't been made yet
       const daysSinceJoin = Math.floor((today.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
       newStatus = (today < joinDate || daysSinceJoin <= 7) ? 'pendiente' : 'inactivo';
     } else if (isFullyPaid && cycles >= MAX_CYCLES) {
-      // Completamente pagado (12+ ciclos)
+      // Fully paid (12+ cycles)
       newStatus = 'finalizado';
+    } else if (planFrequency === 'daily' || planFrequency === 'weekly') {
+      // For daily/weekly plans: check if current period is paid
+      // Calculate if today falls within a paid period
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get the most recent payment date
+      const mostRecentPaymentDate = Math.max(
+        ...(payments || []).map(p => new Date(p.payment_date).getTime())
+      );
+
+      const mostRecentPayment = new Date(mostRecentPaymentDate);
+      mostRecentPayment.setHours(0, 0, 0, 0);
+
+      // Calculate periods since most recent payment
+      let periodsSinceLastPayment = 0;
+      if (planFrequency === 'daily') {
+        periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24));
+      } else if (planFrequency === 'weekly') {
+        periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24 * 7));
+      }
+
+      // Calculate total periods paid (including maintenance bonuses)
+      const totalPaid = (payments || []).reduce(
+        (sum, p) => sum + getEffectiveAmount(p, plan),
+        0
+      );
+
+      const totalPeriodsPaid = Math.floor(totalPaid / planPrice);
+      const maintenancePeriods = (payments || []).filter(p =>
+        isMaintenancePayment(p) && getEffectiveAmount(p, plan) > 0 && getEffectiveAmount(p, plan) < planPrice
+      ).length;
+
+      const totalEffectivePeriods = totalPeriodsPaid + maintenancePeriods;
+
+      // Client is active if we've paid for at least as many periods as have passed
+      // Or if we're within the grace period of the most recent payment
+      if (totalEffectivePeriods > periodsSinceLastPayment) {
+        newStatus = 'activo';
+      } else {
+        // Check if we're within the same period as the most recent payment
+        // (allow same-day activity for daily, same-week for weekly)
+        const isSamePeriod = periodsSinceLastPayment === 0;
+        newStatus = isSamePeriod ? 'activo' : 'inactivo';
+      }
     } else if (daysSinceLastPayment <= MAX_DAYS_ACTIVE) {
-      // Pago reciente (<= 30 días)
+      // Recent payment (<= 30 days)
       newStatus = 'activo';
     } else {
-      // Sin pago reciente
+      // No recent payment
       newStatus = 'inactivo';
     }
 
@@ -1018,12 +1129,12 @@ export async function updateClientStatus(clientId, planId) {
 }
 
 /**
- * Corrige el status de TODOS los clientes basándose en sus pagos.
- * Lógica mejorada:
- * - Activo: tiene pagos recientes (<= 30 días)
- * - Inactivo: no tiene pagos o último pago hace más de 30 días
- * - Pendiente: no tiene pagos y fecha de inicio está en el futuro
- * - Finalizado: tiene 12+ ciclos pagados completos
+ * Fixes status for ALL clients based on payments.
+ * Improved logic:
+ * - Active: has recent payments (<= 30 days) for monthly plans, or current period paid for daily/weekly
+ * - Inactive: no payments or last payment > 30 days ago for monthly, or current period not paid for daily/weekly
+ * - Pending: no payments and start date in future
+ * - Finalized: has 12+ fully paid cycles
  *
  * @returns {Promise<{success: boolean, updated: number, total: number, errors: string[]}>}
  */
@@ -1041,7 +1152,8 @@ export async function fixAllClientStatuses() {
         plans (
           id,
           price,
-          currency
+          currency,
+          frequency
         )
       `);
 
@@ -1052,14 +1164,14 @@ export async function fixAllClientStatuses() {
 
     const { data: allPayments, error: paymentsError } = await client
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, is_archived');
+      .select('id, client_id, plan_id, amount_usd, amount_bs, exchange_rate, payment_type, discount_type, discount_value, is_archived, reference');
 
     if (paymentsError) throw paymentsError;
 
-    // Filtrar solo pagos no archivados
+    // Filter only non-archived payments
     const validPayments = (allPayments || []).filter(p => !p.is_archived);
 
-    // Agrupar pagos por cliente
+    // Group payments by client
     const clientPaymentsMap = {};
     validPayments.forEach(p => {
       if (!clientPaymentsMap[p.client_id]) clientPaymentsMap[p.client_id] = [];
@@ -1077,56 +1189,101 @@ export async function fixAllClientStatuses() {
       try {
         const plan = clientData.plans;
         const planPrice = plan ? parseFloat(plan.price) || 0 : 0;
+        const planFrequency = getPlanFrequency(plan);
 
         if (planPrice <= 0) continue;
 
-        // Obtener todos los pagos del cliente (sin filtrar por plan_id para incluir historial)
+        // Get all client payments (not filtering by plan_id to include history)
         const clientPayments = clientPaymentsMap[clientData.id] || [];
         const totalPaid = clientPayments.reduce(
           (sum, p) => sum + getEffectiveAmount(p, plan),
           0
         );
 
-        // Calcular días desde último pago
-        let daysSinceLastPayment = 999;
-        if (clientPayments.length > 0) {
-          const lastPaymentDate = Math.max(
-            ...clientPayments.map(p => new Date(p.payment_date).getTime())
-          );
-          const now = new Date();
-          now.setHours(0, 0, 0, 0);
-          daysSinceLastPayment = Math.floor((now.getTime() - lastPaymentDate) / (1000 * 60 * 60 * 24));
-        }
-
-        const cycles = Math.floor(totalPaid / planPrice);
-        const remainder = totalPaid % planPrice;
-        const isFullyPaid = remainder < 0.001;
-        const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
-        const totalPrice = planPrice + enrollmentFee;
-
         let newStatus;
 
-        // Nuevo algoritmo basado en días desde último pago
+        // New algorithm based on plan frequency
         if (clientPayments.length === 0) {
-          // Sin pagos activos:
-          // - Si tiene original_join_date (hizo borrón y cuenta nueva), queda pendiente hasta pagar
-          // - Si el ingreso es reciente (<= 7 días) o está en el futuro, es pendiente
-          // - De lo contrario, es inactivo
+          // No active payments:
+          // - If has original_join_date (did clean slate), remains pending until payment
+          // - If join date is recent (<= 7 days) or in future, is pending
+          // - Otherwise, is inactive
           const hasHadReset = !!clientData.original_join_date;
           const joinDate = new Date(clientData.join_date);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const daysSinceJoin = Math.floor((today.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
           newStatus = (hasHadReset || today < joinDate || daysSinceJoin <= 7) ? 'pendiente' : 'inactivo';
-        } else {
-          // Tiene pagos activos - calcular días desde último pago
-          const daysSinceLast = daysSinceLastPayment;
+        } else if (planFrequency === 'monthly') {
+          // Monthly plan logic (existing)
+          const cycles = Math.floor(totalPaid / planPrice);
+          const remainder = totalPaid % planPrice;
+          const isFullyPaid = remainder < 0.001;
+          const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
+          const totalPrice = planPrice + enrollmentFee;
+
+          // Calculate days since last payment
+          let daysSinceLastPayment = 999;
+          if (clientPayments.length > 0) {
+            const lastPaymentDate = Math.max(
+              ...clientPayments.map(p => new Date(p.payment_date).getTime())
+            );
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            daysSinceLastPayment = Math.floor((now.getTime() - lastPaymentDate) / (1000 * 60 * 60 * 24));
+          }
+
           if (isFullyPaid && cycles >= MAX_CYCLES) {
             newStatus = 'finalizado';
-          } else if (daysSinceLast <= MAX_DAYS_ACTIVE) {
+          } else if (daysSinceLastPayment <= MAX_DAYS_ACTIVE) {
             newStatus = 'activo';
           } else {
             newStatus = 'inactivo';
+          }
+        } else if (planFrequency === 'daily' || planFrequency === 'weekly') {
+          // Daily/weekly plan logic
+          // Calculate if current period is paid
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          // Get the most recent payment date
+          const mostRecentPaymentDate = Math.max(
+            ...(payments || []).map(p => new Date(p.payment_date).getTime())
+          );
+
+          const mostRecentPayment = new Date(mostRecentPaymentDate);
+          mostRecentPayment.setHours(0, 0, 0, 0);
+
+          // Calculate periods since most recent payment
+          let periodsSinceLastPayment = 0;
+          if (planFrequency === 'daily') {
+            periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24));
+          } else if (planFrequency === 'weekly') {
+            periodsSinceLastPayment = Math.floor((today.getTime() - mostRecentPayment.getTime()) / (1000 * 60 * 60 * 24 * 7));
+          }
+
+          // Calculate total periods paid (including maintenance bonuses)
+          const totalPaidAmount = (payments || []).reduce(
+            (sum, p) => sum + getEffectiveAmount(p, plan),
+            0
+          );
+
+          const totalPeriodsPaid = Math.floor(totalPaidAmount / planPrice);
+          const maintenancePeriods = (payments || []).filter(p =>
+            isMaintenancePayment(p) && getEffectiveAmount(p, plan) > 0
+          ).length;
+
+          const totalEffectivePeriods = totalPeriodsPaid + maintenancePeriods;
+
+          // Client is active if we've paid for at least as many periods as have passed
+          // Or if we're within the same period as the most recent payment
+          if (totalEffectivePeriods > periodsSinceLastPayment) {
+            newStatus = 'activo';
+          } else {
+            // Check if we're within the same period as the most recent payment
+            // (allow same-day activity for daily, same-week for weekly)
+            const isSamePeriod = periodsSinceLastPayment === 0;
+            newStatus = isSamePeriod ? 'activo' : 'inactivo';
           }
         }
 
@@ -1136,12 +1293,15 @@ export async function fixAllClientStatuses() {
             name: `${clientData.first_name} ${clientData.last_name}`,
             oldStatus: clientData.status,
             newStatus,
-            daysSinceLast: daysSinceLastPayment,
+            daysSinceLast: planFrequency === 'monthly' ?
+              ((clientPayments.length > 0) ?
+                Math.floor((new Date().getTime() - Math.max(...clientPayments.map(p => new Date(p.payment_date).getTime()))) / (1000 * 60 * 60 * 24)) : 999) :
+              (planFrequency === 'daily' || planFrequency === 'weekly') ? 0 : 999, // Placeholder for non-monthly
             totalPaid: totalPaid.toFixed(2)
           });
         }
       } catch (err) {
-        errors.push(`Cliente ${clientData.id}: ${err.message}`);
+        errors.push(`Client ${clientData.id}: ${err.message}`);
       }
     }
 
@@ -1171,7 +1331,6 @@ export async function fixAllClientStatuses() {
     }
 
     return { success: true, updated: 0, total: allClients.length, changes: [], errors: [] };
-
   } catch (err) {
     console.error('Error fixing all client statuses:', err);
     return { success: false, updated: 0, total: 0, errors: [err.message] };
