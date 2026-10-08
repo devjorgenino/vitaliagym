@@ -71,10 +71,13 @@ export function usePayments({ onClientUpdate } = {}) {
       }
       
       // Actualizar la fecha del próximo pago del cliente basándose en ciclos pagados
+      // Para evitar condición de carrera, pasamos el pago recién creado
       if (paymentData.client_id && paymentData.plan_id) {
-        await recalculateNextPaymentDate({ 
-          clientId: paymentData.client_id, 
-          planId: paymentData.plan_id 
+        const paymentToPass = data ? (Array.isArray(data) ? data[0] : data) : paymentData;
+        await recalculateNextPaymentDate({
+          clientId: paymentData.client_id,
+          planId: paymentData.plan_id,
+          payments: [paymentToPass]
         });
         await updateClientStatus(paymentData.client_id, paymentData.plan_id);
       }
@@ -177,6 +180,10 @@ export function usePayments({ onClientUpdate } = {}) {
           throw error;
         }
 
+        // Set clientId and planId for recalculation (needed in both atomic and legacy paths)
+        clientId = paymentToDelete.client_id;
+        planId = paymentToDelete.plan_id;
+
         // 2. Verificar si que hacer Rollback del reinicio
         if (paymentToDelete && paymentToDelete.client_id) {
           // ¿Quedan pagos activos?
@@ -208,7 +215,7 @@ export function usePayments({ onClientUpdate } = {}) {
                   data: { is_archived: false },
                   match: { client_id: paymentToDelete.client_id, is_archived: true }
               });
-              // - Restore client join_date
+              // - Restore client join_date (rollback clean slate)
               await executeWithSync({
                   table: 'clients',
                   type: 'UPDATE',
