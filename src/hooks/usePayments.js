@@ -108,10 +108,13 @@ export function usePayments({ onClientUpdate } = {}) {
       }
       
       // Actualizar la fecha del próximo pago del cliente basándose en ciclos pagados
+      // Para evitar condición de carrera, pasamos el pago recién creado/actualizado
       if (paymentData.client_id && paymentData.plan_id) {
-        await recalculateNextPaymentDate({ 
-          clientId: paymentData.client_id, 
-          planId: paymentData.plan_id 
+        const paymentToPass = data ? (Array.isArray(data) ? data[0] : data) : paymentData;
+        await recalculateNextPaymentDate({
+          clientId: paymentData.client_id,
+          planId: paymentData.plan_id,
+          payments: [paymentToPass]
         });
         await updateClientStatus(paymentData.client_id, paymentData.plan_id);
       }

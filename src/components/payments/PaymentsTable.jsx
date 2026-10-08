@@ -1,12 +1,13 @@
 
-function calculateMonthsFromDates(fromStr, toStr) {
-  if (!fromStr || !toStr) return 1;
-  const from = new Date(fromStr);
-  const to = new Date(toStr);
-  if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) return 1;
-  const diffDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
-  return Math.max(1, Math.round(diffDays / 30));
-}
+// Función eliminada: usar differenceInCalendarMonths de paymentCalculations.js en su lugar
+// function calculateMonthsFromDates(fromStr, toStr) {
+//   if (!fromStr || !toStr) return 1;
+//   const from = new Date(fromStr);
+//   const to = new Date(toStr);
+//   if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) return 1;
+//   const diffDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+//   return Math.max(1, Math.round(diffDays / 30));
+// }
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import client from "../../api/client";
@@ -17,7 +18,7 @@ import { useExchangeRate } from "../../hooks/useExchangeRate";
 import { formatDate, formatDateTime, formatDateToLocal, matchesSearch } from "@/lib/utils";
 import { getPlanCurrency, getPlanPriceInBS, getPlanPriceInUSD } from "@/lib/planUtils";
 import { DatePicker } from "@/components/ui/date-picker";
-import { addMonthsPreservingAnchor, getEffectiveAmount, computeNextPaymentDate, getClientPaymentStatus, INSCRIPTION_PRICE } from "@/utils/paymentCalculations";
+import { addMonthsPreservingAnchor, getEffectiveAmount, computeNextPaymentDate, getClientPaymentStatus, INSCRIPTION_PRICE, differenceInCalendarMonths } from "@/utils/paymentCalculations";
 import {
   VENEZUELAN_BANKS,
   getBanksWithFavorites,
@@ -2291,7 +2292,7 @@ export function PaymentsTable({
                                   onChange={(val) => {
                                     setFormData(prev => ({ ...prev, date_from: val }));
                                     if (formData.date_to && val) {
-                                      const m = calculateMonthsFromDates(val, formData.date_to);
+                                      const m = differenceInCalendarMonths(val, formData.date_to);
                                       setMonthsCount(m);
                                     }
                                   }}
@@ -2305,7 +2306,7 @@ export function PaymentsTable({
                                   onChange={(val) => {
                                     setFormData(prev => ({ ...prev, date_to: val }));
                                     if (formData.date_from && val) {
-                                      const m = calculateMonthsFromDates(formData.date_from, val);
+                                      const m = differenceInCalendarMonths(formData.date_from, val);
                                       setMonthsCount(m);
                                     }
                                   }}
