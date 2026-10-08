@@ -517,10 +517,13 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
         if (deltaAccumulated > 0) {
           if (payDay < anchorDay) {
             currentDueDate = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+            if (accumulatedMonths > 1) {
+              currentDueDate = addMonthsPreservingAnchor(currentDueDate, deltaAccumulated - 1, anchorDay);
+            }
           } else {
             currentDueDate = addMonthsPreservingAnchor(
               getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
-              1,
+              deltaAccumulated,
               anchorDay
             );
           }
@@ -577,26 +580,41 @@ export async function recalculateNextPaymentDate({ clientId, planId, payments })
       return { success: false, error: 'Plan price is invalid' };
     }
 
-    let allPayments;
-    if (payments) {
-      // Use the provided payments array (should be filtered to the correct client and plan)
-      allPayments = payments;
-    } else {
-      // 2. Client's payments for the specific plan being recalculated, excluding archived and ordered by date
-      // We filter by both client_id AND plan_id to ensure we only consider payments for this specific plan
-      const { data: fetchedPayments, error: paymentsError } = await client
-        .from('payments')
-        .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date, reference')
-        .eq('client_id', clientId)
-        .eq('plan_id', planId)
-        .eq('is_archived', false)
-        .order('payment_date', { ascending: true });
+    let allPayments = [];
+    // Always attempt to fetch payments from DB to get complete history
+    const { data: fetchedPayments, error: paymentsError } = await client
+      .from('payments')
+      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date, reference')
+      .eq('client_id', clientId)
+      .eq('plan_id', planId)
+      .eq('is_archived', false)
+      .order('payment_date', { ascending: true });
 
-      if (paymentsError) {
-        console.error('Error fetching payments for recalculation:', paymentsError);
+    if (paymentsError) {
+      console.error('Error fetching payments for recalculation:', paymentsError);
+      // If we have a payments hint (e.g. from recent insert/update), we may still want to use it
+      if (!payments || payments.length === 0) {
         return { success: false, error: paymentsError };
       }
+      // Otherwise, we'll use the payments hint and log a warning
+      console.warn('Using payments hint due to fetch error');
+      allPayments = payments || [];
+    } else {
       allPayments = fetchedPayments;
+    }
+
+    // If we were given specific payments to include (e.g. from a recent insert/update),
+    // merge them in, avoiding duplicates by id
+    if (payments && payments.length > 0) {
+      const paymentIds = new Set(allPayments.map(p => p.id));
+      for (const p of payments) {
+        if (!paymentIds.has(p.id)) {
+          allPayments.push(p);
+          paymentIds.add(p.id);
+        }
+      }
+      // Re-sort by date to ensure chronological order
+      allPayments.sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
     }
 
     // 3. Calculate correct date with business rules
@@ -775,6 +793,168 @@ export async function recalculateAllNextPaymentDates() {
 }
 
 /**
+ * Comprehensive audit of all clients' next_payment_date vs expected value
+ * Returns detailed list of discrepancies for manual review
+ *
+ * @returns {Promise<{
+ *   success: boolean,
+ *   total: number,
+ *   discrepancies_count: number,
+ *   discrepancies: Array<{
+ *     id: string,
+ *     name: string,
+ *     join_date: string,
+ *     original_join_date: string|null,
+ *     stored_next_payment_date: string|null,
+ *     expected_next_payment_date: string|null,
+ *     days_difference: number|null,
+ *     plan_name: string,
+ *     plan_price: number,
+ *     plan_currency: string,
+ *     plan_frequency: string,
+ *     enrollment_paid: boolean|null,
+ *     total_paid: number,
+ *     cycles_paid: number,
+ *     last_payment_date: string|null,
+ *     payment_count: number
+ *   }>,
+ *   errors: string[]
+ * }>}
+ */
+export async function auditAllClientPaymentDates() {
+  try {
+    // 1. Get all clients with their plan info
+    const { data: allClients, error: fetchError } = await client
+      .from('clients')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        join_date,
+        next_payment_date,
+        plan_id,
+        enrollment_paid,
+        original_join_date,
+        plans (
+          id,
+          name,
+          price,
+          currency,
+          frequency
+        )
+      `);
+
+    if (fetchError) throw fetchError;
+    if (!allClients || allClients.length === 0) {
+      return { success: true, total: 0, discrepancies_count: 0, discrepancies: [], errors: [] };
+    }
+
+    // 2. Get all payments ordered by date (excluding archived)
+    const { data: allPayments, error: paymentsError } = await client
+      .from('payments')
+      .select('id, client_id, plan_id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date')
+      .eq('is_archived', false)
+      .order('payment_date', { ascending: true });
+
+    if (paymentsError) throw paymentsError;
+
+    const discrepancies = [];
+    const errors = [];
+
+    // 3. Process each client
+    for (const clientData of allClients) {
+      try {
+        if (!clientData.join_date) {
+          errors.push(`Client ${clientData.id}: missing join date`);
+          continue;
+        }
+
+        const planPrice = clientData.plans ? parseFloat(clientData.plans.price) || 0 : 0;
+        if (planPrice <= 0) {
+          errors.push(`Client ${clientData.id}: invalid plan price`);
+          continue;
+        }
+
+        // Get client's payments (not filtering by plan_id to include plan change history)
+        const clientPayments = (allPayments || []).filter(
+          p => p.client_id === clientData.id
+        );
+
+        // Calculate correct date with business rules
+        const enrollmentFee = clientData.enrollment_paid ? INSCRIPTION_PRICE : 0;
+        const expectedNextPaymentDate = computeNextPaymentDate(
+          clientData.join_date,
+          clientPayments,
+          clientData.plans,
+          planPrice,
+          enrollmentFee
+        );
+
+        // Compare stored vs expected
+        const storedDate = clientData.next_payment_date;
+        const datesMatch = storedDate === expectedNextPaymentDate;
+
+        if (!datesMatch) {
+          // Calculate days difference for reporting
+          let daysDifference = null;
+          if (storedDate && expectedNextPaymentDate) {
+            const stored = new Date(storedDate);
+            const expected = new Date(expectedNextPaymentDate);
+            daysDifference = Math.round((stored.getTime() - expected.getTime()) / (1000 * 60 * 60 * 24));
+          } else if (!storedDate && expectedNextPaymentDate) {
+            daysDifference = -999; // Stored null, expected date
+          } else if (storedDate && !expectedNextPaymentDate) {
+            daysDifference = 999; // Stored date, expected null
+          }
+
+          // Get payment summary
+          const totalPaid = clientPayments.reduce(
+            (sum, p) => sum + getEffectiveAmount(p, clientData.plans),
+            0
+          );
+          const cycles = Math.floor(totalPaid / planPrice);
+          const lastPaymentDate = clientPayments.length > 0
+            ? Math.max(...clientPayments.map(p => new Date(p.payment_date).getTime()))
+            : null;
+
+          discrepancies.push({
+            id: clientData.id,
+            name: `${clientData.first_name} ${clientData.last_name}`,
+            join_date: clientData.join_date,
+            original_join_date: clientData.original_join_date,
+            stored_next_payment_date: storedDate,
+            expected_next_payment_date: expectedNextPaymentDate,
+            days_difference: daysDifference,
+            plan_name: clientData.plans?.name || 'Unknown',
+            plan_price: planPrice,
+            plan_currency: clientData.plans?.currency || 'USD',
+            plan_frequency: clientData.plans?.frequency || 'monthly',
+            enrollment_paid: clientData.enrollment_paid,
+            total_paid: totalPaid,
+            cycles_paid: cycles,
+            last_payment_date: lastPaymentDate ? new Date(lastPaymentDate).toISOString().split('T')[0] : null,
+            payment_count: clientPayments.length
+          });
+        }
+      } catch (err) {
+        errors.push(`Client ${clientData.id}: ${err.message}`);
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      total: allClients.length,
+      discrepancies_count: discrepancies.length,
+      discrepancies,
+      errors
+    };
+  } catch (err) {
+    console.error('Error auditing all payment dates:', err);
+    return { success: false, total: 0, discrepancies_count: 0, discrepancies: [], errors: [err.message] };
+  }
+}
+
+/**
  * Audits next_payment_date for ALL clients without modifying anything.
  * Compares stored value against expected value based on actual payments.
  *
@@ -787,7 +967,7 @@ export async function recalculateAllNextPaymentDates() {
  *     name: string,
  *     join_date: string,
  *     stored: string,
- *     expected: string,
+*     expected: string,
  *     totalPaid: number,
  *     cycles: number,
  *   }>,

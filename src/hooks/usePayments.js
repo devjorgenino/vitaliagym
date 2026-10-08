@@ -71,10 +71,13 @@ export function usePayments({ onClientUpdate } = {}) {
       }
       
       // Actualizar la fecha del próximo pago del cliente basándose en ciclos pagados
+      // Para evitar condición de carrera, pasamos el pago recién creado
       if (paymentData.client_id && paymentData.plan_id) {
-        await recalculateNextPaymentDate({ 
-          clientId: paymentData.client_id, 
-          planId: paymentData.plan_id 
+        const paymentToPass = data ? (Array.isArray(data) ? data[0] : data) : paymentData;
+        await recalculateNextPaymentDate({
+          clientId: paymentData.client_id,
+          planId: paymentData.plan_id,
+          payments: [paymentToPass]
         });
         await updateClientStatus(paymentData.client_id, paymentData.plan_id);
       }
@@ -161,7 +164,7 @@ export function usePayments({ onClientUpdate } = {}) {
         // 1. Obtener pago antes de borrar
         const { data: paymentToDelete, error: fetchErr } = await client
           .from('payments')
-          .select('client_id, plan_id, is_archived')
+          .select('client_id, plan_id, is_archived, payment_date')
           .eq('id', id)
           .single();
 
@@ -177,7 +180,13 @@ export function usePayments({ onClientUpdate } = {}) {
           throw error;
         }
 
+        // Set clientId and planId for recalculation (needed in both atomic and legacy paths)
+        clientId = paymentToDelete.client_id;
+        planId = paymentToDelete.plan_id;
+
         // 2. Verificar si que hacer Rollback del reinicio
+        // Solo hacer rollback si el pago siendo eliminado es reciente respecto a la fecha de unión original
+        // (posible pago de inscripción durante el proceso de clean slate)
         if (paymentToDelete && paymentToDelete.client_id) {
           // ¿Quedan pagos activos?
           const { data: remainingPayments } = await client
@@ -188,11 +197,24 @@ export function usePayments({ onClientUpdate } = {}) {
 
           const { data: clientData } = await client
             .from('clients')
-            .select('original_join_date')
+            .select('original_join_date, join_date')
             .eq('id', paymentToDelete.client_id)
             .single();
 
-          if ((!remainingPayments || remainingPayments.length === 0) && clientData && clientData.original_join_date) {
+          const shouldRollback = !remainingPayments || remainingPayments.length === 0;
+          const hasHadReset = clientData && clientData.original_join_date;
+
+          // Calcular días entre el pago y la fecha de unión original (proxy para fecha de clean slate)
+          let daysSinceJoin = 999;
+          if (hasHadReset && paymentToDelete.payment_date && clientData.original_join_date) {
+            const paymentDate = new Date(paymentToDelete.payment_date);
+            const originalJoinDate = new Date(clientData.original_join_date);
+            daysSinceJoin = Math.abs(paymentDate.getTime() - originalJoinDate.getTime()) / (1000 * 60 * 60 * 24);
+          }
+
+          // Solo hacer rollback si: no quedan pagos, tuvo clean slate, y el pago es reciente (≤ 7 días)
+          const isRecentPayment = daysSinceJoin <= 7;
+          if (shouldRollback && hasHadReset && isRecentPayment) {
               // ROLLBACK TRIGGERED
               // - Unarchive all payments
               await executeWithSync({

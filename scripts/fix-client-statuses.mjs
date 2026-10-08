@@ -11,21 +11,6 @@ const LOCAL_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIs
 
 const localDb = createClient(LOCAL_URL, LOCAL_KEY);
 
-function calculateDaysUntilPayment(nextPaymentDate, joinDate) {
-  if (!nextPaymentDate && !joinDate) return null;
-  
-  const referenceDate = nextPaymentDate ? new Date(nextPaymentDate) : new Date(joinDate);
-  const today = new Date();
-  
-  // Set both to midnight to count full days
-  referenceDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-  
-  const diffTime = referenceDate.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-}
-
 async function fixAllClientStatuses() {
   console.log('🔄 Arreglando estados de clientes...');
   try {
@@ -53,45 +38,72 @@ async function fixAllClientStatuses() {
 
     const { data: allPayments, error: paymentsError } = await localDb
       .from('payments')
-      .select('id, client_id, plan_id, amount_usd');
+      .select('id, client_id, plan_id, amount_usd, payment_date');
 
     if (paymentsError) throw paymentsError;
 
     let updatedCount = 0;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
 
     for (const clientData of allClients) {
       try {
-        // En supabase-js v2 un objeto anidado viene como array si es una relación one-to-many, 
+        // En supabase-js v2 un objeto anidado viene como array si es una relación one-to-many,
         // o un objeto directamente si es many-to-one, pero para estar seguros:
         const plan = Array.isArray(clientData.plans) ? clientData.plans[0] : clientData.plans;
         const planPrice = plan ? parseFloat(plan.price) || 0 : 0;
-        
+
         if (planPrice <= 0) continue;
 
+        // Get ALL payments for this client (not filtering by plan_id to include history)
         const clientPayments = (allPayments || []).filter(
-          p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
+          p => p.client_id === clientData.id
         );
 
-        const totalPaid = clientPayments.reduce(
-          (sum, p) => sum + (parseFloat(p.amount_usd) || 0),
-          0
-        );
+        // Calculate days since last payment for accurate status determination
+        let daysSinceLastPayment = 999;
+        if (clientPayments.length > 0) {
+          // Parse YYYY-MM-DD format safely
+          const lastPaymentTimestamp = Math.max(
+            ...clientPayments.map(p => {
+              if (!p.payment_date) {
+                console.error(`Payment missing payment_date for client ${clientData.id}`);
+                return 0;
+              }
+              const [year, month, day] = p.payment_date.split('-').map(Number);
+              if (isNaN(year) || isNaN(month) || isNaN(day)) {
+                console.error(`Invalid date format for payment: ${p.payment_date}`);
+                return 0;
+              }
+              const date = new Date(year, month - 1, day); // month is 0-indexed in JS Date
+              if (isNaN(date.getTime())) {
+                console.error(`Invalid date for payment: ${p.payment_date}`);
+                return 0;
+              }
+              return date.getTime();
+            })
+          );
+          const lastPaymentDate = new Date(lastPaymentTimestamp);
+          lastPaymentDate.setHours(0, 0, 0, 0);
+          daysSinceLastPayment = Math.floor((now.getTime() - lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
 
-        const cycles = Math.floor(totalPaid / planPrice);
-        const daysUntilPayment = calculateDaysUntilPayment(
-          clientData.next_payment_date,
-          clientData.join_date
-        );
-
+        // Determine status based on days since last payment (correct logic)
         let newStatus;
-        if (cycles >= 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
-          newStatus = 'activo';
-        } else if (daysUntilPayment !== null && daysUntilPayment < 0) {
-          newStatus = 'inactivo';
-        } else if (cycles < 1 && daysUntilPayment !== null && daysUntilPayment >= 0) {
-          newStatus = 'pendiente';
+        if (clientPayments.length === 0) {
+          // No payments: check if new client or reactivated (clean slate logic)
+          const joinDate = new Date(clientData.join_date);
+          const daysSinceJoin = Math.floor((now.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
+          newStatus = (now < joinDate || daysSinceJoin <= 7) ? 'pendiente' : 'inactivo';
         } else {
-          newStatus = 'inactivo';
+          // Has payments: based on days since last payment
+          if (daysSinceLastPayment <= 30) {
+            newStatus = 'activo';
+          } else {
+            newStatus = 'inactivo';
+          }
+          // Note: We're not handling 'finalizado' here to keep it simple and match existing logic
+          // The existing logic for finalized (12+ cycles) is more complex and handled elsewhere
         }
 
         if (newStatus !== clientData.status) {
@@ -100,7 +112,7 @@ async function fixAllClientStatuses() {
             .from('clients')
             .update({ status: newStatus })
             .eq('id', clientData.id);
-            
+
           if (error) console.error(error);
           else updatedCount++;
         }
@@ -108,7 +120,7 @@ async function fixAllClientStatuses() {
         console.error(`Error con cliente ${clientData.id}:`, err);
       }
     }
-    
+
     console.log(`✅ Actualizados ${updatedCount} clientes.`);
 
   } catch (e) {

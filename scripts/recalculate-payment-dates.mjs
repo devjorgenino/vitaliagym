@@ -206,7 +206,7 @@ async function main() {
     const planPrice = parseFloat(c.plans.price) || 0;
     if (planPrice <= 0) continue;
 
-    const cp       = payments.filter(p => p.client_id === c.id && p.plan_id === c.plan_id);
+    const cp = payments.filter(p => p.client_id === c.id);
     const expected = computeNextPaymentDate(c.join_date, cp, planPrice);
 
     if (!expected) continue;
