@@ -544,7 +544,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
  * @param {string} params.planId   - Current plan ID for client
  * @returns {Promise<{success: boolean, newDate?: string, cyclesExtended?: number, error?: any}>}
  */
-export async function recalculateNextPaymentDate({ clientId, planId }) {
+export async function recalculateNextPaymentDate({ clientId, planId, payments }) {
   try {
     // 1. Client data
     const { data: clientData, error: clientError } = await client
@@ -577,18 +577,26 @@ export async function recalculateNextPaymentDate({ clientId, planId }) {
       return { success: false, error: 'Plan price is invalid' };
     }
 
-    // 2. Client's payments for current plan, excluding archived and ordered by date
-    const { data: allPayments, error: paymentsError } = await client
-      .from('payments')
-      .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date, reference')
-      .eq('client_id', clientId)
-      .eq('plan_id', clientData.plan_id)
-      .eq('is_archived', false)
-      .order('payment_date', { ascending: true });
+    let allPayments;
+    if (payments) {
+      // Use the provided payments array (should be filtered to the correct client and plan)
+      allPayments = payments;
+    } else {
+      // 2. Client's payments for the specific plan being recalculated, excluding archived and ordered by date
+      // We filter by both client_id AND plan_id to ensure we only consider payments for this specific plan
+      const { data: fetchedPayments, error: paymentsError } = await client
+        .from('payments')
+        .select('id, amount_usd, amount_bs, payment_type, discount_type, discount_value, payment_date, reference')
+        .eq('client_id', clientId)
+        .eq('plan_id', planId)
+        .eq('is_archived', false)
+        .order('payment_date', { ascending: true });
 
-    if (paymentsError) {
-      console.error('Error fetching payments for recalculation:', paymentsError);
-      return { success: false, error: paymentsError };
+      if (paymentsError) {
+        console.error('Error fetching payments for recalculation:', paymentsError);
+        return { success: false, error: paymentsError };
+      }
+      allPayments = fetchedPayments;
     }
 
     // 3. Calculate correct date with business rules
