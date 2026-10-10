@@ -376,18 +376,36 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
 
   // Total price includes enrollment fee if already paid (one-time only)
   const enrollmentFeePaid = getEnrollmentFeePaid(client, clientPayments);
+  const cyclePrice = planPrice + enrollmentFeePaid;
   const totalPrice = planPrice + enrollmentFeePaid;
 
-  // Calculate how much has been paid in current cycle
-  let currentCyclePaid = totalPaidSoFar % totalPrice;
-  if (currentCyclePaid < 0.001 && totalPaidSoFar > 0) {
-    currentCyclePaid = totalPrice;
+  // CORRECT CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
+  // Cycle 1 price = planPrice + enrollmentFee, subsequent cycles = planPrice only
+  let currentCyclePaid = 0;
+  let currentCyclePrice = planPrice;
+  let isFullyPaid = false;
+
+  if (totalPaidSoFar === 0) {
+    // No payments yet - current cycle is the first one with enrollment fee
+    currentCyclePrice = totalPrice;
+    currentCyclePaid = 0;
+  } else if (totalPaidSoFar < cyclePrice) {
+    // In first cycle, haven't completed it yet
+    currentCyclePrice = totalPrice;
+    currentCyclePaid = totalPaidSoFar;
+  } else if ((totalPaidSoFar - enrollmentFeePaid) % planPrice === 0) {
+    // Just completed a cycle (after enrollment)
+    currentCyclePrice = planPrice;
+    currentCyclePaid = planPrice;
+    isFullyPaid = true;
+  } else {
+    // In progress of a cycle (after enrollment)
+    const amountInCurrentCycle = totalPaidSoFar - enrollmentFeePaid - Math.floor((totalPaidSoFar - enrollmentFeePaid) / planPrice) * planPrice;
+    currentCyclePrice = planPrice;
+    currentCyclePaid = amountInCurrentCycle;
   }
-  // Enrollment fee only applies to first cycle: if remainder > planPrice, that cycle included enrollment fee; if not, current cycle costs only planPrice.
-  const currentCyclePrice =
-    currentCyclePaid > planPrice ? totalPrice : planPrice;
+
   const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);
-  const isFullyPaid = currentRemaining < 0.001;
 
   const currency = getPlanCurrency ? getPlanCurrency(getPlanForPayment(client)) : "USD";
 
@@ -475,7 +493,14 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
       maintenanceBonusSoFar++;
     }
 
-    const baseCycles = Math.floor(totalEffectiveSoFar / cyclePrice);
+    // CORRECT CYCLE CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
+    // Cycle 1 price = planPrice + enrollmentFee, subsequent cycles = planPrice only
+    let baseCycles = 0;
+    if (totalEffectiveSoFar >= cyclePrice) {
+      baseCycles = 1 + Math.floor((totalEffectiveSoFar - cyclePrice) / planPrice);
+    } else {
+      baseCycles = Math.floor(totalEffectiveSoFar / cyclePrice);
+    }
     const accumulatedMonths = baseCycles + maintenanceBonusSoFar;
 
     if (accumulatedMonths <= 0) {
@@ -512,21 +537,18 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
         currentDueDate = addMonthsPreservingAnchor(currentDueDate, deltaAccumulated, anchorDay);
       } else {
         // Reactivation after inactivity: reactivates current cycle anchored to client's day.
-        // Only update the date when this payment actually completes at least one new cycle.
-        // Partial payments during reactivation do not advance the due date.
-        if (deltaAccumulated > 0) {
-          if (payDay < anchorDay) {
-            currentDueDate = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
-            if (accumulatedMonths > 1) {
-              currentDueDate = addMonthsPreservingAnchor(currentDueDate, deltaAccumulated - 1, anchorDay);
-            }
-          } else {
-            currentDueDate = addMonthsPreservingAnchor(
-              getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
-              deltaAccumulated,
-              anchorDay
-            );
+        // Always advance to at least the next anchor day when paying after due date.
+        if (payDay < anchorDay) {
+          currentDueDate = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+          if (deltaAccumulated > 1) {
+            currentDueDate = addMonthsPreservingAnchor(currentDueDate, deltaAccumulated - 1, anchorDay);
           }
+        } else {
+          currentDueDate = addMonthsPreservingAnchor(
+            getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
+            Math.max(deltaAccumulated, 1),
+            anchorDay
+          );
         }
       }
     }
@@ -729,9 +751,9 @@ export async function recalculateAllNextPaymentDates() {
           continue;
         }
 
-        // Client's payments (not filtering by plan_id to include plan change history)
+        // Client's payments - filtered by plan_id to only include current plan payments
         const clientPayments = (allPayments || []).filter(
-          p => p.client_id === clientData.id
+          p => p.client_id === clientData.id && p.plan_id === clientData.plan_id
         );
 
         // Calculate correct date with business rules

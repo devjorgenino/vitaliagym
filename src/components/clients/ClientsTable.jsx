@@ -243,20 +243,25 @@ export function ClientsTable() {
 
     // Calcular el ciclo actual de pago (considerar inscripción si ya fue pagada)
     const enrollmentFeePaid = getEnrollmentFeePaid(client, allClientPayments);
-    const totalPrice = planPrice + enrollmentFeePaid;
+    const cyclePrice = planPrice + enrollmentFeePaid;
 
-    let paidForCurrentCycle = totalPaidSoFar % totalPrice;
+    // CORRECT CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
+    let paidForCurrentCycle = 0;
+    let currentCyclePrice = planPrice;
 
-    if (paidForCurrentCycle < 0.001 && totalPaidSoFar > 0) {
-      paidForCurrentCycle = totalPrice;
+    if (totalPaidSoFar === 0) {
+      currentCyclePrice = cyclePrice;
+      paidForCurrentCycle = 0;
+    } else if (totalPaidSoFar < cyclePrice) {
+      currentCyclePrice = cyclePrice;
+      paidForCurrentCycle = totalPaidSoFar;
+    } else if ((totalPaidSoFar - enrollmentFeePaid) % planPrice === 0) {
+      currentCyclePrice = planPrice;
+      paidForCurrentCycle = planPrice;
+    } else {
+      paidForCurrentCycle = totalPaidSoFar - enrollmentFeePaid - Math.floor((totalPaidSoFar - enrollmentFeePaid) / planPrice) * planPrice;
     }
 
-    // La inscripción de $5 USD solo corresponde al primer ciclo. Si el
-    // remanente supera planPrice, ese ciclo incluyó la inscripción
-    // (cyclePrice = planPrice + fee); si no, la inscripción ya fue pagada
-    // y el ciclo actual cuesta solo planPrice.
-    const currentCyclePrice =
-      paidForCurrentCycle > planPrice ? totalPrice : planPrice;
     const currentRemaining = Math.max(0, currentCyclePrice - paidForCurrentCycle);
     const isFullyPaid = currentRemaining < 0.001;
 
@@ -306,18 +311,23 @@ export function ClientsTable() {
 
     // El precio total incluye la inscripción si ya fue pagada (una sola vez)
     const enrollmentFeePaid = getEnrollmentFeePaid(client, allClientPayments);
-    const totalPrice = planPrice + enrollmentFeePaid;
+    const cyclePrice = planPrice + enrollmentFeePaid;
 
-    // Calcular cuánto se ha pagado en el ciclo actual
-    let currentCyclePaid = totalPaid % totalPrice;
-    if (currentCyclePaid < 0.001 && totalPaid > 0) {
-      currentCyclePaid = totalPrice;
+    // CORRECT CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
+    let currentCyclePrice, currentCyclePaid;
+    if (totalPaid === 0) {
+      currentCyclePrice = cyclePrice;
+      currentCyclePaid = 0;
+    } else if (totalPaid < cyclePrice) {
+      currentCyclePrice = cyclePrice;
+      currentCyclePaid = totalPaid;
+    } else if ((totalPaid - enrollmentFeePaid) % planPrice === 0) {
+      currentCyclePrice = planPrice;
+      currentCyclePaid = planPrice;
+    } else {
+      currentCyclePrice = planPrice;
+      currentCyclePaid = totalPaid - enrollmentFeePaid - Math.floor((totalPaid - enrollmentFeePaid) / planPrice) * planPrice;
     }
-    // La inscripción solo corresponde al primer ciclo: si el remanente
-    // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
-    // actual cuesta solo planPrice.
-    const currentCyclePrice =
-      currentCyclePaid > planPrice ? totalPrice : planPrice;
     const remainingAmount = Math.max(0, currentCyclePrice - currentCyclePaid);
 
     // Si ya completó el ciclo actual, no hay restante

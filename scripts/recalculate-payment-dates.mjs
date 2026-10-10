@@ -5,8 +5,8 @@
  * Requiere: npm install dotenv @supabase/supabase-js
  *
  * REGLA DE NEGOCIO:
- *   next_payment_date = día(join_date) en el mes siguiente al último pago registrado
- *   Sin pagos completos → join_date + 1 mes
+ *   Utiliza la misma lógica que la aplicación para calcular next_payment_date
+ *   incluyendo descuentos, pagos de mantenimiento y ajuste de día ancla.
  *
  * Uso:
  *   node scripts/recalculate-payment-dates.mjs          → audita y corrige automáticamente en local
@@ -46,7 +46,85 @@ console.log(`📡 Conectado a: ${isProd ? 'PRODUCCIÓN (' + SUPABASE_URL + ')' :
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 const DRY_RUN = process.argv.includes('--dry-run');
 
-// ─── Lógica de negocio ────────────────────────────────────────────────────────
+// --- Copiado de las funciones necesarias de paymentCalculations.js y planUtils.js ---
+
+const INSCRIPTION_PRICE = 5;
+const MAX_EFFECTIVE_AMOUNT_USD = 10000;
+const MAX_EFFECTIVE_AMOUNT_BS = 1000000;
+const FALLBACK_EXCHANGE_RATE = 310;
+
+function getPlanFrequency(plan) {
+  if (!plan) return 'monthly';
+  return (plan.frequency || 'monthly').toLowerCase();
+}
+
+function getEffectiveAmount(payment, plan, fallbackRate = FALLBACK_EXCHANGE_RATE) {
+  if (!payment) return 0;
+
+  // Determinar el campo de amount a usar basado en payment_type y moneda del plan
+  let field = 'amount_usd';
+  if (payment?.payment_type === 'efectivo_bolivares') {
+    field = 'amount_bs';
+  } else if (plan && (plan.currency || 'USD').toUpperCase() === 'BS') {
+    field = 'amount_bs';
+  }
+
+  let amount = parseFloat(payment[field]) || 0;
+  const isBSPlan = (plan?.currency || 'USD').toUpperCase() === 'BS';
+
+  // Para USD pagados en bolivares, convertir a USD
+  if (payment.payment_type === 'efectivo_bolivares' && !isBSPlan) {
+    const rate = payment.exchange_rate || fallbackRate;
+    amount = amount / rate;
+  }
+
+  // Validar razonabilidad del monto base
+  const maxAmount = isBSPlan ? MAX_EFFECTIVE_AMOUNT_BS : MAX_EFFECTIVE_AMOUNT_USD;
+  if (amount > maxAmount) {
+    console.warn(
+      `⚠️ Monto anómalo detectado: ${amount} en pago ${payment.id || 'unknown'} (${isBSPlan ? 'Bs' : 'USD'}), limitando a ${maxAmount}`
+    );
+    amount = maxAmount;
+  }
+
+  if (payment.discount_type === 'percentage' && payment.discount_value) {
+    const disc = parseFloat(payment.discount_value) || 0;
+    if (disc > 0 && disc < 100) {
+      // Protección contra descuentos cercanos al 100% que inflan el monto efectivo
+      const maxDiscount = 95; // Máximo 95% de descuento
+      const safeDisc = Math.min(disc, maxDiscount);
+      if (disc !== safeDisc) {
+        console.warn(`⚠️ Descuento excesivo ${disc}% en pago ${payment.id || 'unknown'}, limitando a ${maxDiscount}%`);
+      }
+      amount = amount / (1 - safeDisc / 100);
+    } else if (disc >= 100) {
+      // 100% de descuento significa cobertura completa - tratar como 0 para propósitos de ciclo
+      return 0;
+    }
+  } else if (payment.discount_type === 'fixed' && payment.discount_value) {
+    const fixedDisc = parseFloat(payment.discount_value) || 0;
+    // Validar razonabilidad del descuento fijo
+    if (fixedDisc > MAX_EFFECTIVE_AMOUNT_USD) {
+      console.warn(`⚠️ Descuento fijo anómalo: ${fixedDisc}, limitando`);
+      amount += MAX_EFFECTIVE_AMOUNT_USD;
+    } else {
+      amount += fixedDisc;
+    }
+  }
+
+  // Límite final del monto efectivo
+  if (amount > maxAmount) {
+    amount = maxAmount;
+  }
+
+  return Math.round(amount * 100) / 100;
+}
+
+function isMaintenancePayment(payment) {
+  if (!payment) return false;
+  const ref = (payment.reference || '').toLowerCase();
+  return ref.includes('maintenance') || ref.includes('maintenance fee') || ref.includes('mantenimiento');
+}
 
 function getAnchorDateForTargetMonth(anchorDay, year, month) {
   const lastDay = new Date(year, month, 0).getDate();
@@ -56,6 +134,7 @@ function getAnchorDateForTargetMonth(anchorDay, year, month) {
 
 function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
   if (!baseDateStr || monthsToAdd === null || monthsToAdd === undefined || monthsToAdd < 0) return null;
+
   const [y, m, d] = baseDateStr.split('-').map(Number);
   const anchor = anchorDay || d;
 
@@ -76,86 +155,125 @@ function addMonthsPreservingAnchor(baseDateStr, monthsToAdd, anchorDay) {
 
 /**
  * Calcula la next_payment_date correcta para un cliente según su historial cronológico de pagos.
- *
- * Reglas:
- * - El corte siempre corresponde al día del join_date (o fin de mes si el mes es más corto).
- * - Renovaciones continuas: Si un cliente activo paga antes o el día de su vencimiento, se extiende su cobertura.
- * - Reactivaciones tras inactividad: Si un cliente regresa tras meses sin pagar, su pago reactiva el servicio
- *   hasta su próximo día de corte ancla (no se arrastran cortes en el pasado).
- * - Pagos Parciales: El saldo se acumula hasta completar el precio de 1 ciclo antes de extender la fecha.
- * - Sin pagos: Proyecta el primer vencimiento a 1 mes desde join_date.
+ * Versión idéntica a la usada en la aplicación.
  *
  * @param {string} joinDate       - Fecha de ingreso (YYYY-MM-DD)
- * @param {Array}  payments       - Pagos del cliente para su plan
- * @param {number} planPrice      - Precio del plan
- * @returns {string|null}
+ * @param {Array}  clientPayments - Pagos del cliente para su plan
+ * @param {Object} plan           - Plan del cliente
+ * @param {number} planPrice      - Precio del plan por período
+ * @param {number} enrollmentFee  - Pago de inscripción (si aplica)
+ * @returns {string|null} - Calculated next payment date (YYYY-MM-DD) for monthly plans, null for daily/weekly
  */
-function computeNextPaymentDate(joinDate, payments, planPrice) {
+function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrollmentFee = 0) {
   if (!joinDate || planPrice <= 0) return null;
+
+  const frequency = getPlanFrequency(plan);
+
+  // Para planes diarios y semanales, no hay concepto de fecha de próximo pago
+  // El acceso se otorga por período pagado
+  if (frequency === 'daily' || frequency === 'weekly') {
+    return null;
+  }
+
+  // Para planes mensuales, usar la lógica existente
+  // El precio total del ciclo incluye la tarifa de inscripción (solo una vez)
+  const cyclePrice = planPrice + enrollmentFee;
+
   const anchorDay = parseInt(joinDate.split('-')[2], 10);
 
-  if (!payments || payments.length === 0) {
+  // Si no hay pagos, la próxima fecha de pago es join_date + 1 mes
+  if (!clientPayments || clientPayments.length === 0) {
     return addMonthsPreservingAnchor(joinDate, 1, anchorDay);
   }
 
-  const sortedPayments = [...payments].sort(
+  // Ordenar pagos cronológicamente
+  const sortedPayments = [...clientPayments].sort(
     (a, b) => new Date(a.payment_date) - new Date(b.payment_date)
   );
 
   let currentDueDate = null;
-  let accumulatedBalance = 0;
+  let totalEffectiveSoFar = 0;
+  let maintenanceBonusSoFar = 0;
+  let previousAccumulatedMonths = 0;
 
   for (const p of sortedPayments) {
-    const amount = parseFloat(p.amount_usd) || 0;
-    if (amount <= 0) continue;
-
-    accumulatedBalance += amount;
-    const cycles = Math.floor(accumulatedBalance / planPrice);
-    if (cycles <= 0) continue;
-
-    accumulatedBalance -= cycles * planPrice;
     const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
 
+    const effective = getEffectiveAmount(p, plan);
+    const isMaint = isMaintenancePayment(p);
+    const isMaintBonus = isMaint && effective > 0 && effective < planPrice;
+
+    // Actualizar totales acumulados
+    totalEffectiveSoFar += effective;
+    if (isMaintBonus) {
+      maintenanceBonusSoFar++;
+    }
+
+    // CORRECT CYCLE CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
+    // Cycle 1 price = planPrice + enrollmentFee, subsequent cycles = planPrice only
+    let baseCycles = 0;
+    if (totalEffectiveSoFar >= cyclePrice) {
+      baseCycles = 1 + Math.floor((totalEffectiveSoFar - cyclePrice) / planPrice);
+    } else {
+      baseCycles = Math.floor(totalEffectiveSoFar / cyclePrice);
+    }
+    const accumulatedMonths = baseCycles + maintenanceBonusSoFar;
+
+    if (accumulatedMonths <= 0) {
+      previousAccumulatedMonths = accumulatedMonths;
+      continue;
+    }
+    
+    const deltaAccumulated = accumulatedMonths - previousAccumulatedMonths;
+
     if (!currentDueDate) {
-      const firstTarget = addMonthsPreservingAnchor(joinDate, cycles, anchorDay);
-      if (p.payment_date > firstTarget) {
+      // Primera vez que tenemos suficiente para al menos un ciclo
+      const baseTarget = addMonthsPreservingAnchor(joinDate, accumulatedMonths, anchorDay);
+      if (p.payment_date > baseTarget) {
+        // Pago inicial tardío
         if (payDay < anchorDay) {
           let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
-          if (cycles > 1) {
-            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+          if (accumulatedMonths > 1) {
+            target = addMonthsPreservingAnchor(target, accumulatedMonths - 1, anchorDay);
           }
           currentDueDate = target;
         } else {
           currentDueDate = addMonthsPreservingAnchor(
             getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
-            cycles,
+            accumulatedMonths,
             anchorDay
           );
         }
       } else {
-        currentDueDate = firstTarget;
+        currentDueDate = baseTarget;
       }
     } else {
       if (p.payment_date <= currentDueDate) {
-        currentDueDate = addMonthsPreservingAnchor(currentDueDate, cycles, anchorDay);
+        // Pago a tiempo o temprano: extender por deltaAccumulated
+        currentDueDate = addMonthsPreservingAnchor(currentDueDate, deltaAccumulated, anchorDay);
       } else {
+        // Reactivation after inactivity: reactiva el ciclo actual anclado al día del cliente.
+        // Siempre avanzar al menos al siguiente día ancla cuando se paga después del vencimiento.
         if (payDay < anchorDay) {
-          let target = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
-          if (cycles > 1) {
-            target = addMonthsPreservingAnchor(target, cycles - 1, anchorDay);
+          currentDueDate = getAnchorDateForTargetMonth(anchorDay, payYear, payMonth);
+          if (deltaAccumulated > 1) {
+            currentDueDate = addMonthsPreservingAnchor(currentDueDate, deltaAccumulated - 1, anchorDay);
           }
-          currentDueDate = target;
         } else {
           currentDueDate = addMonthsPreservingAnchor(
             getAnchorDateForTargetMonth(anchorDay, payYear, payMonth),
-            cycles,
+            Math.max(deltaAccumulated, 1),
             anchorDay
           );
         }
       }
     }
+
+    previousAccumulatedMonths = accumulatedMonths;
   }
 
+  // Si después de procesar todos los pagos no tenemos una fecha de vencimiento,
+  // proyectamos el primer vencimiento a partir de join_date (un mes adelante).
   return currentDueDate || addMonthsPreservingAnchor(joinDate, 1, anchorDay);
 }
 
@@ -181,7 +299,7 @@ async function main() {
   // 1. Clientes con plan
   const { data: clients, error: cErr } = await db
     .from('clients')
-    .select('id, first_name, last_name, cedula, plan_id, join_date, next_payment_date, plans(id, name, price)')
+    .select('id, first_name, last_name, cedula, plan_id, join_date, next_payment_date, enrollment_paid, plans(id, name, price, currency, frequency)')
     .not('plan_id', 'is', null)
     .order('last_name', { ascending: true });
 
@@ -190,7 +308,7 @@ async function main() {
   // 2. Todos los pagos ordenados por fecha
   const { data: payments, error: pErr } = await db
     .from('payments')
-    .select('id, client_id, plan_id, amount_usd, payment_date')
+    .select('id, client_id, plan_id, amount_usd, amount_bs, payment_type, discount_type, discount_value, exchange_rate, payment_date, reference')
     .order('payment_date', { ascending: true });
 
   if (pErr) { console.error('Error al obtener pagos:', pErr.message); process.exit(1); }
@@ -206,8 +324,9 @@ async function main() {
     const planPrice = parseFloat(c.plans.price) || 0;
     if (planPrice <= 0) continue;
 
-    const cp = payments.filter(p => p.client_id === c.id);
-    const expected = computeNextPaymentDate(c.join_date, cp, planPrice);
+    const cp = payments.filter(p => p.client_id === c.id && p.plan_id === c.plan_id);
+    const enrollmentFee = c.enrollment_paid ? INSCRIPTION_PRICE : 0;
+    const expected = computeNextPaymentDate(c.join_date, cp, c.plans, planPrice, enrollmentFee);
 
     if (!expected) continue;
 
