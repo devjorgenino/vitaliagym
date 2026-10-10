@@ -481,6 +481,11 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
   let previousAccumulatedMonths = 0;
 
   for (const p of sortedPayments) {
+    // Skip payments made BEFORE the client joined
+    if (p.payment_date < joinDate) {
+      continue;
+    }
+
     const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
 
     const effective = getEffectiveAmount(p, plan);
