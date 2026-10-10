@@ -378,12 +378,11 @@ describe('Flujos completos de pago', () => {
     it('calcula correctamente el estado después de cada paso', () => {
       const payments = [];
       let expectedNextDates = [
-        '2026-02-15', // tras registrar → mismo ancla
-        '2026-02-15', // tras completar enero
-        '2026-03-15', // febrero puntual
-        '2026-03-15', // marzo no pagado, still vencido
-        '2026-04-15', // reactivación antes del ancla
-        '2026-05-15', // cierra abril
+        '2026-02-15', // tras registrar → sin ciclo completo, fallback a join+1
+        '2026-02-15', // tras completar enero (1 ciclo = join + 1 mes)
+        '2026-03-15', // febrero puntual (2 ciclos = join + 2 meses)
+        '2026-04-15', // marzo no pagado, reactivación antes del ancla (still 2 ciclos)
+        '2026-05-15', // cierra abril (3 ciclos = join + 4 meses)
       ];
 
       scenario.forEach((s, i) => {
