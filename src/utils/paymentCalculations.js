@@ -479,12 +479,17 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
   let totalEffectiveSoFar = 0;
   let maintenanceBonusSoFar = 0;
   let previousAccumulatedMonths = 0;
+  let lastValidPaymentDate = joinDate; // Track last valid payment for potential fallback
+  let hasCompletedAnyCycle = false;
 
   for (const p of sortedPayments) {
     // Skip payments made BEFORE the client joined
     if (p.payment_date < joinDate) {
       continue;
     }
+
+    // Update last valid payment date
+    lastValidPaymentDate = p.payment_date;
 
     const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
 
@@ -517,6 +522,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
 
     if (!currentDueDate) {
       // First time we have enough for at least one cycle
+      hasCompletedAnyCycle = true;
       const baseTarget = addMonthsPreservingAnchor(joinDate, accumulatedMonths, anchorDay);
       if (p.payment_date > baseTarget) {
         // Initial late payment
@@ -562,8 +568,11 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
   }
 
   // Si después de procesar todos los pagos no tenemos una fecha de vencimiento,
-  // proyectamos el primer vencimiento a partir de join_date (un mes adelante).
-  return currentDueDate || addMonthsPreservingAnchor(joinDate, 1, anchorDay);
+  // proyectamos el primer vencimiento. Si el último pago fue después de la primera fecha
+  // esperada (reactivación), usamos el último pago como base; de lo contrario join_date.
+  const firstDueDate = addMonthsPreservingAnchor(joinDate, 1, anchorDay);
+  const fallbackBase = lastValidPaymentDate > firstDueDate ? lastValidPaymentDate : joinDate;
+  return currentDueDate || addMonthsPreservingAnchor(fallbackBase, 1, anchorDay);
 }
 
 /**

@@ -195,12 +195,17 @@ function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrol
   let totalEffectiveSoFar = 0;
   let maintenanceBonusSoFar = 0;
   let previousAccumulatedMonths = 0;
+  let lastValidPaymentDate = joinDate; // Track last valid payment for potential fallback
+  let hasCompletedAnyCycle = false;
 
   for (const p of sortedPayments) {
     // Skip payments made BEFORE the client joined
     if (p.payment_date < joinDate) {
       continue;
     }
+
+    // Update last valid payment date
+    lastValidPaymentDate = p.payment_date;
 
     const [payYear, payMonth, payDay] = p.payment_date.split('-').map(Number);
 
@@ -233,6 +238,7 @@ function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrol
 
     if (!currentDueDate) {
       // Primera vez que tenemos suficiente para al menos un ciclo
+      hasCompletedAnyCycle = true;
       const baseTarget = addMonthsPreservingAnchor(joinDate, accumulatedMonths, anchorDay);
       if (p.payment_date > baseTarget) {
         // Pago inicial tardío
@@ -278,8 +284,11 @@ function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrol
   }
 
   // Si después de procesar todos los pagos no tenemos una fecha de vencimiento,
-  // proyectamos el primer vencimiento a partir de join_date (un mes adelante).
-  return currentDueDate || addMonthsPreservingAnchor(joinDate, 1, anchorDay);
+  // proyectamos el primer vencimiento. Si el último pago fue después de la primera fecha
+  // esperada (reactivación), usamos el último pago como base; de lo contrario join_date.
+  const firstDueDate = addMonthsPreservingAnchor(joinDate, 1, anchorDay);
+  const fallbackBase = lastValidPaymentDate > firstDueDate ? lastValidPaymentDate : joinDate;
+  return currentDueDate || addMonthsPreservingAnchor(fallbackBase, 1, anchorDay);
 }
 
 function daysUntil(dateStr) {
@@ -351,6 +360,27 @@ async function main() {
         statusBefore: statusLabel(daysBefore),
         statusAfter:  statusLabel(daysAfter),
       });
+      if (c.first_name === 'Yulitza' && c.last_name === 'Gomez') {
+        console.log('DEBUG Yulitza mismatch:');
+        console.log('  expected:', expected);
+        console.log('  stored:', c.next_payment_date);
+        console.log('  cp.length:', cp.length);
+        console.log('  cp:', cp.map(p => p.payment_date + ' $' + p.amount_usd + ' ref=' + p.reference));
+        console.log('  enrollmentFee:', enrollmentFee);
+        console.log('  planPrice:', planPrice);
+        const plan = c.plans;
+        let totalEffectiveSoFar = 0;
+        const sortedPayments = [...cp].sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
+        for (const p of sortedPayments) {
+          if (p.payment_date < c.join_date) continue;
+          const effective = getEffectiveAmount(p, plan);
+          const isMaint = isMaintenancePayment(p);
+          const isMaintBonus = isMaint && effective > 0 && effective < planPrice;
+          totalEffectiveSoFar += effective;
+          if (isMaintBonus) maintenanceBonusSoFar++;
+          console.log('  Payment:', p.payment_date, 'effective=$' + effective, 'maint=' + isMaint, 'maintBonus=' + isMaintBonus, 'total=$' + totalEffectiveSoFar.toFixed(2));
+        }
+      }
     } else {
       correct.push(c.id);
     }
