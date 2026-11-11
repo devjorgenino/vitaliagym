@@ -385,6 +385,11 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
   let currentCyclePrice = planPrice;
   let isFullyPaid = false;
 
+  // Calculate amount available AFTER the one-time enrollment fee
+  const amountAfterEnrollment = Math.max(0, totalPaidSoFar - enrollmentFeePaid);
+  const fullCyclesCompleted = amountAfterEnrollment >= planPrice ? Math.floor(amountAfterEnrollment / planPrice) : 0;
+  const amountInCurrentCycle = amountAfterEnrollment - (fullCyclesCompleted * planPrice);
+
   if (totalPaidSoFar === 0) {
     // No payments yet - current cycle is the first one with enrollment fee
     currentCyclePrice = totalPrice;
@@ -393,16 +398,21 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
     // In first cycle, haven't completed it yet
     currentCyclePrice = totalPrice;
     currentCyclePaid = totalPaidSoFar;
-  } else if ((totalPaidSoFar - enrollmentFeePaid) % planPrice === 0) {
-    // Just completed a cycle (after enrollment)
+  } else if (amountAfterEnrollment > 0 && amountInCurrentCycle === 0) {
+    // Just completed a full cycle (or multiple cycles)
+    // amountInCurrentCycle === 0 means we've exactly completed cycles
+    // The client is fully paid for the current cycle
     currentCyclePrice = planPrice;
     currentCyclePaid = planPrice;
     isFullyPaid = true;
-  } else {
-    // In progress of a cycle (after enrollment)
-    const amountInCurrentCycle = totalPaidSoFar - enrollmentFeePaid - Math.floor((totalPaidSoFar - enrollmentFeePaid) / planPrice) * planPrice;
+  } else if (amountInCurrentCycle > 0) {
+    // In progress of a cycle after enrollment
     currentCyclePrice = planPrice;
     currentCyclePaid = amountInCurrentCycle;
+  } else {
+    // Edge case: only paid enrollment fee, no plan price yet
+    currentCyclePrice = planPrice;
+    currentCyclePaid = 0;
   }
 
   const currentRemaining = Math.max(0, currentCyclePrice - currentCyclePaid);

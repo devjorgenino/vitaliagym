@@ -58,4 +58,7 @@ supabase/*
 # Claude
 .claude/
 .freebuff/
-.agents/
+reports/
+.agents/.team/
+.team/.team/
+.team/*

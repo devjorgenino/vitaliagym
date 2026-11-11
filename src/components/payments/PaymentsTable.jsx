@@ -600,6 +600,11 @@ export function PaymentsTable({
     // supera planPrice, ese ciclo incluyó la inscripción; si no, el ciclo
     // actual cuesta solo planPrice.
     // CORRECT CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
+    // Calculate amount available AFTER the one-time enrollment fee
+    const amountAfterEnrollment = Math.max(0, totalPaidBefore - enrollmentFeePaid);
+    const fullCyclesCompleted = amountAfterEnrollment >= planPrice ? Math.floor(amountAfterEnrollment / planPrice) : 0;
+    const amountInCurrentCycle = amountAfterEnrollment - (fullCyclesCompleted * planPrice);
+    
     let currentCyclePriceBefore, remainingForNewPayment;
     if (totalPaidBefore === 0) {
       currentCyclePriceBefore = totalPrice;
@@ -607,13 +612,15 @@ export function PaymentsTable({
     } else if (totalPaidBefore < totalPrice) {
       currentCyclePriceBefore = totalPrice;
       remainingForNewPayment = totalPrice - totalPaidBefore;
-    } else if ((totalPaidBefore - enrollmentFeePaid) % planPrice === 0) {
+    } else if (amountAfterEnrollment > 0 && amountInCurrentCycle === 0) {
       currentCyclePriceBefore = planPrice;
       remainingForNewPayment = 0;
+    } else if (amountInCurrentCycle > 0) {
+      currentCyclePriceBefore = planPrice;
+      remainingForNewPayment = planPrice - amountInCurrentCycle;
     } else {
       currentCyclePriceBefore = planPrice;
-      const amountInCurrentCycle = totalPaidBefore - enrollmentFeePaid - Math.floor((totalPaidBefore - enrollmentFeePaid) / planPrice) * planPrice;
-      remainingForNewPayment = planPrice - amountInCurrentCycle;
+      remainingForNewPayment = planPrice;
     }
 
     return {
@@ -1354,6 +1361,11 @@ export function PaymentsTable({
     );
     const cyclePrice = planPrice + enrollmentFeePaid;
     // CORRECT CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
+    // Calculate amount available AFTER the one-time enrollment fee
+    const amountAfterEnrollment = Math.max(0, totalPaid - enrollmentFeePaid);
+    const fullCyclesCompleted = amountAfterEnrollment >= planPrice ? Math.floor(amountAfterEnrollment / planPrice) : 0;
+    const amountInCurrentCycle = amountAfterEnrollment - (fullCyclesCompleted * planPrice);
+    
     let currentCyclePrice, remainingAmount;
     if (totalPaid === 0) {
       currentCyclePrice = cyclePrice;
@@ -1361,13 +1373,15 @@ export function PaymentsTable({
     } else if (totalPaid < cyclePrice) {
       currentCyclePrice = cyclePrice;
       remainingAmount = cyclePrice - totalPaid;
-    } else if ((totalPaid - enrollmentFeePaid) % planPrice === 0) {
+    } else if (amountAfterEnrollment > 0 && amountInCurrentCycle === 0) {
       currentCyclePrice = planPrice;
       remainingAmount = 0;
+    } else if (amountInCurrentCycle > 0) {
+      currentCyclePrice = planPrice;
+      remainingAmount = planPrice - amountInCurrentCycle;
     } else {
       currentCyclePrice = planPrice;
-      const amountInCurrentCycle = totalPaid - enrollmentFeePaid - Math.floor((totalPaid - enrollmentFeePaid) / planPrice) * planPrice;
-      remainingAmount = planPrice - amountInCurrentCycle;
+      remainingAmount = planPrice;
     }
 
     const remainingStatus = {
