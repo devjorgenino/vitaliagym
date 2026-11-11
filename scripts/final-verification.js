@@ -4,8 +4,13 @@ const path = require('path');
 
 dotenv.config({ path: path.join(__dirname, '../.env.local') });
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const isProd = process.argv.includes('--prod');
+const supabaseUrl = isProd 
+  ? (process.env.SUPABASE_PROD_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
+  : process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = isProd 
+  ? (process.env.SUPABASE_PROD_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Faltan variables de entorno en .env.local');
