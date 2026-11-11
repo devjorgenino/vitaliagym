@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import client from '../api/client';
-import { fetchWithOffline } from '../lib/offline-read';
+import { fetchWithOffline, saveQueryCache, getQueryCache } from '../lib/offline-read';
 import { executeWithSync } from '../lib/data-sync';
 import { 
   recalculateNextPaymentDate,
@@ -19,40 +19,71 @@ export function usePayments({ onClientUpdate } = {}) {
       setLoading(true);
       setError(null);
 
-      // Limit to all records (local dev may need >1000, supabase default is 1000 max)
-      const { data, error } = await fetchWithOffline('payments-list', () => client
-        .from('payments')
-        .select(`
-          *,
-          clients (
-            id,
-            first_name,
-            last_name,
-            cedula,
-            enrollment_paid
-          ),
-          plans (
-            id,
-            name,
-            price,
-            currency
-          )
-        `, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(0, 10000));
+      // Supabase has a hard limit of 1000 records per request.
+      // We need to fetch in chunks using proper pagination.
+      const PAGE_SIZE = 1000;
+      let allData = [];
+      let hasMore = true;
+      let offset = 0;
 
-      if (error) {
-        if (error.message.includes('relation') && error.message.includes('does not exist')) {
-          setError('La tabla "payments" no existe. Ejecuta el script SQL en /database');
-        } else {
-          setError(`Error: ${error.message}`);
+      while (hasMore) {
+        const { data, error } = await client
+          .from('payments')
+          .select(`
+            *,
+            clients (
+              id,
+              first_name,
+              last_name,
+              cedula,
+              enrollment_paid
+            ),
+            plans (
+              id,
+              name,
+              price,
+              currency
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            setError('La tabla "payments" no existe. Ejecuta el script SQL en /database');
+          } else {
+            setError(`Error: ${error.message}`);
+          }
+          setPayments([]);
+          return;
         }
-        setPayments([]);
-      } else {
-        setPayments(data || []);
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += data.length;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
       }
+
+      // Save to cache after fetching all data
+      if (allData.length > 0) {
+        await saveQueryCache('payments-list', allData);
+      }
+
+      setPayments(allData);
     } catch (err) {
       console.error("Error fetching payments:", err);
+      
+      // Try to get cached data as fallback
+      const cached = await getQueryCache('payments-list');
+      if (cached) {
+        console.log('Served payments-list from offline cache');
+        setPayments(cached.data);
+        return;
+      }
+      
       setError('Error de conexión. Verifica tu configuración.');
       setPayments([]);
     } finally {
