@@ -88,8 +88,7 @@ export function usePaymentsPaginated({
       // Aplicar ordenamiento
       query = query.order(sortBy, { ascending: sortAsc });
 
-      // Aplicar paginación
-      query = query.range(from, to);
+      query = query.range(0, 10000);  // All records (overrides default 1000 limit)
 
       const { data, error: queryError, count } = await query;
 

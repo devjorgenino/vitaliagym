@@ -19,6 +19,7 @@ export function usePayments({ onClientUpdate } = {}) {
       setLoading(true);
       setError(null);
 
+      // Limit to all records (local dev may need >1000, supabase default is 1000 max)
       const { data, error } = await fetchWithOffline('payments-list', () => client
         .from('payments')
         .select(`
@@ -36,8 +37,9 @@ export function usePayments({ onClientUpdate } = {}) {
             price,
             currency
           )
-        `)
-        .order('created_at', { ascending: false }));
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(0, 10000));
 
       if (error) {
         if (error.message.includes('relation') && error.message.includes('does not exist')) {
@@ -370,7 +372,7 @@ export function usePayments({ onClientUpdate } = {}) {
             query = query.lte('payment_date', filters.date_to);
           }
           
-          return query.order('created_at', { ascending: false });
+          return query.order('created_at', { ascending: false }).range(0, 10000);
       });
 
       if (error) {

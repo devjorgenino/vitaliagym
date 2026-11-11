@@ -206,76 +206,11 @@ export function ClientsTable() {
       return { status: "inactivo", label: "Inactivo" };
     }
 
-    // Usar el status de la base de datos si está disponible
-    if (client.status === "pendiente") {
-      return { status: "pendiente", label: "Pendiente" };
-    }
+    // Usar el status de la base de datos directamente
+    if (client.status === "activo") return { status: "activo", label: "Activo" };
+    if (client.status === "inactivo") return { status: "inactivo", label: "Inactivo" };
+    if (client.status === "pendiente") return { status: "pendiente", label: "Pendiente" };
 
-    // REGLA PRINCIPAL: Si tiene días hasta el próximo pago negativos, está vencido (inactivo)
-    if (client.daysUntilPayment !== null && client.daysUntilPayment < 0) {
-      return { status: "inactivo", label: "Inactivo" };
-    }
-
-    // REGLA PRINCIPAL: Si tiene días hasta el próximo pago >= 0, está activo (tiene tiempo)
-    if (client.daysUntilPayment !== null && client.daysUntilPayment >= 0) {
-      return { status: "activo", label: "Activo" };
-    }
-
-    // Si no tiene next_payment_date calculado, verificar si ha pagado
-    const planPrice = getPlanPrice(client.plan_id);
-    if (planPrice <= 0) {
-      return { status: "activo", label: "Activo" };
-    }
-
-    const allClientPayments = payments.filter(
-      (p) => p.client_id === client.id && p.plan_id === client.plan_id,
-    );
-
-    // Si no tiene pagos y no tiene daysUntilPayment, está inactivo
-    if (allClientPayments.length === 0) {
-      return { status: "inactivo", label: "Inactivo" };
-    }
-
-    const totalPaidSoFar = allClientPayments.reduce(
-      (sum, p) => sum + getEffectiveAmount(p, getPlanForPayment(p)),
-      0,
-    );
-
-    // Calcular el ciclo actual de pago (considerar inscripción si ya fue pagada)
-    const enrollmentFeePaid = getEnrollmentFeePaid(client, allClientPayments);
-    const cyclePrice = planPrice + enrollmentFeePaid;
-
-    // CORRECT CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
-    let paidForCurrentCycle = 0;
-    let currentCyclePrice = planPrice;
-
-    if (totalPaidSoFar === 0) {
-      currentCyclePrice = cyclePrice;
-      paidForCurrentCycle = 0;
-    } else if (totalPaidSoFar < cyclePrice) {
-      currentCyclePrice = cyclePrice;
-      paidForCurrentCycle = totalPaidSoFar;
-    } else if ((totalPaidSoFar - enrollmentFeePaid) % planPrice === 0) {
-      currentCyclePrice = planPrice;
-      paidForCurrentCycle = planPrice;
-    } else {
-      paidForCurrentCycle = totalPaidSoFar - enrollmentFeePaid - Math.floor((totalPaidSoFar - enrollmentFeePaid) / planPrice) * planPrice;
-    }
-
-    const currentRemaining = Math.max(0, currentCyclePrice - paidForCurrentCycle);
-    const isFullyPaid = currentRemaining < 0.001;
-
-    // Si pagó completo el ciclo actual, está activo
-    if (isFullyPaid) {
-      return { status: "activo", label: "Activo" };
-    }
-
-    // Si tiene pagos parciales (pago fraccionado), está pendiente
-    if (totalPaidSoFar > 0 && currentRemaining > 0) {
-      return { status: "pendiente", label: "Pendiente" };
-    }
-
-    // Por defecto, si no tiene pagos, está inactivo
     return { status: "inactivo", label: "Inactivo" };
   };
 
@@ -295,11 +230,20 @@ export function ClientsTable() {
       return null;
     }
 
+    // Solo mostrar saldo restante para clientes no activos (pendiente o inactivo)
+    // Clientes activos con pago al día no deben mostrar saldo pendiente
+    const isClientActive = client.status === "activo";
+
     const allClientPayments = payments.filter(
       (p) => p.client_id === client.id && p.plan_id === client.plan_id,
     );
 
     if (allClientPayments.length === 0) {
+      return null;
+    }
+
+    // Para clientes activos, no mostrar saldo en la lista principal
+    if (isClientActive) {
       return null;
     }
 
@@ -315,18 +259,30 @@ export function ClientsTable() {
 
     // CORRECT CALCULATION: enrollmentFee is ONE-TIME only, not per cycle
     let currentCyclePrice, currentCyclePaid;
+    
+    // Calculate amount available AFTER the one-time enrollment fee
+    const amountAfterEnrollment = Math.max(0, totalPaid - enrollmentFeePaid);
+    const fullCyclesCompleted = amountAfterEnrollment >= planPrice ? Math.floor(amountAfterEnrollment / planPrice) : 0;
+    const amountInCurrentCycle = amountAfterEnrollment - (fullCyclesCompleted * planPrice);
+    
     if (totalPaid === 0) {
       currentCyclePrice = cyclePrice;
       currentCyclePaid = 0;
     } else if (totalPaid < cyclePrice) {
       currentCyclePrice = cyclePrice;
       currentCyclePaid = totalPaid;
-    } else if ((totalPaid - enrollmentFeePaid) % planPrice === 0) {
+    } else if (amountAfterEnrollment > 0 && amountInCurrentCycle === 0) {
+      // Just completed a full cycle (or multiple cycles)
       currentCyclePrice = planPrice;
       currentCyclePaid = planPrice;
-    } else {
+    } else if (amountInCurrentCycle > 0) {
+      // In progress of a cycle after enrollment
       currentCyclePrice = planPrice;
-      currentCyclePaid = totalPaid - enrollmentFeePaid - Math.floor((totalPaid - enrollmentFeePaid) / planPrice) * planPrice;
+      currentCyclePaid = amountInCurrentCycle;
+    } else {
+      // Edge case: only paid enrollment fee, no plan price yet
+      currentCyclePrice = planPrice;
+      currentCyclePaid = 0;
     }
     const remainingAmount = Math.max(0, currentCyclePrice - currentCyclePaid);
 
@@ -1150,20 +1106,27 @@ export function ClientsTable() {
                       clientPaymentsThisMonth.length > 0;
 
                     // Opción C: Status + Vencimiento + Pago del mes
-                    // Habilitar botón cuando:
-                    // - Cliente inactivo (siempre)
-                    // - Cliente pendiente (siempre)
-                    // - Cliente activo + vencido
-                    // - Cliente activo + sin pagar este mes
-                    // Deshabilitar cuando:
-                    // - Cliente activo + NO vencido + YA pagó este mes
-                    // Calcular el status del cliente
-                    const clientStatus = getClientStatus(client);
+                     // Habilitar botón cuando:
+                     // - Cliente inactivo (siempre)
+                     // - Cliente pendiente (siempre)
+                     // - Cliente activo + vencido (días < 0)
+                     // - Cliente activo + sin pagar este mes Y ≤ 5 días para la próxima fecha
+                     // Deshabilitar cuando:
+                     // - Cliente activo + NO vencido + YA pagó este mes
+                     // - Cliente activo + NO vencido + más de 5 días para la próxima fecha
+                     // Calcular el status del cliente
+                     const clientStatus = getClientStatus(client);
 
-                    const shouldDisableButton =
-                      clientStatus.status === "activo" &&
-                      !isOverdue &&
-                      hasPaymentThisMonth;
+                     // El botón debe estar habilitado cuando:
+                     // - NO es activo, O
+                     // - Es activo y está vencido, O
+                     // - Es activo con ≤ 5 días para la próxima fecha (antes de vencer)
+                     const isNearDue = daysUntilPayment !== null && daysUntilPayment >= 0 && daysUntilPayment <= 5;
+
+                     const shouldDisableButton =
+                       clientStatus.status === "activo" &&
+                       !isOverdue &&
+                       !isNearDue;
 
                     // Calcular el índice real considerando la paginación
                     const realIndex = (currentPage - 1) * pageSize + index + 1;
@@ -1333,9 +1296,9 @@ export function ClientsTable() {
                                 <p>
                                   {shouldDisableButton
                                     ? "Pago al día"
-                                    : paymentWithRemaining
+                                    : (paymentWithRemaining
                                       ? `Pagar restante (${getPlanCurrency(plans.find((p) => p.id === client.plan_id)) === "BS" ? "Bs." : "$"}${paymentWithRemaining.remainingFormatted})`
-                                      : "Registrar pago"}
+                                      : "Registrar pago")}
                                 </p>
                               </TooltipContent>
                               <TooltipTrigger asChild>
