@@ -39,7 +39,7 @@ Se agregó un campo en el formulario de edición/creación de clientes:
     placeholder="Ej: 15"
     min="1"
     max="31"
-    className="w-20"
+    className="w-full h-8 px-2 text-xs"
   />
   <p className="text-xs text-muted-foreground">
     Día del mes para facturación recurrente. Si no se define, se usa el día de ingreso.

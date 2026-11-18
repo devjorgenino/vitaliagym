@@ -1691,7 +1691,7 @@ export function ClientsTable() {
               </div>
             </div>
             <div className="md:col-span-2 flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="plan_id">Plan</Label>
                   <Select
@@ -1713,51 +1713,45 @@ export function ClientsTable() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="join_date">
-                      Fecha de Ingreso <span className="text-destructive">*</span>
-                    </Label>
-                    <DatePicker
-                      value={formData.join_date}
-                      onChange={(value) =>
-                        handleInputChange({ target: { name: "join_date", value } })
+                <div className="space-y-2">
+                  <Label htmlFor="join_date">
+                    Fecha de Ingreso
+                    <span className="text-destructive ml-0.5">*</span>
+                  </Label>
+                  <DatePicker
+                    value={formData.join_date}
+                    onChange={(value) =>
+                      handleInputChange({ target: { name: "join_date", value } })
+                    }
+                    placeholder="Seleccionar fecha"
+                    size="sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Ancla para cálculos de facturación
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="billing_day">Día de Cobro</Label>
+                  <Input
+                    id="billing_day"
+                    type="number"
+                    name="billing_day"
+                    value={formData.billing_day}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (e.target.value === '' || (val >= 1 && val <= 31)) {
+                        handleInputChange(e);
                       }
-                      placeholder="Seleccionar fecha"
-                      size="sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Ancla para cálculos de facturación
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="billing_day">
-                      Día de Cobro
-                      <span className="text-muted-foreground font-normal ml-1">
-                        (Opcional)
-                      </span>
-                    </Label>
-                    <Input
-                      id="billing_day"
-                      type="number"
-                      name="billing_day"
-                      value={formData.billing_day}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        if (e.target.value === '' || (val >= 1 && val <= 31)) {
-                          handleInputChange(e);
-                        }
-                      }}
-                      placeholder="Ej: 15"
-                      min="1"
-                      max="31"
-                      className="h-9"
-                      aria-describedby="billing-day-help"
-                    />
-                    <p id="billing-day-help" className="text-xs text-muted-foreground">
-                      Personaliza el día de facturación mensual
-                    </p>
-                  </div>
+                    }}
+                    placeholder="Ej: 15"
+                    min="1"
+                    max="31"
+                    className="h-9"
+                    aria-describedby="billing-day-help"
+                  />
+                  <p id="billing-day-help" className="text-xs text-muted-foreground">
+                    Día opcional de facturación mensual
+                  </p>
                 </div>
               </div>
               <div className="flex items-center space-x-2 pt-2">
