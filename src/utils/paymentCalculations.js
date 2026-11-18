@@ -437,7 +437,7 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
  * For daily/weekly plans: each payment period is independent, no accumulation
  *
  * BUSINESS RULES FOR MONTHLY PLANS:
- * 1. Anchor Day Preservation: Cutoff always corresponds to join_date day (or month end if month shorter).
+ * 1. Anchor Day Preservation: Cutoff always corresponds to billing_day (or join_date day if not set, or month end if month shorter).
  * 2. Continuous Renewals: If active client pays before or on due date, coverage is extended.
  * 3. Reactivations after Inactivity: If client returns after months without paying, payment reactivates service
  *    until next anchor day cutoff (does not drag past cutoffs).
@@ -456,9 +456,11 @@ export function getClientPaymentStatus(client, payments, getPlanForPayment, getE
  * @param {Array}  clientPayments - Client's payments for current plan
  * @param {Object} plan - Client's plan
  * @param {number} planPrice - Plan price per period
+ * @param {number} enrollmentFee - Enrollment fee (one-time only)
+ * @param {number|null} billingDay - Billing day (1-31). If null, uses join_date day as anchor.
  * @returns {string|null} - Calculated next payment date (YYYY-MM-DD) for monthly plans, null for daily/weekly
  */
-export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrollmentFee = 0) {
+export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice, enrollmentFee = 0, billingDay = null) {
   if (!joinDate || planPrice <= 0) return null;
 
   const frequency = getPlanFrequency(plan);
@@ -473,7 +475,7 @@ export function computeNextPaymentDate(joinDate, clientPayments, plan, planPrice
   // Total cycle price includes enrollment fee (one-time only)
   const cyclePrice = planPrice + enrollmentFee;
 
-  const anchorDay = parseInt(joinDate.split('-')[2], 10);
+  const anchorDay = billingDay !== null ? billingDay : parseInt(joinDate.split('-')[2], 10);
 
   // If no payments, the next payment date is join_date + 1 month
   if (!clientPayments || clientPayments.length === 0) {
@@ -604,6 +606,7 @@ export async function recalculateNextPaymentDate({ clientId, planId, payments })
         next_payment_date,
         plan_id,
         enrollment_paid,
+        billing_day,
         plans (
           id,
           price,
@@ -680,7 +683,8 @@ export async function recalculateNextPaymentDate({ clientId, planId, payments })
         allPayments || [],
         clientData.plans,
         planPrice,
-        enrollmentFee
+        enrollmentFee,
+        clientData.billing_day
       );
     }
 
@@ -729,12 +733,14 @@ export async function recalculateAllNextPaymentDates() {
     // 1. Get all clients
     const { data: allClients, error: fetchError } = await client
       .from('clients')
-      .select(`
+      // Select billing_day if available (new field for anchor day logic)
+.select(`
         id,
         join_date,
         next_payment_date,
         plan_id,
         enrollment_paid,
+        billing_day,
         plans (
           id,
           price,
@@ -787,7 +793,8 @@ export async function recalculateAllNextPaymentDates() {
           clientPayments,
           clientData.plans,
           planPrice,
-          enrollmentFee
+          enrollmentFee,
+          clientData.billing_day
         );
 
         // For daily/weekly plans, newNextPaymentDate is null — clear any stale date
@@ -933,7 +940,8 @@ export async function auditAllClientPaymentDates() {
           clientPayments,
           clientData.plans,
           planPrice,
-          enrollmentFee
+          enrollmentFee,
+          clientData.billing_day
         );
 
         // Compare stored vs expected
@@ -1071,7 +1079,7 @@ export async function auditNextPaymentDates() {
       );
       const cycles   = Math.floor(totalPaid / planPrice);
       const enrollmentFee = c.enrollment_paid ? INSCRIPTION_PRICE : 0;
-      const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice, enrollmentFee);
+      const expected = computeNextPaymentDate(c.join_date, clientPayments, c.plans, planPrice, enrollmentFee, c.billing_day);
 
       if (expected !== c.next_payment_date) {
         discrepancies.push({

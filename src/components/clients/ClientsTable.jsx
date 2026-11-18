@@ -125,7 +125,8 @@ export function ClientsTable() {
     plan_id: "",
     join_date: formatDateToLocal(),
     enrollment_paid: false,
-      avatar_url: "",
+  billing_day: "",
+  avatar_url: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
@@ -337,7 +338,8 @@ export function ClientsTable() {
       plan_id: "",
       join_date: formatDateToLocal(),
       enrollment_paid: false,
-      avatar_url: "",
+  billing_day: "",
+  avatar_url: "",
     });
     setPhotoFile(null);
     setPhotoPreview(null);
@@ -373,6 +375,7 @@ export function ClientsTable() {
       plan_id: client.plan_id || "",
       join_date: client.join_date || "",
       enrollment_paid: client.enrollment_paid || false,
+      billing_day: client.billing_day || "",
       avatar_url: client.avatar_url || "",
     });
     setPhotoFile(null);
@@ -548,6 +551,7 @@ export function ClientsTable() {
         plan_id: formData.plan_id,
         join_date: formData.join_date,
         enrollment_paid: isEditing ? formData.enrollment_paid : false,
+        billing_day: formData.billing_day || null,
         status: isEditing ? undefined : "pendiente",
       };
 
@@ -1479,7 +1483,7 @@ export function ClientsTable() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="first_name">
                 Nombre <span className="text-destructive">*</span>
@@ -1707,18 +1711,41 @@ export function ClientsTable() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="join_date">
-                Fecha de Ingreso <span className="text-destructive">*</span>
-              </Label>
-              <DatePicker
-                value={formData.join_date}
-                onChange={(value) =>
-                  handleInputChange({ target: { name: "join_date", value } })
-                }
-                placeholder="Seleccionar fecha"
-                size="sm"
-              />
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="join_date">
+                  Fecha de Ingreso <span className="text-destructive">*</span>
+                </Label>
+                <DatePicker
+                  value={formData.join_date}
+                  onChange={(value) =>
+                    handleInputChange({ target: { name: "join_date", value } })
+                  }
+                  placeholder="Seleccionar fecha"
+                  size="sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billing_day">
+                  Día de Cobro <span className="text-muted-foreground text-xs">(Opcional)</span>
+                </Label>
+                <Input
+                  id="billing_day"
+                  type="number"
+                  name="billing_day"
+                  value={formData.billing_day}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (e.target.value === '' || (val >= 1 && val <= 31)) {
+                      handleInputChange(e);
+                    }
+                  }}
+                  placeholder="Ej: 15"
+                  min="1"
+                  max="31"
+                  className="w-full h-8 px-2 text-xs"
+                />
+              </div>
             </div>
             <div className="flex items-center space-x-2 pt-4">
               <Switch
