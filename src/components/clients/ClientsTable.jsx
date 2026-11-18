@@ -1617,7 +1617,7 @@ export function ClientsTable() {
                 Digitel: 0412/0422, Movistar: 0414/0424, Movilnet: 0416/0426
               </p>
             </div>
-            <div className="md:col-span-2 space-y-2">
+            <div className="md:col-span-3 space-y-2">
               <Label htmlFor="address">Dirección</Label>
               <Input
                 id="address"
@@ -1628,7 +1628,7 @@ export function ClientsTable() {
                 placeholder="Calle Principal #123"
               />
             </div>
-            <div className="md:col-span-2 space-y-2">
+            <div className="md:col-span-3 space-y-2">
               <Label htmlFor="observations">Observaciones</Label>
               <Textarea
                 id="observations"
@@ -1639,134 +1639,138 @@ export function ClientsTable() {
                 placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="avatar">Foto de Perfil</Label>
-              <div className="flex items-center gap-4">
-                <div className="relative flex-shrink-0">
-                  {photoPreview || formData.avatar_url ? (
-                    <img
-                      src={photoPreview || formData.avatar_url}
-                      alt="Vista previa"
-                      className="w-20 h-20 rounded-full object-cover border-2 border-muted"
+            <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+              <div className="space-y-2">
+                <Label htmlFor="avatar">Foto de Perfil</Label>
+                <div className="flex items-center gap-4">
+                  <div className="relative flex-shrink-0">
+                    {photoPreview || formData.avatar_url ? (
+                      <img
+                        src={photoPreview || formData.avatar_url}
+                        alt="Vista previa"
+                        className="w-16 h-16 rounded-full object-cover border-2 border-muted"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
+                        <Users className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <Input
+                      ref={fileInputRef}
+                      id="avatar"
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoSelect}
+                      disabled={uploadingPhoto}
+                      className="cursor-pointer text-xs"
                     />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
-                      <Users className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <Input
-                    ref={fileInputRef}
-                    id="avatar"
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoSelect}
-                    disabled={uploadingPhoto}
-                    className="cursor-pointer"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Sube una imagen para la foto de perfil del cliente (JPG, PNG, WEBP. Max 5MB)
-                  </p>
-                  {uploadingPhoto && (
-                    <p className="text-xs text-primary flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Subiendo foto...
+                    <p className="text-[11px] text-muted-foreground">
+                      JPG, PNG, WEBP. Max 5MB
                     </p>
+                    {uploadingPhoto && (
+                      <p className="text-xs text-primary flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Subiendo foto...
+                      </p>
+                    )}
+                  </div>
+                  {(photoPreview || formData.avatar_url) && !uploadingPhoto && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => {
+                        clearPhotoSelection();
+                        setFormData((prev) => ({ ...prev, avatar_url: "" }));
+                      }}
+                      className="h-8 w-8 p-0 text-destructive"
+                      aria-label="Quitar foto"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   )}
                 </div>
-                {(photoPreview || formData.avatar_url) && !uploadingPhoto && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => {
-                      clearPhotoSelection();
-                      setFormData((prev) => ({ ...prev, avatar_url: "" }));
-                    }}
-                    className="h-8 w-8 p-0 text-destructive"
-                    aria-label="Quitar foto"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="plan_id">Plan</Label>
+                <Select
+                  value={formData.plan_id}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, plan_id: value }))
+                  }
+                  disabled={plansLoading}
+                >
+                  <SelectTrigger id="plan_id" className="w-full">
+                    <SelectValue placeholder="Seleccionar plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground opacity-0">espacio</p>
               </div>
             </div>
-            <div className="md:col-span-2 flex flex-col gap-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="plan_id">Plan</Label>
-                  <Select
-                    value={formData.plan_id}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, plan_id: value }))
-                    }
-                    disabled={plansLoading}
-                  >
-                    <SelectTrigger id="plan_id">
-                      <SelectValue placeholder="Seleccionar plan" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {plans.map((plan) => (
-                        <SelectItem key={plan.id} value={plan.id}>
-                          {plan.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="join_date">
-                    Fecha de Ingreso
-                    <span className="text-destructive ml-0.5">*</span>
-                  </Label>
-                  <DatePicker
-                    value={formData.join_date}
-                    onChange={(value) =>
-                      handleInputChange({ target: { name: "join_date", value } })
-                    }
-                    placeholder="Seleccionar fecha"
-                    size="sm"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Ancla para cálculos de facturación
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="billing_day">Día de Cobro</Label>
-                  <Input
-                    id="billing_day"
-                    type="number"
-                    name="billing_day"
-                    value={formData.billing_day}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      if (e.target.value === '' || (val >= 1 && val <= 31)) {
-                        handleInputChange(e);
-                      }
-                    }}
-                    placeholder="Ej: 15"
-                    min="1"
-                    max="31"
-                    className="h-9"
-                    aria-describedby="billing-day-help"
-                  />
-                  <p id="billing-day-help" className="text-xs text-muted-foreground">
-                    Día opcional de facturación mensual
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2 pt-2">
-                <Switch
-                  id="enrollment_paid"
-                  checked={formData.enrollment_paid}
-                  onCheckedChange={handleEnrollmentPaidChange}
-                  disabled={isEditing && formData.enrollment_paid}
-                />
-                <Label htmlFor="enrollment_paid" className="text-sm font-normal cursor-pointer">
-                  {isEditing
-                    ? "Inscripción pagada"
-                    : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
+            <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="join_date">
+                  Fecha de Ingreso
+                  <span className="text-destructive ml-0.5">*</span>
                 </Label>
+                <DatePicker
+                  value={formData.join_date}
+                  onChange={(value) =>
+                    handleInputChange({ target: { name: "join_date", value } })
+                  }
+                  placeholder="Seleccionar fecha"
+                  size="sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ancla para cálculos de facturación
+                </p>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="billing_day">
+                  Día de Cobro
+                  <span className="text-muted-foreground font-normal ml-1">(Opcional)</span>
+                </Label>
+                <Input
+                  id="billing_day"
+                  type="number"
+                  name="billing_day"
+                  value={formData.billing_day}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (e.target.value === '' || (val >= 1 && val <= 31)) {
+                      handleInputChange(e);
+                    }
+                  }}
+                  placeholder="Ej: 15"
+                  min="1"
+                  max="31"
+                  className="h-9"
+                  aria-describedby="billing-day-help"
+                />
+                <p id="billing-day-help" className="text-xs text-muted-foreground">
+                  Día opcional de facturación mensual
+                </p>
+              </div>
+            </div>
+            <div className="md:col-span-3 flex items-center space-x-2 pt-2">
+              <Switch
+                id="enrollment_paid"
+                checked={formData.enrollment_paid}
+                onCheckedChange={handleEnrollmentPaidChange}
+                disabled={isEditing && formData.enrollment_paid}
+              />
+              <Label htmlFor="enrollment_paid" className="text-sm font-normal cursor-pointer">
+                {isEditing
+                  ? "Inscripción pagada"
+                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
+              </Label>
             </div>
           </div>
 
