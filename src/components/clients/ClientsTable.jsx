@@ -1483,7 +1483,7 @@ export function ClientsTable() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="first_name">
                 Nombre <span className="text-destructive">*</span>
@@ -1549,7 +1549,7 @@ export function ClientsTable() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                V: Venezolano, E: Extranjero, J: Jurídico, P: Pasaporte
+                V, E, J, P
               </p>
             </div>
             <div className="space-y-2">
@@ -1614,10 +1614,10 @@ export function ClientsTable() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Digitel: 0412/0422, Movistar: 0414/0424, Movilnet: 0416/0426
+                0412, 0414, 0416, etc.
               </p>
             </div>
-            <div className="md:col-span-3 space-y-2">
+            <div className="md:col-span-2 space-y-2">
               <Label htmlFor="address">Dirección</Label>
               <Input
                 id="address"
@@ -1628,7 +1628,7 @@ export function ClientsTable() {
                 placeholder="Calle Principal #123"
               />
             </div>
-            <div className="md:col-span-3 space-y-2">
+            <div className="md:col-span-2 space-y-2">
               <Label htmlFor="observations">Observaciones</Label>
               <Textarea
                 id="observations"
@@ -1639,82 +1639,79 @@ export function ClientsTable() {
                 placeholder="Notas adicionales, alergias, condiciones médicas, preferencias, etc."
               />
             </div>
-            <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-              <div className="space-y-2">
-                <Label htmlFor="avatar">Foto de Perfil</Label>
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-shrink-0">
-                    {photoPreview || formData.avatar_url ? (
-                      <img
-                        src={photoPreview || formData.avatar_url}
-                        alt="Vista previa"
-                        className="w-16 h-16 rounded-full object-cover border-2 border-muted"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
-                        <Users className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <Input
-                      ref={fileInputRef}
-                      id="avatar"
-                      type="file"
-                      accept="image/*"
-                      onChange={handlePhotoSelect}
-                      disabled={uploadingPhoto}
-                      className="cursor-pointer text-xs"
+            <div className="space-y-2">
+              <Label htmlFor="avatar">Foto de Perfil</Label>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-shrink-0">
+                  {photoPreview || formData.avatar_url ? (
+                    <img
+                      src={photoPreview || formData.avatar_url}
+                      alt="Vista previa"
+                      className="w-14 h-14 rounded-full object-cover border-2 border-muted"
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      JPG, PNG, WEBP. Max 5MB
-                    </p>
-                    {uploadingPhoto && (
-                      <p className="text-xs text-primary flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" /> Subiendo foto...
-                      </p>
-                    )}
-                  </div>
-                  {(photoPreview || formData.avatar_url) && !uploadingPhoto && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => {
-                        clearPhotoSelection();
-                        setFormData((prev) => ({ ...prev, avatar_url: "" }));
-                      }}
-                      className="h-8 w-8 p-0 text-destructive"
-                      aria-label="Quitar foto"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                    </div>
                   )}
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="plan_id">Plan</Label>
-                <Select
-                  value={formData.plan_id}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, plan_id: value }))
-                  }
-                  disabled={plansLoading}
-                >
-                  <SelectTrigger id="plan_id" className="w-full">
-                    <SelectValue placeholder="Seleccionar plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground opacity-0">espacio</p>
+                <div className="flex-1 space-y-1">
+                  <Input
+                    ref={fileInputRef}
+                    id="avatar"
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoSelect}
+                    disabled={uploadingPhoto}
+                    className="cursor-pointer text-xs h-8"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    JPG, PNG, WEBP (Max 5MB)
+                  </p>
+                  {uploadingPhoto && (
+                    <p className="text-xs text-primary flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Subiendo...
+                    </p>
+                  )}
+                </div>
+                {(photoPreview || formData.avatar_url) && !uploadingPhoto && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      clearPhotoSelection();
+                      setFormData((prev) => ({ ...prev, avatar_url: "" }));
+                    }}
+                    className="h-8 w-8 p-0 text-destructive"
+                    aria-label="Quitar foto"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="plan_id">Plan</Label>
+              <Select
+                value={formData.plan_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, plan_id: value }))
+                }
+                disabled={plansLoading}
+              >
+                <SelectTrigger id="plan_id" className="w-full">
+                  <SelectValue placeholder="Seleccionar plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="join_date">
                   Fecha de Ingreso
@@ -1728,14 +1725,11 @@ export function ClientsTable() {
                   placeholder="Seleccionar fecha"
                   size="sm"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Ancla para cálculos de facturación
-                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="billing_day">
                   Día de Cobro
-                  <span className="text-muted-foreground font-normal ml-1">(Opcional)</span>
+                  <span className="text-muted-foreground font-normal ml-1">(Opc)</span>
                 </Label>
                 <Input
                   id="billing_day"
@@ -1754,23 +1748,20 @@ export function ClientsTable() {
                   className="h-9"
                   aria-describedby="billing-day-help"
                 />
-                <p id="billing-day-help" className="text-xs text-muted-foreground">
-                  Día opcional de facturación mensual
-                </p>
               </div>
-            </div>
-            <div className="md:col-span-3 flex items-center space-x-2 pt-2">
-              <Switch
-                id="enrollment_paid"
-                checked={formData.enrollment_paid}
-                onCheckedChange={handleEnrollmentPaidChange}
-                disabled={isEditing && formData.enrollment_paid}
-              />
-              <Label htmlFor="enrollment_paid" className="text-sm font-normal cursor-pointer">
-                {isEditing
-                  ? "Inscripción pagada"
-                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
-              </Label>
+              <div className="flex items-center space-x-2 pt-6">
+                <Switch
+                  id="enrollment_paid"
+                  checked={formData.enrollment_paid}
+                  onCheckedChange={handleEnrollmentPaidChange}
+                  disabled={isEditing && formData.enrollment_paid}
+                />
+                <Label htmlFor="enrollment_paid" className="text-sm font-normal cursor-pointer">
+                  {isEditing
+                    ? "Inscripción pagada"
+                    : `Inscripción ($${INSCRIPTION_PRICE})`}
+                </Label>
+              </div>
             </div>
           </div>
 
