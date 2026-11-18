@@ -111,6 +111,9 @@ export function ClientsTable() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
+  const initialJoinDate = formatDateToLocal();
+  const initialBillingDay = initialJoinDate ? parseInt(initialJoinDate.split('-')[2], 10) : "";
+
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -123,10 +126,10 @@ export function ClientsTable() {
     address: "",
     observations: "",
     plan_id: "",
-    join_date: formatDateToLocal(),
+    join_date: initialJoinDate,
     enrollment_paid: false,
-  billing_day: "",
-  avatar_url: "",
+    billing_day: initialBillingDay,
+    avatar_url: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
@@ -324,6 +327,9 @@ export function ClientsTable() {
 
   // Resetear formulario
   const resetForm = useCallback(() => {
+    const initialJoinDate = formatDateToLocal();
+    const initialBillingDay = initialJoinDate ? parseInt(initialJoinDate.split('-')[2], 10) : "";
+
     setFormData({
       first_name: "",
       last_name: "",
@@ -336,10 +342,10 @@ export function ClientsTable() {
       address: "",
       observations: "",
       plan_id: "",
-      join_date: formatDateToLocal(),
+      join_date: initialJoinDate,
       enrollment_paid: false,
-  billing_day: "",
-  avatar_url: "",
+      billing_day: initialBillingDay,
+      avatar_url: "",
     });
     setPhotoFile(null);
     setPhotoPreview(null);
@@ -1719,9 +1725,16 @@ export function ClientsTable() {
                 </Label>
                 <DatePicker
                   value={formData.join_date}
-                  onChange={(value) =>
-                    handleInputChange({ target: { name: "join_date", value } })
-                  }
+                  onChange={(value) => {
+                    handleInputChange({ target: { name: "join_date", value } });
+                    // Auto-update billing_day to match join_date day when creating new client
+                    if (!isEditing && value) {
+                      const day = parseInt(value.split('-')[2], 10);
+                      if (!isNaN(day) && day >= 1 && day <= 31) {
+                        setFormData((prev) => ({ ...prev, billing_day: day }));
+                      }
+                    }
+                  }}
                   placeholder="Seleccionar fecha"
                   size="sm"
                 />
