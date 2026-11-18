@@ -1690,75 +1690,89 @@ export function ClientsTable() {
                 )}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="plan_id">Plan</Label>
-              <Select
-                value={formData.plan_id}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, plan_id: value }))
-                }
-                disabled={plansLoading}
-              >
-                <SelectTrigger id="plan_id">
-                  <SelectValue placeholder="Seleccionar plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {plans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="join_date">
-                  Fecha de Ingreso <span className="text-destructive">*</span>
-                </Label>
-                <DatePicker
-                  value={formData.join_date}
-                  onChange={(value) =>
-                    handleInputChange({ target: { name: "join_date", value } })
-                  }
-                  placeholder="Seleccionar fecha"
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="billing_day">
-                  Día de Cobro <span className="text-muted-foreground text-xs">(Opcional)</span>
-                </Label>
-                <Input
-                  id="billing_day"
-                  type="number"
-                  name="billing_day"
-                  value={formData.billing_day}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (e.target.value === '' || (val >= 1 && val <= 31)) {
-                      handleInputChange(e);
+            <div className="md:col-span-2 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="plan_id">Plan</Label>
+                  <Select
+                    value={formData.plan_id}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, plan_id: value }))
                     }
-                  }}
-                  placeholder="Ej: 15"
-                  min="1"
-                  max="31"
-                  className="w-full h-8 px-2 text-xs"
-                />
+                    disabled={plansLoading}
+                  >
+                    <SelectTrigger id="plan_id">
+                      <SelectValue placeholder="Seleccionar plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          {plan.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="join_date">
+                      Fecha de Ingreso <span className="text-destructive">*</span>
+                    </Label>
+                    <DatePicker
+                      value={formData.join_date}
+                      onChange={(value) =>
+                        handleInputChange({ target: { name: "join_date", value } })
+                      }
+                      placeholder="Seleccionar fecha"
+                      size="sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Ancla para cálculos de facturación
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="billing_day">
+                      Día de Cobro
+                      <span className="text-muted-foreground font-normal ml-1">
+                        (Opcional)
+                      </span>
+                    </Label>
+                    <Input
+                      id="billing_day"
+                      type="number"
+                      name="billing_day"
+                      value={formData.billing_day}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (e.target.value === '' || (val >= 1 && val <= 31)) {
+                          handleInputChange(e);
+                        }
+                      }}
+                      placeholder="Ej: 15"
+                      min="1"
+                      max="31"
+                      className="h-9"
+                      aria-describedby="billing-day-help"
+                    />
+                    <p id="billing-day-help" className="text-xs text-muted-foreground">
+                      Personaliza el día de facturación mensual
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center space-x-2 pt-4">
-              <Switch
-                id="enrollment_paid"
-                checked={formData.enrollment_paid}
-                onCheckedChange={handleEnrollmentPaidChange}
-                disabled={isEditing && formData.enrollment_paid}
-              />
-              <Label htmlFor="enrollment_paid" className="text-sm font-normal">
-                {isEditing
-                  ? "Inscripción pagada"
-                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
-              </Label>
+              <div className="flex items-center space-x-2 pt-2">
+                <Switch
+                  id="enrollment_paid"
+                  checked={formData.enrollment_paid}
+                  onCheckedChange={handleEnrollmentPaidChange}
+                  disabled={isEditing && formData.enrollment_paid}
+                />
+                <Label htmlFor="enrollment_paid" className="text-sm font-normal cursor-pointer">
+                  {isEditing
+                    ? "Inscripción pagada"
+                    : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
+                </Label>
+              </div>
             </div>
           </div>
 
