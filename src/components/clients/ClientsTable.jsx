@@ -1760,7 +1760,7 @@ export function ClientsTable() {
                   min="1"
                   max="31"
                   className="h-9"
-                  aria-describedby="billing-day-help",
+                  aria-describedby="billing-day-help"
                 />
               </div>
               <div className="flex items-center space-x-2 pt-6">
