@@ -1759,7 +1759,7 @@ export function ClientsTable() {
                   placeholder="Ej: 15"
                   min="1"
                   max="31"
-                  className="h-9"
+                  className="h-10"
                   aria-describedby="billing-day-help"
                 />
               </div>
