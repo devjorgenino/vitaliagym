@@ -1737,6 +1737,7 @@ export function ClientsTable() {
                   }}
                   placeholder="Seleccionar fecha"
                   size="sm"
+                  className="h-9"
                 />
               </div>
               <div className="space-y-2">
