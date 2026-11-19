@@ -1737,7 +1737,7 @@ export function ClientsTable() {
                   }}
                   placeholder="Seleccionar fecha"
                   size="sm"
-                  className="h-10"
+                  className="h-9"
                 />
               </div>
               <div className="space-y-2">
@@ -1759,8 +1759,8 @@ export function ClientsTable() {
                   placeholder="Ej: 15"
                   min="1"
                   max="31"
-                  className="h-10"
-                  aria-describedby="billing-day-help"
+                  className="h-9"
+                  aria-describedby="billing-day-help",
                 />
               </div>
               <div className="flex items-center space-x-2 pt-6">
