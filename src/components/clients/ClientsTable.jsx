@@ -111,6 +111,9 @@ export function ClientsTable() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
+  const initialJoinDate = formatDateToLocal();
+  const initialBillingDay = initialJoinDate ? parseInt(initialJoinDate.split('-')[2], 10) : "";
+
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -123,9 +126,10 @@ export function ClientsTable() {
     address: "",
     observations: "",
     plan_id: "",
-    join_date: formatDateToLocal(),
+    join_date: initialJoinDate,
     enrollment_paid: false,
-      avatar_url: "",
+    billing_day: initialBillingDay,
+    avatar_url: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
@@ -323,6 +327,9 @@ export function ClientsTable() {
 
   // Resetear formulario
   const resetForm = useCallback(() => {
+    const initialJoinDate = formatDateToLocal();
+    const initialBillingDay = initialJoinDate ? parseInt(initialJoinDate.split('-')[2], 10) : "";
+
     setFormData({
       first_name: "",
       last_name: "",
@@ -335,8 +342,9 @@ export function ClientsTable() {
       address: "",
       observations: "",
       plan_id: "",
-      join_date: formatDateToLocal(),
+      join_date: initialJoinDate,
       enrollment_paid: false,
+      billing_day: initialBillingDay,
       avatar_url: "",
     });
     setPhotoFile(null);
@@ -373,6 +381,7 @@ export function ClientsTable() {
       plan_id: client.plan_id || "",
       join_date: client.join_date || "",
       enrollment_paid: client.enrollment_paid || false,
+      billing_day: client.billing_day || "",
       avatar_url: client.avatar_url || "",
     });
     setPhotoFile(null);
@@ -548,6 +557,7 @@ export function ClientsTable() {
         plan_id: formData.plan_id,
         join_date: formData.join_date,
         enrollment_paid: isEditing ? formData.enrollment_paid : false,
+        billing_day: formData.billing_day || null,
         status: isEditing ? undefined : "pendiente",
       };
 
@@ -1545,7 +1555,7 @@ export function ClientsTable() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                V: Venezolano, E: Extranjero, J: Jurídico, P: Pasaporte
+                V, E, J, P
               </p>
             </div>
             <div className="space-y-2">
@@ -1610,7 +1620,7 @@ export function ClientsTable() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Digitel: 0412/0422, Movistar: 0414/0424, Movilnet: 0416/0426
+                0412, 0414, 0416, etc.
               </p>
             </div>
             <div className="md:col-span-2 space-y-2">
@@ -1637,21 +1647,21 @@ export function ClientsTable() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="avatar">Foto de Perfil</Label>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className="relative flex-shrink-0">
                   {photoPreview || formData.avatar_url ? (
                     <img
                       src={photoPreview || formData.avatar_url}
                       alt="Vista previa"
-                      className="w-20 h-20 rounded-full object-cover border-2 border-muted"
+                      className="w-14 h-14 rounded-full object-cover border-2 border-muted"
                     />
                   ) : (
-                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
-                      <Users className="h-6 w-6 text-muted-foreground" />
+                    <div className="w-14 h-14 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
+                      <Users className="h-5 w-5 text-muted-foreground" />
                     </div>
                   )}
                 </div>
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 space-y-1">
                   <Input
                     ref={fileInputRef}
                     id="avatar"
@@ -1659,14 +1669,14 @@ export function ClientsTable() {
                     accept="image/*"
                     onChange={handlePhotoSelect}
                     disabled={uploadingPhoto}
-                    className="cursor-pointer"
+                    className="cursor-pointer text-xs h-8"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Sube una imagen para la foto de perfil del cliente (JPG, PNG, WEBP. Max 5MB)
+                  <p className="text-[10px] text-muted-foreground">
+                    JPG, PNG, WEBP (Max 5MB)
                   </p>
                   {uploadingPhoto && (
                     <p className="text-xs text-primary flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Subiendo foto...
+                      <Loader2 className="h-3 w-3 animate-spin" /> Subiendo...
                     </p>
                   )}
                 </div>
@@ -1695,7 +1705,7 @@ export function ClientsTable() {
                 }
                 disabled={plansLoading}
               >
-                <SelectTrigger id="plan_id">
+                <SelectTrigger id="plan_id" className="w-full">
                   <SelectValue placeholder="Seleccionar plan" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1707,31 +1717,65 @@ export function ClientsTable() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="join_date">
-                Fecha de Ingreso <span className="text-destructive">*</span>
-              </Label>
-              <DatePicker
-                value={formData.join_date}
-                onChange={(value) =>
-                  handleInputChange({ target: { name: "join_date", value } })
-                }
-                placeholder="Seleccionar fecha"
-                size="sm"
-              />
-            </div>
-            <div className="flex items-center space-x-2 pt-4">
-              <Switch
-                id="enrollment_paid"
-                checked={formData.enrollment_paid}
-                onCheckedChange={handleEnrollmentPaidChange}
-                disabled={isEditing && formData.enrollment_paid}
-              />
-              <Label htmlFor="enrollment_paid" className="text-sm font-normal">
-                {isEditing
-                  ? "Inscripción pagada"
-                  : `Incluir inscripción ($${INSCRIPTION_PRICE})`}
-              </Label>
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="join_date">
+                  Fecha de Ingreso
+                  <span className="text-destructive ml-0.5">*</span>
+                </Label>
+                <DatePicker
+                  value={formData.join_date}
+                  onChange={(value) => {
+                    handleInputChange({ target: { name: "join_date", value } });
+                    // Auto-update billing_day to match join_date day when creating new client
+                    if (!isEditing && value) {
+                      const day = parseInt(value.split('-')[2], 10);
+                      if (!isNaN(day) && day >= 1 && day <= 31) {
+                        setFormData((prev) => ({ ...prev, billing_day: day }));
+                      }
+                    }
+                  }}
+                  placeholder="Seleccionar fecha"
+                  size="sm"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billing_day">
+                  Día de Cobro
+                  <span className="text-muted-foreground font-normal ml-1">(Opc)</span>
+                </Label>
+                <Input
+                  id="billing_day"
+                  type="number"
+                  name="billing_day"
+                  value={formData.billing_day}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (e.target.value === '' || (val >= 1 && val <= 31)) {
+                      handleInputChange(e);
+                    }
+                  }}
+                  placeholder="Ej: 15"
+                  min="1"
+                  max="31"
+                  className="h-9"
+                  aria-describedby="billing-day-help"
+                />
+              </div>
+              <div className="flex items-center space-x-2 pt-6">
+                <Switch
+                  id="enrollment_paid"
+                  checked={formData.enrollment_paid}
+                  onCheckedChange={handleEnrollmentPaidChange}
+                  disabled={isEditing && formData.enrollment_paid}
+                />
+                <Label htmlFor="enrollment_paid" className="text-sm font-normal cursor-pointer">
+                  {isEditing
+                    ? "Inscripción pagada"
+                    : `Inscripción ($${INSCRIPTION_PRICE})`}
+                </Label>
+              </div>
             </div>
           </div>
 

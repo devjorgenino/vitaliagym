@@ -315,6 +315,20 @@ describe('paymentCalculations - computeNextPaymentDate', () => {
     // Se espera que avance mes a mes y cubra hasta septiembre!
     expect(computeNextPaymentDate(joinDate, payments, plan, planPrice)).toBe('2026-09-16');
   });
+
+  it('respeta billingDay personalizado como día ancla para el cálculo de fecha de pago', () => {
+    const plan = { frequency: 'mensual' };
+    const planPrice = 20;
+    const joinDate = '2026-01-28'; // Ingresó el 28
+    const billingDay = 5; // Pero su día de cobro preferido es el 5
+
+    // Sin pagos: la fecha proyectada usa el día de cobro (5 de febrero)
+    expect(computeNextPaymentDate(joinDate, [], plan, planPrice, 0, billingDay)).toBe('2026-02-05');
+
+    // Con pago realizado el 28 de enero: primer pago cubre hasta la fecha ancla del mes siguiente (5 de febrero)
+    const payments = [{ id: '1', amount_usd: 20, payment_date: '2026-01-28' }];
+    expect(computeNextPaymentDate(joinDate, payments, plan, planPrice, 0, billingDay)).toBe('2026-02-05');
+  });
 });
 
 describe('paymentCalculations - calculateDaysUntilPayment & getPaymentStatusColor', () => {
